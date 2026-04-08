@@ -535,8 +535,11 @@ function ovProb(c,ci){
 function render(){
   var app=document.getElementById('app');var info=cInfo();
   var h='<div class="hdr"><div class="hdr-row"><div><h1>'+greet()+'</h1><div class="hdr-sub">Cycle Day '+info.cd+' · '+fd(td())+'</div></div>';
-  h+='<div style="display:flex;gap:6px;align-items:center"><button class="csv-btn" onclick="backup()" style="padding:8px 10px">💾</button>';
-  h+='<button class="csv-btn" onclick="exp()">⬇</button></div></div></div>';
+  h+='<div style="display:flex;gap:6px;align-items:center">';
+  h+='<button class="csv-btn" onclick="backup()" style="padding:8px 10px">💾 Save</button>';
+  h+='<button class="csv-btn" onclick="document.getElementById(\'hdrRest\').click()" style="padding:8px 10px">📂 Load</button>';
+  h+='<input type="file" id="hdrRest" style="display:none" accept=".json" onchange="restore(this)">';
+  h+='</div></div></div>';
   h+='<div class="tabs">';
   ["today","overlay","cycle","compare","insights"].forEach(function(t){h+='<button class="tab'+(curTab===t?' on':'')+'" onclick="sw(\''+t+'\')">'+t[0].toUpperCase()+t.slice(1)+'</button>'});
   h+='</div><div class="content">';
@@ -1521,13 +1524,20 @@ function delAppt(i){if(!confirm("Delete appointment?"))return;D.appts.splice(i,1
 function backup(){
   var b=JSON.stringify(D,null,2);
   var blob=new Blob([b],{type:"application/json"});
+  var file=new File([blob],"bbt_backup_"+td()+".json",{type:"application/json"});
+  // Try Web Share API first (works reliably on iOS Safari)
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({files:[file],title:"BBT Backup"}).then(function(){flash("Backup shared ✓")}).catch(function(e){if(e.name!=="AbortError")dlFallback(blob)});
+  }else{dlFallback(blob)}
+}
+function dlFallback(blob){
   var u=URL.createObjectURL(blob);
   var a=document.createElement("a");
   a.href=u;a.download="bbt_backup_"+td()+".json";
   a.style.display="none";
   document.body.appendChild(a);
   a.click();
-  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u)},1000);
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u)},2000);
   flash("Backup saved ✓");
 }
 function restore(inp){
@@ -1550,11 +1560,14 @@ function restore(inp){
 function exp(){
   var csv="Cycle,Day,Date,Temp,Ovulation,Flow,Intimacy,Moods,Symptoms,Meds,Notes\n";
   D.cycles.forEach(function(c,i){c.readings.forEach(function(r){csv+=(i+1)+","+r.day+","+r.date+","+r.temp.toFixed(2)+","+(r.ov?"Yes":"")+","+(r.flow||"")+","+(D.sex[r.date]?"Yes":"")+",\""+(D.mood[r.date]||[]).join("; ")+"\",\""+(D.sym[r.date]||[]).join("; ")+"\",\""+(D.meds[r.date]||[]).join("; ")+"\","+(D.notes[r.date]||"")+"\n"})});
-  var b=new Blob([csv],{type:"text/csv"});var u=URL.createObjectURL(b);
-  var a=document.createElement("a");a.href=u;a.download="bbt_jess.csv";a.style.display="none";
-  document.body.appendChild(a);a.click();
-  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u)},1000);
-  flash("Exported ✓");
+  var blob=new Blob([csv],{type:"text/csv"});
+  var file=new File([blob],"bbt_jess.csv",{type:"text/csv"});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({files:[file],title:"BBT Export"}).then(function(){flash("Exported ✓")}).catch(function(e){if(e.name!=="AbortError")dlFallback(blob)});
+  }else{
+    var u=URL.createObjectURL(blob);var a=document.createElement("a");a.href=u;a.download="bbt_jess.csv";a.style.display="none";
+    document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u)},2000);flash("Exported ✓");
+  }
 }
 
 function sw(t){curTab=t;render()}
