@@ -1365,6 +1365,12 @@ function startPeriod(){
 var collapsed={};
 function toggleCol(id){collapsed[id]=!collapsed[id];render()}
 function isCol(id){return collapsed[id]}
+function colStart(id,title,extra){
+  var h='<div class="section"><div class="col-hdr" onclick="toggleCol(\''+id+'\')"><span class="sec-title">'+title+'</span><div style="display:flex;align-items:center;gap:8px">'+(extra||'')+'<span class="col-arrow'+(isCol(id)?'':' open')+'">▼</span></div></div>';
+  h+='<div class="col-body'+(isCol(id)?' shut':'')+'" style="max-height:9999px">';
+  return h;
+}
+function colEnd(){return'</div></div>'}
 
 /* Pull to refresh */
 function initPTR(){
@@ -1403,7 +1409,7 @@ function rOverlay(){
   h+='<div class="section"><div class="cw" style="position:relative"><canvas id="oC" style="height:220px;touch-action:none"></canvas>';
   if(zm.s>1)h+='<button onclick="zmR()" style="position:absolute;top:8px;right:8px;background:var(--card);border-radius:8px;padding:4px 10px;font-size:10px;font-weight:700;color:var(--cobalt);box-shadow:var(--sh)">Reset</button>';
   h+='</div>';if(zm.s<=1)h+='<div style="text-align:center;padding:4px 0;font-size:10px;color:var(--txt4)">Pinch to zoom · drag to pan</div>';
-  h+='</div>';return h;
+  h+=colEnd();return h;
 }
 function tCyc(i){cVis[i]=!cVis[i];render()}
 function tAll(){var a=cVis.every(function(v){return v});cVis=cVis.map(function(){return!a});render()}
@@ -1470,13 +1476,9 @@ function rCompare(){
   var dayData=[];
   D.cycles.forEach(function(c,i){
     var r=c.readings.find(function(x){return x.day===info.cd});
-    var sy=[];var mo=[];
-    if(r){
-      sy=D.sym[r.date]||[];mo=D.mood[r.date]||[];
-    }
-    // Even if no reading, check if cycle was long enough
-    if(r||c.length>=info.cd||!c.length)
-      dayData.push({i:i,r:r,sy:sy,mo:mo,c:c,excl:isExcl(i)})
+    if(!r)return;// Only show cycles with actual data for this day
+    var sy=D.sym[r.date]||[];var mo=D.mood[r.date]||[];
+    dayData.push({i:i,r:r,sy:sy,mo:mo,c:c,excl:isExcl(i)})
   });
   if(dayData.length){
     // Temp comparison
@@ -1583,7 +1585,7 @@ function rInsights(){
   }
 
   // CYCLE HISTORY CARDS
-  h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Cycle History</span></div>';
+  h+=colStart('i_cychist','Cycle History');
   for(var ci2=D.cycles.length-1;ci2>=0;ci2--){
     var cs=cycleSummary(ci2);
     var cCol=PAL[ci2%7];
@@ -1599,12 +1601,12 @@ function rInsights(){
     if(cs.excl)h+='<span class="cyc-tag" style="background:var(--rose-bg);color:var(--rose)">Excluded</span>';
     h+='</div></div>';
   }
-  h+='</div>';
+  h+='</div>';h+=colEnd();
 
   // LUTEAL PHASE CHART
   var luts=lutealLengths();
   if(luts.length>=2){
-    h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Luteal Phase Length</span></div>';
+    h+=colStart('i_lutlen','Luteal Phase Length');
     h+='<div class="card" style="padding:14px 16px">';
     var avgLut2=Math.round(luts.reduce(function(a,b){return a+b.lut},0)/luts.length);
     h+='<div style="font-size:11px;color:var(--txt3);margin-bottom:8px">Average: <strong>'+avgLut2+' days</strong></div>';
@@ -1615,13 +1617,13 @@ function rInsights(){
       h+='<div style="flex:1;height:14px;background:var(--cream3);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+w+'%;background:'+col+';border-radius:4px"></div></div>';
       h+='<span style="font-size:11px;font-weight:700;width:28px;text-align:right">'+l.lut+'d</span></div>';
     });
-    h+='</div></div>';
+    h+='</div></div>';h+=colEnd();
   }
 
   // SYMPTOM TRENDS
   var trends=symTrends();
   if(trends.length){
-    h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Symptom Trends</span></div>';
+    h+=colStart('i_symtrend','Symptom Trends');
     h+='<div class="card" style="padding:10px 14px">';
     trends.slice(0,12).forEach(function(t){
       var arrow=t.trend==='up'?'↑':t.trend==='down'?'↓':'→';
@@ -1632,13 +1634,13 @@ function rInsights(){
       h+='<span style="font-size:14px;font-weight:700;color:'+arrowCol+'">'+arrow+'</span></div></div>';
     });
     h+='<div style="font-size:9px;color:var(--txt4);margin-top:6px">↑ increasing recently · ↓ decreasing · → stable</div>';
-    h+='</div></div>';
+    h+='</div></div>';h+=colEnd();
   }
 
   // OPK HISTORY
   var opks=opkHistory();
   if(opks.length){
-    h+='<div class="section"><div class="sec-hdr"><span class="sec-title">OPK History</span></div>';
+    h+=colStart('i_opkhist','OPK History');
     h+='<div class="card" style="padding:10px 14px">';
     opks.slice().reverse().slice(0,15).forEach(function(o){
       var col=o.result==='pos'?'var(--gold)':'var(--txt4)';
@@ -1647,12 +1649,12 @@ function rInsights(){
       h+='<span style="font-size:12px;color:var(--txt)">'+fd(o.date)+(o.cycle?' · C'+o.cycle:'')+(o.day?' · Day '+o.day:'')+'</span>';
       h+='<span style="font-size:12px;font-weight:700;color:'+col+'">'+icon+'</span></div>';
     });
-    h+='</div></div>';
+    h+='</div></div>';h+=colEnd();
   }
 
   // Monthly summary card (current cycle)
   var info=cInfo();var curC=info.c;
-  h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Cycle Summary</span></div>';
+  h+=colStart('i_cycsumm','Cycle Summary');
   h+='<div class="sum-card">';
   h+='<div style="font-size:16px;font-weight:800;color:var(--txt);margin-bottom:12px">C'+D.cycles.length+' · Started '+fd(curC.key)+'</div>';
   h+='<div class="sum-row"><span class="sum-lbl">Cycle Day</span><span class="sum-val">'+info.cd+'</span></div>';
@@ -1666,7 +1668,7 @@ function rInsights(){
   h+='<div class="sum-row"><span class="sum-lbl">Period expected</span><span class="sum-val">'+fd(ad(curC.key,info.av-1))+'</span></div>';
   var cp2=conceptionProb(info.ci);
   if(cp2)h+='<div class="sum-row"><span class="sum-lbl">Conception score</span><span class="sum-val" style="color:'+(cp2.pct>=70?'var(--forest)':cp2.pct>=40?'var(--gold)':'var(--txt4)')+'">'+cp2.pct+'% — '+cp2.lbl+'</span></div>';
-  h+='</div></div>';
+  h+='</div>';h+=colEnd();
 
   // Cycle length trend
   h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Cycle Length Trend</span></div><div class="cw"><canvas id="tC" style="height:140px"></canvas></div></div>';
@@ -1679,7 +1681,7 @@ function rInsights(){
   var hm=heatmapData();
   if(hm.syms.length){
     var maxCd=30; // cap display at 30 days
-    h+='<div class="section"><div class="sec-hdr"><span class="sec-title">When Symptoms Hit</span></div><div class="card" style="padding:14px 16px">';
+    h+=colStart('i_symhit','When Symptoms Hit')+'<div class="card" style="padding:14px 16px">';
     // Day markers
     h+='<div style="display:flex;align-items:center;margin-bottom:8px"><div style="width:90px;flex-shrink:0"></div><div style="flex:1;display:flex;justify-content:space-between;font-size:9px;color:var(--txt4)">';
     h+='<span>Day 1</span><span>'+Math.round(maxCd/2)+'</span><span>'+maxCd+'</span></div></div>';
@@ -1712,11 +1714,11 @@ function rInsights(){
       h+='<div style="width:30px;font-size:9px;font-weight:700;color:var(--txt3);text-align:center">'+days.length+'×</div></div>';
     });
     h+='<div style="font-size:9px;color:var(--txt4);margin-top:8px">Darker = more frequent · Count = total occurrences across all cycles</div>';
-    h+='</div></div>';
+    h+='</div>';h+=colEnd();
   }
 
   // Symptom patterns
-  var pt=pats();h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Symptom Patterns</span></div>';
+  var pt=pats();h+=colStart('i_sympat','Symptom Patterns');
   h+='<div class="card"><div style="font-size:11px;font-weight:700;color:var(--forest);margin-bottom:10px">Follicular Phase</div>';
   var fk=Object.keys(pt.f).sort(function(a,b){return pt.f[b]-pt.f[a]}).slice(0,6);var mxF=fk.length?pt.f[fk[0]]:1;
   fk.forEach(function(k){h+='<div class="pr"><span class="pn">'+k.replace('CM: ','')+'</span><div class="pt"><div class="pb" style="width:'+(pt.f[k]/mxF*100)+'%;background:var(--forest)"></div></div><span style="font-size:10px;color:var(--txt3);width:20px">'+pt.f[k]+'</span></div>'});
@@ -1724,16 +1726,16 @@ function rInsights(){
   h+='<div class="card" style="margin-top:8px"><div style="font-size:11px;font-weight:700;color:var(--plum);margin-bottom:10px">Luteal Phase</div>';
   var lk=Object.keys(pt.l).sort(function(a,b){return pt.l[b]-pt.l[a]}).slice(0,6);var mxL=lk.length?pt.l[lk[0]]:1;
   lk.forEach(function(k){h+='<div class="pr"><span class="pn">'+k.replace('CM: ','')+'</span><div class="pt"><div class="pb" style="width:'+(pt.l[k]/mxL*100)+'%;background:var(--plum)"></div></div><span style="font-size:10px;color:var(--txt3);width:20px">'+pt.l[k]+'</span></div>'});
-  if(!lk.length)h+='<div style="font-size:12px;color:var(--txt4)">No data</div>';h+='</div></div>';
+  if(!lk.length)h+='<div style="font-size:12px;color:var(--txt4)">No data</div>';h+='</div>';h+=colEnd();
 
   // TTC cycle report (current cycle)
   var info2=cInfo();var rpt=ttcReport(info2.ci);
-  h+='<div class="section"><div class="sec-hdr"><span class="sec-title">TTC Report — This Cycle</span></div><div class="card">';
+  h+=colStart('i_ttcrpt','TTC Report — This Cycle')+'<div class="card">';
   if(rpt.good.length){h+='<div style="font-size:11px;font-weight:700;color:var(--forest);margin-bottom:6px">What went well</div>';
     rpt.good.forEach(function(g){h+='<div style="font-size:12px;color:var(--txt);padding:3px 0;display:flex;gap:6px"><span style="color:var(--forest)">✓</span>'+g+'</div>'});h+='<div style="height:10px"></div>'}
   if(rpt.improve.length){h+='<div style="font-size:11px;font-weight:700;color:var(--burnt);margin-bottom:6px">Things to try</div>';
     rpt.improve.forEach(function(g){h+='<div style="font-size:12px;color:var(--txt);padding:3px 0;display:flex;gap:6px"><span style="color:var(--burnt)">→</span>'+g+'</div>'})}
-  h+='</div></div>';
+  h+='</div>';h+=colEnd();
 
   // Journey timeline
   var jrn=journeyData();
@@ -1758,17 +1760,17 @@ function rInsights(){
 
   // Mood journal entries
   var jEntries=Object.keys(D.journal).filter(function(d){return D.journal[d]}).sort(function(a,b){return b.localeCompare(a)});
-  h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Journal Entries</span><span class="sec-title">'+jEntries.length+'</span></div>';
+  h+=colStart('i_journal','Journal Entries','<span class="sec-title">'+jEntries.length+'</span>');
   if(jEntries.length){h+='<div class="card" style="padding:8px 14px">';
     jEntries.slice(0,10).forEach(function(d){
       var cy=null,cd=null;D.cycles.forEach(function(c,i){var end=D.cycles[i+1]?D.cycles[i+1].key:"9999";if(d>=c.key&&d<end){cy=i+1;cd=db(c.key,d)+1}});
       h+='<div class="mj-entry"><div class="mj-date">'+fdf(d)+(cd?' · Day '+cd:'')+(cy?' · C'+cy:'')+'</div><div class="mj-text">'+D.journal[d]+'</div></div>'
     });h+='</div>'}
   else h+='<div class="card" style="color:var(--txt4);font-size:12px">No journal entries yet — write one from the Today tab</div>';
-  h+='</div>';
+  h+=colEnd();
 
   // Notes
-  var nl=timeline();h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Notes Timeline</span><span class="sec-title">'+nl.length+'</span></div>';
+  var nl=timeline();h+=colStart('i_notes','Notes Timeline','<span class="sec-title">'+nl.length+'</span>');
   if(nl.length){h+='<div class="card" style="padding:8px 14px">';nl.forEach(function(n){h+='<div class="ni"><div class="nm">'+fdf(n.d)+(n.cd?' · Day '+n.cd:'')+(n.cy?' · C'+n.cy:'')+'</div><div class="nt">'+n.t+'</div></div>'});h+='</div>'}else h+='<div class="card" style="color:var(--txt4);font-size:12px">No notes yet</div>';h+='</div>';return h;
 }
 function dTrend(){var cv=document.getElementById('tC');if(!cv)return;var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight,p={t:10,r:10,b:28,l:36},gW=W-p.l-p.r,gH=H-p.t-p.b;var ls=[];D.cycles.forEach(function(c,i){if(c.length)ls.push({i:i,l:c.length,ex:isExcl(i)})});if(ls.length<2)return;var mn2=Math.min.apply(null,ls.map(function(l){return l.l}))-2,mx2=Math.max.apply(null,ls.map(function(l){return l.l}))+2;function x(i){return p.l+i/(ls.length-1)*gW}function y(v){return p.t+(1-(v-mn2)/(mx2-mn2))*gH}ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;for(var v=Math.ceil(mn2/5)*5;v<=mx2;v+=5){ctx.beginPath();ctx.moveTo(p.l,y(v));ctx.lineTo(W-p.r,y(v));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="9px -apple-system";ctx.textAlign="right";ctx.fillText(v,p.l-4,y(v)+3)}ctx.strokeStyle="#2B5C8A";ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();ls.forEach(function(l,i){i===0?ctx.moveTo(x(i),y(l.l)):ctx.lineTo(x(i),y(l.l))});ctx.stroke();ls.forEach(function(l,i){ctx.globalAlpha=l.ex?.35:1;ctx.fillStyle=PAL[l.i%7];ctx.beginPath();ctx.arc(x(i),y(l.l),5,0,Math.PI*2);ctx.fill();ctx.fillStyle="var(--txt)";ctx.font="bold 11px -apple-system";ctx.textAlign="center";ctx.fillText(l.l+(l.ex?' ✕':''),x(i),y(l.l)-8);ctx.fillStyle="#A0928A";ctx.font="9px -apple-system";ctx.fillText(D.cycles[l.i].label,x(i),H-p.b+14);ctx.globalAlpha=1});var incl=ls.filter(function(l){return!l.ex});var avg=incl.length?incl.reduce(function(a,b){return a+b.l},0)/incl.length:0;if(avg){ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle="#C4652A";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.l,y(avg));ctx.lineTo(W-p.r,y(avg));ctx.stroke();ctx.restore();ctx.fillStyle="#C4652A";ctx.font="9px -apple-system";ctx.textAlign="left";ctx.fillText('avg '+Math.round(avg),W-p.r-40,y(avg)-4)}}
