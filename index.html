@@ -223,16 +223,35 @@ textarea{resize:vertical;min-height:60px}
 .gp-check.done{background:var(--forest);border-color:var(--forest);color:#fff}
 /* Quick symptom taps */
 .qs-wrap{padding:0 16px;margin-bottom:10px}
-.qs-chips{display:flex;flex-wrap:wrap;gap:5px}
-.qs-chip{padding:6px 10px;border-radius:16px;font-size:11px;font-weight:600;background:var(--card);color:var(--txt3);box-shadow:var(--sh)}
+.qs-chips{display:flex;flex-wrap:wrap;gap:6px}
+.qs-chip{padding:10px 14px;border-radius:20px;font-size:13px;font-weight:600;background:var(--card);color:var(--txt3);box-shadow:var(--sh);min-height:40px;display:flex;align-items:center}
 .qs-chip.on{color:#fff;box-shadow:none}
 .qs-chip.on-s{background:var(--burnt)}.qs-chip.on-m{background:var(--cobalt)}.qs-chip.on-c{background:var(--gold)}
+/* Collapsible sections */
+.col-hdr{display:flex;justify-content:space-between;align-items:center;padding:10px 0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.col-hdr .sec-title{margin:0}
+.col-arrow{font-size:14px;color:var(--txt4);transition:transform .2s}
+.col-arrow.open{transform:rotate(180deg)}
+.col-body{overflow:hidden;transition:max-height .3s ease}
+.col-body.shut{max-height:0!important;padding:0;overflow:hidden}
+/* Auto-save indicator */
+.save-ind{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:16px;z-index:998;background:var(--forest);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:10px;opacity:0;transition:opacity .2s;pointer-events:none}
+.save-ind.show{opacity:1}
+/* Backup banner */
+.bk-banner{padding:10px 14px;border-radius:12px;font-size:11px;color:var(--txt3);background:var(--cream);display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.bk-banner.warn{background:var(--rose-bg);color:var(--rose)}
+/* Period start button */
+.period-btn{width:100%;padding:14px;border-radius:14px;font-size:14px;font-weight:800;background:var(--rose);color:#fff;display:flex;align-items:center;justify-content:center;gap:8px}
+/* Pull to refresh */
+.ptr-indicator{text-align:center;padding:8px;font-size:11px;color:var(--txt4);display:none}
+.ptr-indicator.show{display:block}
 /* Streak */
 .streak{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--burnt);padding:3px 8px;border-radius:8px;background:var(--burnt-bg)}
 </style>
 </head>
 <body>
 <div class="app" id="app"></div>
+<div class="save-ind" id="saveInd">✓ Saved</div>
 <div class="fab" onclick="openAdd()">+</div>
 <script>
 var SK="bbt-jess-v13";
@@ -497,7 +516,12 @@ function load(){
   Object.keys(D.mood||{}).forEach(function(d){if(D.mood[d])D.mood[d]=D.mood[d].filter(function(m){return validMoods.indexOf(m)>-1})});
   cVis=D.cycles.map(function(){return true});save();
 }
-function save(){localStorage.setItem(SK,JSON.stringify(D))}
+function save(){
+  localStorage.setItem(SK,JSON.stringify(D));
+  D._lastSave=td();
+  var el=document.getElementById('saveInd');
+  if(el){el.classList.add('show');setTimeout(function(){el.classList.remove('show')},800)}
+}
 function db(a,b){return Math.round((new Date(b)-new Date(a))/864e5)}
 function ad(d,n){var dt=new Date(d+'T12:00:00');dt.setDate(dt.getDate()+n);return dt.toISOString().slice(0,10)}
 function fd(d){return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
@@ -574,6 +598,10 @@ function rToday(info){
   });
   h+='</div></div></div>';
 
+  // BACKUP BANNER
+  var bk=backupBanner();
+  h+='<div class="section"><div class="bk-banner'+(bk.warn?' warn':'')+'" onclick="doBackup()"><span>'+bk.text+'</span><span style="font-weight:700">'+(bk.warn?'Backup now →':'✓')+'</span></div></div>';
+
   // QUICK MORNING LOG — temp + CM + key symptoms in one section
   h+='<div class="section"><div class="card" style="padding:14px 16px">';
   h+='<div class="fl" style="margin-bottom:8px">Quick Log</div>';
@@ -619,6 +647,14 @@ function rToday(info){
     h+='<div class="section"><div class="card" style="padding:14px 16px"><div class="fl" style="margin-bottom:8px">What your symptoms mean</div>';
     h+='<div id="aiResult"></div></div></div>';
   }
+
+  // PERIOD START BUTTON (only show if period might be due)
+  if(info.dtp<=2||info.cd>=info.av-2)
+    h+='<div class="section"><button class="period-btn" onclick="startPeriod()">🔴 Period Started — Start New Cycle</button></div>';
+
+  // === COLLAPSIBLE: Cycle Details ===
+  h+='<div class="section"><div class="col-hdr" onclick="toggleCol(\'details\')"><span class="sec-title">Cycle Details</span><span class="col-arrow'+(isCol('details')?'':' open')+'">▼</span></div>';
+  h+='<div class="col-body'+(isCol('details')?' shut':'')+'" style="max-height:9999px">';
 
   // Notifications & alerts
   var notifs=getNotifs(info);var alerts=tempAlerts(info);
@@ -715,12 +751,12 @@ function rToday(info){
   });
   if(myOvD)h+='<button class="chip" onclick="clearMyOv('+info.ci+')" style="color:var(--rose)">Clear</button>';
   h+='</div></div></div></div>';
-  // Notifications
-  var notifs=getNotifs(info);var alerts=tempAlerts(info);
-  if(notifs.length||alerts.length){h+='<div class="section">';
-    notifs.forEach(function(n){h+='<div class="notif" style="background:'+n.bg+';color:'+n.color+'"><span class="notif-icon">'+n.icon+'</span>'+n.msg+'</div>'});
-    alerts.forEach(function(a){h+='<div class="notif" style="background:'+a.bg+';color:'+a.color+'"><span class="notif-icon">'+a.icon+'</span>'+a.msg+'</div>'});
-  h+='</div>'}
+  h+='</div></div>';/* close col-body + section for Cycle Details */
+
+  // === COLLAPSIBLE: Analysis & Predictions ===
+  h+='<div class="section"><div class="col-hdr" onclick="toggleCol(\'analysis\')"><span class="sec-title">Analysis & Predictions</span><span class="col-arrow'+(isCol('analysis')?'':' open')+'">▼</span></div>';
+  h+='<div class="col-body'+(isCol('analysis')?' shut':'')+'" style="max-height:9999px">';
+
   // Conception probability
   var cp=conceptionProb(info.ci);
   if(cp){var cpCol=cp.pct>=70?"var(--forest)":cp.pct>=40?"var(--gold)":"var(--txt4)";
@@ -779,7 +815,9 @@ function rToday(info){
   var cmp=[];D.cycles.forEach(function(c,i){var r3=c.readings.find(function(x){return x.day===info.cd});if(r3)cmp.push({i:i,t:r3.temp,d:r3.date})});
   if(cmp.length){var av2=cmp.reduce(function(a,b){return a+b.t},0)/cmp.length;h+='<div class="card"><div style="font-size:11px;color:var(--txt3);margin-bottom:8px">Average: <strong style="color:var(--txt)">'+av2.toFixed(2)+'°C</strong></div>';cmp.forEach(function(c2){h+='<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.04)"><span style="font-size:12px;font-weight:600;color:'+PAL[c2.i%7]+'">C'+(c2.i+1)+' · '+fd(c2.d)+'</span><span style="font-size:14px;font-weight:700;color:var(--txt)">'+c2.t.toFixed(2)+'°</span></div>'});h+='</div>'}
   else h+='<div class="card" style="color:var(--txt3);font-size:12px">No data for Day '+info.cd+' yet</div>';
-  h+='</div>';return h;
+  h+='</div>';
+  h+='</div></div>';/* close col-body + section for Analysis */
+  return h;
 }
 
 function quickLog(){var t=parseFloat(document.getElementById('qlT').value);if(isNaN(t)){flash("Enter a temp");return}var date=td();var last=D.cycles[D.cycles.length-1];var day=db(last.key,date)+1;var rdg={day:day,date:date,temp:t};var ei=last.readings.findIndex(function(r){return r.date===date});if(ei>-1)last.readings[ei].temp=t;else{last.readings.push(rdg);last.readings.sort(function(a,b){return a.day-b.day})}save();render();flash("Logged "+t.toFixed(2)+"° ✓")}
@@ -1167,6 +1205,48 @@ function cycleOPK(){
   else{delete D.opks[td()];flash("OPK cleared")}
   save();render();
 }
+
+/* Period start — creates a new cycle */
+function startPeriod(){
+  if(!confirm("Start a new cycle? This marks today as Day 1 of a new period."))return;
+  // Close out current cycle
+  var last=D.cycles[D.cycles.length-1];
+  last.length=db(last.key,td());
+  // Create new cycle
+  D.cycles.push({key:td(),label:fd(td()),length:null,readings:[{day:1,date:td(),flow:"medium"}]});
+  save();render();flash("New cycle started ✓");
+}
+
+/* Collapsible sections */
+var collapsed={};
+function toggleCol(id){collapsed[id]=!collapsed[id];render()}
+function isCol(id){return collapsed[id]}
+
+/* Pull to refresh */
+function initPTR(){
+  var startY=0;var app=document.getElementById('app');
+  app.addEventListener('touchstart',function(e){
+    if(window.scrollY===0)startY=e.touches[0].clientY;
+  });
+  app.addEventListener('touchend',function(e){
+    var endY=e.changedTouches[0].clientY;
+    if(startY>0&&endY-startY>80&&window.scrollY===0){render();flash("Refreshed ✓")}
+    startY=0;
+  });
+}
+
+/* Backup banner: check last backup */
+function backupBanner(){
+  var last=localStorage.getItem('lastBackup');
+  var days=last?Math.floor((new Date()-new Date(last))/864e5):999;
+  if(days>30)return{warn:true,text:"No backup in "+(days>900?"ever":days+" days")+" — tap to backup",days:days};
+  return{warn:false,text:"Last backup: "+last,days:days};
+}
+function doBackup(){
+  backup();
+  localStorage.setItem('lastBackup',td());
+  render();
+}
 /* OVERLAY */
 function rOverlay(){
   var h='<div class="pills"><button class="pill'+(cVis.every(function(v){return v})?' on':'')+'" onclick="tAll()">All</button>';
@@ -1531,7 +1611,7 @@ function exp(){
 function sw(t){curTab=t;render()}
 function flash(m){var t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(function(){t.remove()},1800)}
 
-load();render();
+load();render();initPTR();
 // Redraw on orientation change
 window.addEventListener('orientationchange',function(){setTimeout(render,200)});
 window.addEventListener('resize',function(){
