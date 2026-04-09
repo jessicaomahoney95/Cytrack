@@ -31,7 +31,6 @@ input,select,textarea{font-family:inherit}
 .hdr-sub{font-size:11px;color:rgba(255,255,255,.55);margin-top:3px}
 .csv-btn{background:rgba(255,255,255,.15);border-radius:10px;padding:8px 12px;color:#fff;font-size:11px;font-weight:600}
 .tabs{display:flex;gap:2px;padding:3px 16px 14px;background:var(--bg)}
-.tab{flex:1;padding:9px 0;border-radius:10px;font-size:11px;font-weight:700;background:rgba(255,255,255,.1);color:rgba(255,255,255,.55);text-align:center}
 .tab.on{background:var(--cream);color:var(--txt)}
 .content{background:var(--cream2);border-radius:24px 24px 0 0;min-height:80vh;padding:8px 0 40px}
 .section{padding:0 16px;margin-bottom:12px}
@@ -235,6 +234,29 @@ textarea{resize:vertical;min-height:60px}
 .qs-chip.on-s{background:var(--burnt)}.qs-chip.on-m{background:var(--cobalt)}.qs-chip.on-c{background:var(--gold)}
 /* Streak */
 .streak{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--burnt);padding:3px 8px;border-radius:8px;background:var(--burnt-bg)}
+/* Tab active indicator */
+.tab{flex:1;padding:9px 0;border-radius:10px;font-size:11px;font-weight:700;background:rgba(255,255,255,.1);color:rgba(255,255,255,.55);text-align:center;transition:all .15s ease}
+.tab.on{background:var(--cream);color:var(--txt);transform:scale(1.02)}
+/* Temp range bar */
+.tmp-range{height:6px;border-radius:3px;background:var(--cream3);position:relative;margin:6px 0}
+.tmp-range-fill{position:absolute;top:0;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--cobalt),var(--burnt))}
+.tmp-range-dot{position:absolute;top:-3px;width:12px;height:12px;border-radius:50%;border:2px solid var(--card);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+/* Legend */
+.legend{display:flex;flex-wrap:wrap;gap:8px;padding:6px 16px;font-size:10px;font-weight:600;color:var(--txt3)}
+.legend-item{display:flex;align-items:center;gap:4px}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.legend-sq{width:7px;height:7px;transform:rotate(45deg);flex-shrink:0}
+/* Compare stats table */
+.cmp-tbl{width:100%;border-collapse:collapse;font-size:11px}
+.cmp-tbl th{font-weight:600;color:var(--txt3);text-align:left;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06)}
+.cmp-tbl td{padding:6px 0;font-weight:600;color:var(--txt);border-bottom:1px solid rgba(0,0,0,.04)}
+.cmp-tbl td:not(:first-child),.cmp-tbl th:not(:first-child){text-align:center}
+/* Empty state */
+.empty{padding:20px;text-align:center;color:var(--txt4);font-size:12px;line-height:1.5}
+.empty-icon{font-size:24px;margin-bottom:6px}
+/* Regularity score */
+.reg-bar{height:8px;border-radius:4px;background:var(--cream3);overflow:hidden}
+.reg-fill{height:100%;border-radius:4px;transition:width .4s ease}
 </style>
 </head>
 <body>
@@ -256,7 +278,11 @@ var cmpA=-1,cmpB=-1;
 var smooth=false;
 /* Collapsed section state — persisted in localStorage */
 var collapsed={};
-try{var _cs=localStorage.getItem('bbt-collapsed');if(_cs)collapsed=JSON.parse(_cs)}catch(e){}
+try{var _cs=localStorage.getItem('bbt-collapsed');if(_cs)collapsed=JSON.parse(_cs);else{
+  // Smart defaults: collapse verbose sections, keep actionable ones open
+  collapsed={'t-bio':true,'t-ovest':true,'t-conception':true,'t-journal':true};
+  localStorage.setItem('bbt-collapsed',JSON.stringify(collapsed));
+}}catch(e){}
 function isCollapsed(id){return !!collapsed[id]}
 function toggleCollapse(id){if(collapsed[id])delete collapsed[id];else collapsed[id]=true;try{localStorage.setItem('bbt-collapsed',JSON.stringify(collapsed))}catch(e){}render()}
 /* Collapsible section header helper */
@@ -323,8 +349,17 @@ function tempAlerts(info){
     var cl=avgCL2();if(cl&&last.temp<cl)
       alerts.push({type:"period",icon:"🔴",bg:"var(--rose-bg)",color:"var(--rose)",msg:"Temp dropped below coverline ("+last.temp.toFixed(2)+"°) — period may be coming."})
   }
-  var at=ats();if(at[last.day]){var diff=last.temp-at[last.day];
-    if(diff>0.25)alerts.push({type:"spike",icon:"🟡",bg:"var(--gold-bg)",color:"var(--gold)",msg:"Temp is "+diff.toFixed(2)+"° above average for Day "+last.day+". Possible fever, poor sleep, or ovulation shift."})
+  var at=ats();var av=atVar();
+  if(at[last.day]){
+    var diff=last.temp-at[last.day];var sd=av[last.day]||0.1;
+    if(diff>0.25)alerts.push({type:"spike",icon:"🟡",bg:"var(--gold-bg)",color:"var(--gold)",msg:"Temp is "+diff.toFixed(2)+"° above average for Day "+last.day+". Possible fever, poor sleep, or ovulation shift."});
+    else if(diff<-0.2)alerts.push({type:"low",icon:"🔻",bg:"var(--cob-bg)",color:"var(--cobalt)",msg:"Temp is "+Math.abs(diff).toFixed(2)+"° below average for Day "+last.day+" (avg "+at[last.day].toFixed(2)+"°). Could be estrogen surge, poor sleep, or early waking."});
+    else if(Math.abs(diff)>sd*1.8&&sd>0.05)alerts.push({type:"outlier",icon:"📊",bg:"var(--gold-bg)",color:"var(--gold)",msg:"Temp "+(diff>0?"above":"below")+" your usual range for Day "+last.day+" ("+last.temp.toFixed(2)+"° vs "+at[last.day].toFixed(2)+"° ±"+sd.toFixed(2)+")."});
+  }
+  // Today's temp vs yesterday — big swing alert
+  var swing=Math.abs(last.temp-prev.temp);
+  if(swing>=0.3&&!alerts.some(function(a){return a.type==="implantation"})){
+    alerts.push({type:"swing",icon:"↕️",bg:"var(--burnt-bg)",color:"var(--burnt)",msg:"Big temp swing of "+swing.toFixed(2)+"° from yesterday. Check: same time? Alcohol? Illness? Mouth breathing?"})
   }
   return alerts
 }
@@ -667,25 +702,34 @@ function rToday(info){
   h+='<div><div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:4px">'+bio.title+'</div>';
   h+='<div style="font-size:12px;color:var(--txt2);line-height:1.6">'+bio.body+'</div></div>';
   h+='</div></div>';
+  h+='<div class="card" style="padding:10px 14px;background:var(--cob-bg);border:none;box-shadow:none">';
+  h+='<div style="font-size:10px;font-weight:700;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">💡 Fertility Fact</div>';
+  h+='<div style="font-size:11px;color:var(--txt2);line-height:1.4">'+getFact()+'</div></div>';
   h+=colEnd()+'</div>';
 
-  // Stats row
+  // Stats row — with inline temp deviation
   h+='<div class="section"><div class="sg">';
   var tr=info.c.readings.find(function(x){return x.date===td()});
-  h+='<div class="sc"><div class="sv">'+(tr&&tr.temp!=null?tr.temp.toFixed(2)+'°':'—')+'</div><div class="sl">Today\'s Temp</div></div>';
+  var at=ats();var av=atVar();
+  var tempDev=null;
+  if(tr&&tr.temp!=null&&at[info.cd]){var td2=tr.temp-at[info.cd];tempDev={diff:td2,avg:at[info.cd]}}
+  h+='<div class="sc"><div class="sv">'+(tr&&tr.temp!=null?tr.temp.toFixed(2)+'°':'—')+'</div>';
+  if(tempDev){var dc=Math.abs(tempDev.diff)<0.05?'var(--txt4)':tempDev.diff>0?'var(--burnt)':'var(--cobalt)';
+    h+='<div style="font-size:9px;font-weight:600;color:'+dc+';margin-top:1px">'+(tempDev.diff>=0?'+':'')+tempDev.diff.toFixed(2)+'° vs avg</div>'}
+  else h+='<div class="sl">Today\'s Temp</div>';
+  h+='</div>';
   if(info.ho){var dpo=info.cd-info.od;h+='<div class="sc"><div class="sv" style="color:var(--gold)">'+dpo+' DPO</div><div class="sl">Post Ovulation</div></div>'}
   else{var fw=info.ao-5;var inFW=info.cd>=fw&&info.cd<=info.ao;
     if(inFW)h+='<div class="sc"><div class="sv" style="color:var(--burnt)">Now!</div><div class="sl">Fertile Window</div></div>';
     else if(info.cd<fw)h+='<div class="sc"><div class="sv">'+(fw-info.cd)+'d</div><div class="sl">To Fertile Window</div></div>';
     else h+='<div class="sc"><div class="sv">Day '+info.ao+'</div><div class="sl">Avg Ovulation</div></div>'}
   h+='<div class="sc"><div class="sv">'+info.av+'d</div><div class="sl">Avg Cycle</div></div>';
-  var cl=avgCL2();h+='<div class="sc"><div class="sv">'+(cl?cl.toFixed(2)+'°':'—')+'</div><div class="sl">Coverline</div></div>';
+  var cl=avgCL2();
+  // Tomorrow's predicted temp merged into 4th stat box
+  var tmrw=info.cd+1;
+  if(at[tmrw]){h+='<div class="sc"><div class="sv">'+at[tmrw].toFixed(2)+'°</div><div style="font-size:9px;font-weight:600;color:var(--txt4);margin-top:1px">Day '+tmrw+' expected</div></div>'}
+  else{h+='<div class="sc"><div class="sv">'+(cl?cl.toFixed(2)+'°':'—')+'</div><div class="sl">Coverline</div></div>'}
   h+='</div></div>';
-
-  // Predicted temp range
-  var at=ats();var av=atVar();var tmrw=info.cd+1;
-  if(at[tmrw]){var lo=(at[tmrw]-av[tmrw]).toFixed(2),hi2=(at[tmrw]+av[tmrw]).toFixed(2);
-    h+='<div class="section"><div class="card"><div class="sl">Tomorrow\'s Expected Range (Day '+tmrw+')</div><div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px"><div class="sv">'+at[tmrw].toFixed(2)+'°C</div><div style="font-size:12px;color:var(--txt3)">±'+av[tmrw].toFixed(2)+' ('+lo+'–'+hi2+')</div></div></div></div>'}
 
   // OV probability — now with FIXED algorithm
   var op=ovProb(info.c,info.ci);
@@ -789,44 +833,14 @@ function rToday(info){
   h+='</div>';
   h+=colEnd()+'</div>';
 
-  // CYCLE DAY COMPARISON — collapsible
-  h+='<div class="section">'+colHdr('t-daycmp','Day '+info.cd+' Across Cycles');
-  h+=colBody('t-daycmp');
-  var cmp=[];D.cycles.forEach(function(c,i){var r3=c.readings.find(function(x){return x.day===info.cd});if(r3&&r3.temp!=null)cmp.push({i:i,t:r3.temp,d:r3.date,syms:D.sym[r3.date]||[],mood:D.mood[r3.date]||[],sex:!!D.sex[r3.date]})});
-  if(cmp.length){
-    var av2=cmp.reduce(function(a,b){return a+b.t},0)/cmp.length;
-    h+='<div class="card"><div style="font-size:11px;color:var(--txt3);margin-bottom:8px">Average: <strong style="color:var(--txt)">'+av2.toFixed(2)+'°C</strong> across '+cmp.length+' cycles</div>';
-    cmp.forEach(function(c2){
-      h+='<div style="padding:8px 0;border-bottom:1px solid rgba(0,0,0,.04)">';
-      h+='<div style="display:flex;justify-content:space-between;align-items:baseline">';
-      h+='<span style="font-size:12px;font-weight:600;color:'+PAL[c2.i%7]+'">C'+(c2.i+1)+' · '+fd(c2.d)+'</span>';
-      h+='<span style="font-size:14px;font-weight:700;color:var(--txt)">'+c2.t.toFixed(2)+'°</span></div>';
-      // Show diff from average
-      var diff=c2.t-av2;
-      var diffStr=diff>=0?'+'+diff.toFixed(2):diff.toFixed(2);
-      var diffCol=Math.abs(diff)<0.05?'var(--txt4)':diff>0?'var(--burnt)':'var(--cobalt)';
-      h+='<div style="display:flex;gap:6px;align-items:center;margin-top:3px">';
-      h+='<span style="font-size:10px;font-weight:600;color:'+diffCol+'">'+diffStr+'° vs avg</span>';
-      if(c2.sex)h+='<span style="font-size:9px;padding:1px 6px;border-radius:6px;background:var(--cob-bg);color:var(--cobalt)">💙</span>';
-      // Show symptoms on that day
-      var allTags=c2.syms.concat(c2.mood);
-      if(allTags.length){
-        allTags.slice(0,3).forEach(function(s){
-          h+='<span style="font-size:9px;padding:1px 6px;border-radius:6px;background:var(--burnt-bg);color:var(--burnt)">'+s.replace('CM: ','')+'</span>';
-        });
-        if(allTags.length>3)h+='<span style="font-size:9px;color:var(--txt4)">+'+( allTags.length-3)+' more</span>';
-      }
-      h+='</div></div>';
-    });
-    h+='</div>';
-  }else h+='<div class="card" style="color:var(--txt3);font-size:12px">No data for Day '+info.cd+' yet</div>';
-  h+=colEnd()+'</div>';
-
-  // Fertility fact
-  h+='<div class="section"><div class="card" style="padding:12px 16px;background:var(--cob-bg);border:none;box-shadow:none">';
-  h+='<div style="font-size:10px;font-weight:700;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">💡 Fertility Fact</div>';
-  h+='<div style="font-size:12px;color:var(--txt2);line-height:1.5">'+getFact()+'</div>';
-  h+='</div></div>';
+  // CYCLE DAY COMPARISON — link to Compare tab
+  var cmpCount=0;D.cycles.forEach(function(c,i){var r3=c.readings.find(function(x){return x.day===info.cd});if(r3&&r3.temp!=null)cmpCount++});
+  if(cmpCount>0){
+    h+='<div class="section"><div class="card" style="padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center" onclick="sw(\'compare\')">';
+    h+='<div><div style="font-size:12px;font-weight:700;color:var(--cobalt)">Day '+info.cd+' across '+cmpCount+' cycles</div>';
+    h+='<div style="font-size:11px;color:var(--txt3);margin-top:2px">Temps, symptoms, phase comparison</div></div>';
+    h+='<span style="color:var(--cobalt);font-size:16px;font-weight:700">›</span></div></div>';
+  }
 
   return h;
 }
@@ -977,7 +991,17 @@ function rOverlay(){
   h+='<div class="section"><div class="cw" style="position:relative"><canvas id="oC" style="height:320px;touch-action:none"></canvas>';
   if(zm.s>1)h+='<button onclick="zmR()" style="position:absolute;top:8px;right:8px;background:var(--card);border-radius:8px;padding:4px 10px;font-size:10px;font-weight:700;color:var(--cobalt);box-shadow:var(--sh)">Reset</button>';
   h+='</div>';if(zm.s<=1)h+='<div style="text-align:center;padding:4px 0;font-size:10px;color:var(--txt4)">Pinch to zoom · drag to pan</div>';
-  h+='</div>';return h;
+  h+='</div>';
+  // Legend
+  h+='<div class="legend">';
+  h+='<span class="legend-item"><span class="legend-dot" style="background:var(--gold)"></span>OV detected</span>';
+  h+='<span class="legend-item"><span class="legend-dot" style="background:var(--cobalt)"></span>My OV est.</span>';
+  h+='<span class="legend-item"><span class="legend-dot" style="background:var(--rose)"></span>Period</span>';
+  h+='<span class="legend-item"><span class="legend-sq" style="background:var(--cobalt)"></span>Intimacy</span>';
+  h+='<span class="legend-item"><span class="legend-dot" style="background:var(--gold);width:6px;height:6px"></span>EWCM</span>';
+  h+='<span class="legend-item" style="border-top:2px dashed var(--cobalt);padding-top:0;height:10px;width:16px"></span><span style="font-size:10px;font-weight:600;color:var(--txt3)">Coverline</span>';
+  h+='</div>';
+  return h;
 }
 function tCyc(i){cVis[i]=!cVis[i];render()}
 function tAll(){var a=cVis.every(function(v){return v});cVis=cVis.map(function(){return!a});render()}
@@ -1036,14 +1060,184 @@ function dCyc(){var cv=document.getElementById('cC');if(!cv)return;var c=D.cycle
 
 /* COMPARE */
 function rCompare(){
-  var h='<div class="section" style="padding-top:8px"><div class="fl">Pick two cycles to compare</div><div class="cmp-sel">';
+  var info=cInfo();
+  var h='';
+
+  // THIS DAY IN OTHER CYCLES — always shows
+  var thisDayData=[];
+  var allTemps=[];
+  D.cycles.forEach(function(c,i){
+    var r=c.readings.find(function(x){return x.day===info.cd});
+    var od=ovDay(c);var eod=effOv(i);
+    var ph3=info.cd<=5?"Menstrual":(eod&&info.cd>eod+1)?"Luteal":(eod&&info.cd>=eod-1&&info.cd<=eod+1)?"Ovulatory":"Follicular";
+    var phCol=ph3==="Menstrual"?"var(--rose)":ph3==="Ovulatory"?"var(--gold)":ph3==="Luteal"?"var(--plum)":"var(--forest)";
+    var dpo3=eod&&info.cd>eod?(info.cd-eod):null;
+    var syms=r?D.sym[r.date]||[]:[];
+    var moods=r?D.mood[r.date]||[]:[];
+    var sex=r?!!D.sex[r.date]:false;
+    var opk=r&&D.opks?D.opks[r.date]:null;
+    var note=r?D.notes[r.date]||'':'';
+    var flow=r?r.flow:null;
+    var wasOv=r?!!r.ov:false;
+    if(r){
+      thisDayData.push({i:i,temp:r.temp,date:r.date,phase:ph3,phCol:phCol,dpo:dpo3,syms:syms,moods:moods,sex:sex,opk:opk,note:note,flow:flow,wasOv:wasOv,excl:isExcl(i),len:c.length});
+      if(r.temp!=null)allTemps.push(r.temp);
+    }
+  });
+
+  h+='<div class="section" style="padding-top:8px">';
+  h+='<div class="sec-hdr"><span class="sec-title">Day '+info.cd+' across all cycles</span><span class="sec-title">'+thisDayData.length+' cycles</span></div>';
+
+  if(thisDayData.length){
+    var avgT=allTemps.length?(allTemps.reduce(function(a,b){return a+b},0)/allTemps.length):null;
+    var minT=allTemps.length?Math.min.apply(null,allTemps):0;
+    var maxT=allTemps.length?Math.max.apply(null,allTemps):1;
+    var range=maxT-minT;if(range<0.1)range=0.1;
+
+    // Summary header with temp range bar
+    if(avgT){
+      h+='<div class="card" style="padding:14px 16px">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">';
+      h+='<div><span style="font-size:20px;font-weight:800;color:var(--txt)">'+avgT.toFixed(2)+'°</span><span style="font-size:11px;color:var(--txt3);margin-left:6px">avg Day '+info.cd+'</span></div>';
+      h+='<span style="font-size:10px;color:var(--txt4)">'+minT.toFixed(2)+'–'+maxT.toFixed(2)+'°</span></div>';
+      // Today's temp position on range bar
+      var tr=info.c.readings.find(function(x){return x.date===td()});
+      if(tr&&tr.temp!=null){
+        var pos=Math.max(0,Math.min(100,(tr.temp-minT)/range*100));
+        h+='<div style="font-size:10px;font-weight:600;color:var(--txt3);margin-bottom:3px">Today: '+tr.temp.toFixed(2)+'°</div>';
+        h+='<div class="tmp-range"><div class="tmp-range-fill" style="left:0;width:100%;opacity:.3"></div>';
+        h+='<div class="tmp-range-dot" style="left:calc('+pos.toFixed(0)+'% - 6px);background:var(--burnt)"></div></div>';
+        h+='<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--txt4);margin-top:2px"><span>'+minT.toFixed(2)+'°</span><span>'+maxT.toFixed(2)+'°</span></div>';
+      }
+      // Phase breakdown
+      var phases={Menstrual:0,Follicular:0,Ovulatory:0,Luteal:0};
+      thisDayData.forEach(function(d){phases[d.phase]++});
+      var phaseStr=[];
+      if(phases.Menstrual)phaseStr.push('<span style="color:var(--rose)">'+phases.Menstrual+'× menstrual</span>');
+      if(phases.Follicular)phaseStr.push('<span style="color:var(--forest)">'+phases.Follicular+'× follicular</span>');
+      if(phases.Ovulatory)phaseStr.push('<span style="color:var(--gold)">'+phases.Ovulatory+'× ovulatory</span>');
+      if(phases.Luteal)phaseStr.push('<span style="color:var(--plum)">'+phases.Luteal+'× luteal</span>');
+      h+='<div style="font-size:10px;margin-top:8px">'+phaseStr.join(' · ')+'</div>';
+      // OV on this day?
+      var ovCount=thisDayData.filter(function(d){return d.wasOv}).length;
+      if(ovCount)h+='<div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:4px">🥚 Ovulation detected on Day '+info.cd+' in '+ovCount+' cycle'+(ovCount>1?'s':'')+'</div>';
+      h+='</div>';
+    }
+
+    // Per-cycle cards
+    thisDayData.forEach(function(d){
+      h+='<div class="card" style="padding:12px 16px'+(d.excl?';opacity:.5':'')+'">';
+      // Header row: cycle label + temp
+      h+='<div style="display:flex;justify-content:space-between;align-items:center">';
+      h+='<div style="display:flex;align-items:center;gap:8px">';
+      h+='<span style="font-size:13px;font-weight:700;color:'+PAL[d.i%7]+'">C'+(d.i+1)+'</span>';
+      h+='<span style="font-size:10px;color:var(--txt3)">'+fd(d.date)+'</span>';
+      h+='<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:'+d.phCol+';color:#fff;font-weight:700">'+d.phase+'</span>';
+      h+='</div>';
+      h+='<span style="font-size:16px;font-weight:800;color:var(--txt)">'+(d.temp!=null?d.temp.toFixed(2)+'°':'—')+'</span></div>';
+
+      // Temp vs average + DPO
+      var details=[];
+      if(d.temp!=null&&avgT){var diff=d.temp-avgT;var ds=diff>=0?'+'+diff.toFixed(2):diff.toFixed(2);var dc=Math.abs(diff)<0.05?'var(--txt4)':diff>0?'var(--burnt)':'var(--cobalt)';details.push('<span style="color:'+dc+';font-weight:600">'+ds+'° vs avg</span>')}
+      if(d.dpo)details.push('<span style="color:var(--plum)">'+d.dpo+' DPO</span>');
+      if(d.len)details.push('<span>'+d.len+'d cycle</span>');
+      if(d.flow)details.push('<span style="color:var(--rose)">'+d.flow+' flow</span>');
+      if(d.wasOv)details.push('<span style="color:var(--gold);font-weight:700">🥚 OV day</span>');
+      if(d.sex)details.push('<span style="color:var(--cobalt)">💙</span>');
+      if(d.opk==='pos')details.push('<span style="color:var(--gold)">OPK+</span>');
+      if(details.length)h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:10px">'+details.join('')+'</div>';
+
+      // Symptoms + mood
+      var tags=d.syms.concat(d.moods);
+      if(tags.length){
+        h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">';
+        tags.forEach(function(s){
+          var isCM=s.indexOf('CM:')===0;var isMood=d.moods.indexOf(s)>-1;
+          var bg=isCM?'var(--gold-bg)':isMood?'var(--cob-bg)':'var(--burnt-bg)';
+          var col=isCM?'var(--gold)':isMood?'var(--cobalt)':'var(--burnt)';
+          h+='<span style="font-size:9px;padding:2px 7px;border-radius:8px;background:'+bg+';color:'+col+';font-weight:600">'+s.replace('CM: ','')+'</span>';
+        });
+        h+='</div>';
+      }
+
+      // Notes
+      if(d.note)h+='<div style="font-size:11px;color:var(--txt2);margin-top:6px;font-style:italic;line-height:1.4">📝 '+d.note.substring(0,80)+(d.note.length>80?'…':'')+'</div>';
+
+      h+='</div>';
+    });
+
+    // Common symptoms across cycles on this day
+    var symCounts={};
+    thisDayData.forEach(function(d){d.syms.concat(d.moods).forEach(function(s){symCounts[s]=(symCounts[s]||0)+1})});
+    var commonSyms=Object.keys(symCounts).filter(function(s){return symCounts[s]>=2}).sort(function(a,b){return symCounts[b]-symCounts[a]});
+    if(commonSyms.length){
+      h+='<div class="card" style="border-left:3px solid var(--burnt);padding:12px 16px">';
+      h+='<div style="font-size:10px;font-weight:700;color:var(--burnt);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Recurring on Day '+info.cd+'</div>';
+      commonSyms.forEach(function(s){
+        h+='<div style="font-size:11px;color:var(--txt);padding:2px 0"><strong>'+s.replace('CM: ','')+'</strong> — '+symCounts[s]+'/'+thisDayData.length+' cycles</div>';
+      });
+      h+='</div>';
+    }
+  }else{
+    h+='<div class="empty"><div class="empty-icon">📅</div>No data recorded for Day '+info.cd+' in past cycles</div>';
+  }
+  h+='</div>';
+
+  // CYCLE VS CYCLE comparison
+  h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Compare Two Cycles</span></div>';
+  h+='<div class="cmp-sel">';
   h+='<select onchange="cmpA=+this.value;render()"><option value="-1">Cycle A</option>';
   D.cycles.forEach(function(c,i){h+='<option value="'+i+'"'+(cmpA===i?' selected':'')+'>C'+(i+1)+' · '+c.label+'</option>'});
   h+='</select><select onchange="cmpB=+this.value;render()"><option value="-1">Cycle B</option>';
   D.cycles.forEach(function(c,i){h+='<option value="'+i+'"'+(cmpB===i?' selected':'')+'>C'+(i+1)+' · '+c.label+'</option>'});
   h+='</select></div></div>';
-  if(cmpA>=0&&cmpB>=0&&cmpA!==cmpB)h+='<div class="section"><div class="cw"><canvas id="cmpC" style="height:220px"></canvas></div></div>';
+  if(cmpA>=0&&cmpB>=0&&cmpA!==cmpB){
+    h+='<div class="section"><div class="cw"><canvas id="cmpC" style="height:220px"></canvas></div></div>';
+    // Side-by-side stats
+    var ca=D.cycles[cmpA],cb=D.cycles[cmpB];
+    var odA=ovDay(ca),odB=ovDay(cb);
+    var clA=coverline(ca),clB=coverline(cb);
+    var lpA=odA&&ca.length?(ca.length-odA):null,lpB=odB&&cb.length?(cb.length-odB):null;
+    var cpA=conceptionProb(cmpA),cpB=conceptionProb(cmpB);
+    var sexA=0,sexB=0;
+    ca.readings.forEach(function(r){if(D.sex[r.date])sexA++});
+    cb.readings.forEach(function(r){if(D.sex[r.date])sexB++});
+    var cmA=cmScore(cmpA),cmB=cmScore(cmpB);
+    h+='<div class="section"><div class="card" style="padding:14px 16px">';
+    h+='<table class="cmp-tbl"><thead><tr><th></th>';
+    h+='<th style="color:'+PAL[cmpA%7]+'">C'+(cmpA+1)+'</th>';
+    h+='<th style="color:'+PAL[cmpB%7]+'">C'+(cmpB+1)+'</th></tr></thead><tbody>';
+    function cmpRow(label,a,b,hi){
+      var aS=a!=null?String(a):'—',bS=b!=null?String(b):'—';
+      var aW='',bW='';
+      if(hi&&a!=null&&b!=null){if(hi==='high'){aW=a>b?'font-weight:800':'';bW=b>a?'font-weight:800':''}else{aW=a<b?'font-weight:800':'';bW=b<a?'font-weight:800':''}}
+      return '<tr><td style="color:var(--txt3)">'+label+'</td><td style="'+aW+'">'+aS+'</td><td style="'+bW+'">'+bS+'</td></tr>';
+    }
+    h+=cmpRow('Length',ca.length?ca.length+'d':null,cb.length?cb.length+'d':null);
+    h+=cmpRow('Ovulation',odA?'Day '+odA:null,odB?'Day '+odB:null);
+    h+=cmpRow('Luteal phase',lpA?lpA+'d':null,lpB?lpB+'d':null,'high');
+    h+=cmpRow('Coverline',clA?clA.toFixed(2)+'°':null,clB?clB.toFixed(2)+'°':null);
+    h+=cmpRow('Intimacy days',sexA,sexB,'high');
+    h+=cmpRow('Conception score',cpA?cpA.pct+'%':null,cpB?cpB.pct+'%':null,'high');
+    h+=cmpRow('CM quality',cmA?cmA.pct+'%':null,cmB?cmB.pct+'%':null,'high');
+    var tsA=ca.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
+    var tsB=cb.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
+    var avgA=tsA.length?(tsA.reduce(function(a,b){return a+b},0)/tsA.length):null;
+    var avgB=tsB.length?(tsB.reduce(function(a,b){return a+b},0)/tsB.length):null;
+    h+=cmpRow('Avg temp',avgA?avgA.toFixed(2)+'°':null,avgB?avgB.toFixed(2)+'°':null);
+    h+=cmpRow('Readings',tsA.length,tsB.length,'high');
+    h+='</tbody></table></div></div>';
+    var diffs=[];
+    if(lpA&&lpB&&Math.abs(lpA-lpB)>=3)diffs.push('Luteal phase differs by '+(Math.abs(lpA-lpB))+' days');
+    if(odA&&odB&&Math.abs(odA-odB)>=3)diffs.push('Ovulation '+(Math.abs(odA-odB))+' days apart (Day '+odA+' vs '+odB+')');
+    if(cpA&&cpB&&Math.abs(cpA.pct-cpB.pct)>=25)diffs.push('Conception timing '+(cpA.pct>cpB.pct?'better':'worse')+' in C'+(cpA.pct>cpB.pct?(cmpA+1):(cmpB+1)));
+    if(avgA&&avgB&&Math.abs(avgA-avgB)>=0.15)diffs.push('Average temp '+(Math.abs(avgA-avgB)).toFixed(2)+'° '+(avgA>avgB?'higher':'lower')+' in C'+(avgA>avgB?(cmpA+1):(cmpB+1)));
+    if(diffs.length){h+='<div class="section"><div class="card" style="border-left:3px solid var(--cobalt);padding:12px 16px"><div style="font-size:10px;font-weight:700;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Key Differences</div>';
+      diffs.forEach(function(d){h+='<div style="font-size:12px;color:var(--txt);padding:3px 0">• '+d+'</div>'});
+      h+='</div></div>'}
+  }
   else if(cmpA>=0&&cmpB>=0)h+='<div class="section"><div class="card" style="color:var(--txt3);font-size:12px">Pick two different cycles</div></div>';
+
   // Pregnancy tests
   h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Pregnancy Tests</span><button class="sec-title" style="color:var(--cobalt);background:none" onclick="openPT()">+ Add</button></div>';
   if(D.ptests.length){h+='<div class="card" style="padding:8px 14px">';D.ptests.slice().reverse().forEach(function(pt,i){var ri=D.ptests.length-1-i;var col=pt.result==='positive'?'var(--forest)':pt.result==='negative'?'var(--rose)':'var(--gold)';h+='<div class="pt-row"><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--txt)">'+fd(pt.date)+'</div><div style="font-size:11px;color:var(--txt3)">'+(pt.brand||'No brand')+(pt.dpo?' · '+pt.dpo+' DPO':'')+'</div></div><span class="pt-res" style="background:'+col+';color:#fff">'+pt.result+'</span><button onclick="delPT('+ri+')" style="background:none;color:var(--txt5);font-size:14px;padding:4px">✕</button></div>'});h+='</div>'}
