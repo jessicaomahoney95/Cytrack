@@ -544,7 +544,7 @@ function aod(){var d=[];D.cycles.forEach(function(c,i){if(!isExcl(i)){var o=ovDa
 function ats(){var m={};D.cycles.forEach(function(c,i){if(!isExcl(i)){c.readings.forEach(function(r){if(r.temp!=null){if(!m[r.day])m[r.day]=[];m[r.day].push(r.temp)}})}});var a={};Object.keys(m).forEach(function(d){a[d]=m[d].reduce(function(x,y){return x+y},0)/m[d].length});return a}
 function atVar(){var m={};D.cycles.forEach(function(c,i){if(!isExcl(i)){c.readings.forEach(function(r){if(r.temp!=null){if(!m[r.day])m[r.day]=[];m[r.day].push(r.temp)}})}});var v={};Object.keys(m).forEach(function(d){if(m[d].length>1){var avg=m[d].reduce(function(a,b){return a+b},0)/m[d].length;var ss=m[d].reduce(function(a,b){return a+(b-avg)*(b-avg)},0);v[d]=Math.sqrt(ss/m[d].length)}else v[d]=0.1});return v}
 function cInfo(){var ci=D.cycles.length-1;var c=D.cycles[ci];var cd=db(c.key,td())+1;var av=acl(),ao=aod();var dtp=Math.max(0,av-cd+1);var opk=ovDay(c);var eov=effOv(ci);return{c:c,ci:ci,cd:cd,av:av,ao:ao,dtp:dtp,opk:opk,od:eov,ho:!!eov}}
-function coverline(c){var oi=-1;c.readings.forEach(function(r,i){if(r.ov&&(oi<0||i<oi))oi=i});if(oi<0)return null;var pre=[];for(var i=Math.max(0,oi-6);i<oi;i++)if(c.readings[i].temp!=null)pre.push(c.readings[i].temp);if(pre.length<3)return null;return Math.round((Math.max.apply(null,pre)+0.1)*100)/100}
+function coverline(c){var oi=-1;c.readings.forEach(function(r,i){if(r.ov&&(oi<0||i<oi))oi=i});if(oi<0)return null;var pre=[];for(var i=Math.max(0,oi-6);i<oi;i++)if(c.readings[i].temp!=null)pre.push(c.readings[i].temp);if(pre.length<3)return null;pre.sort(function(a,b){return a-b});var med=pre.length%2===0?(pre[pre.length/2-1]+pre[pre.length/2])/2:pre[Math.floor(pre.length/2)];return Math.round((med+0.05)*100)/100}
 function avgCL2(){var cls=[];D.cycles.forEach(function(c,i){if(!isExcl(i)){var cl=coverline(c);if(cl)cls.push(cl)}});return cls.length?Math.round(cls.reduce(function(a,b){return a+b},0)/cls.length*100)/100:null}
 function phase(cd,av,ao,ho,od){if(cd<=5)return{n:"Menstrual",c:"var(--rose)",bg:"var(--rose-bg)",d:"Period phase — shedding the uterine lining."};var eo=ho?od:ao;if(cd<eo-1)return{n:"Follicular",c:"var(--forest)",bg:"var(--forest-bg)",d:"Building to ovulation — estrogen rising."};if(cd>=eo-1&&cd<=eo+1)return{n:ho?"Ovulatory":"Ovulatory (est.)",c:"var(--gold)",bg:"var(--gold-bg)",d:"Peak fertility around ovulation."};return{n:ho?"Luteal":"Luteal (est.)",c:"var(--plum)",bg:"var(--plum-bg)",d:"Post-ovulation — progesterone keeps temps up."}}
 function pats(){var f={},l={};D.cycles.forEach(function(c,i){if(!isExcl(i)){var od2=ovDay(c)||aod();c.readings.forEach(function(r){var all=(D.sym[r.date]||[]).concat(D.mood[r.date]||[]);var b=r.day<=od2?f:l;all.forEach(function(s){b[s]=(b[s]||0)+1})})}});return{f:f,l:l}}
@@ -555,31 +555,39 @@ function clearMyOv(ci){if(D.myOv)delete D.myOv[ci];save();render();flash("OV est
 
 /* FIXED: OV probability — count TOTAL post-OV temps above coverline, not just consecutive */
 function ovProb(c,ci){
-  var od=effOv(ci);if(!od)return null;var cl=avgCL2();if(!cl)return null;
+  var od=effOv(ci);if(!od)return null;
+  // Get pre-OV and post-OV temps for this cycle
+  var pre=c.readings.filter(function(r){return r.day<=od&&r.day>=od-6&&r.temp!=null});
   var post=c.readings.filter(function(r){return r.day>od&&r.temp!=null});
   if(!post.length)return{pct:10,lbl:"No post-OV data yet"};
-  var above=0;var total=post.length;
-  // Count consecutive from start for "confirmed" status
-  var consec=0;var brokeConsec=false;
+  if(pre.length<2)return{pct:15,lbl:"Not enough pre-OV data to assess shift"};
+  // Calculate pre-OV average (baseline)
+  var preAvg=pre.reduce(function(a,b){return a+b.temp},0)/pre.length;
+  // This cycle's coverline (median of pre-OV + 0.05)
+  var preSorted=pre.map(function(r){return r.temp}).sort(function(a,b){return a-b});
+  var med=preSorted.length%2===0?(preSorted[preSorted.length/2-1]+preSorted[preSorted.length/2])/2:preSorted[Math.floor(preSorted.length/2)];
+  var cl=med+0.05;
+  // Count post-OV temps above the shift threshold
+  var above=0,total=post.length,consec=0,brokeConsec=false;
+  var postAvg=post.reduce(function(a,b){return a+b.temp},0)/post.length;
+  var shift=postAvg-preAvg;
   for(var i=0;i<post.length;i++){
-    if(post[i].temp>=cl){
-      above++;
-      if(!brokeConsec)consec++;
-    }else{brokeConsec=true}
+    if(post[i].temp>cl){above++;if(!brokeConsec)consec++}
+    else{brokeConsec=true}
   }
   var abovePct=total>0?Math.round(above/total*100):0;
-  // Scoring: use combination of consecutive initial rise + overall pattern
-  // 3+ consecutive above CL = strong confirmation
-  // Also factor in what % of ALL post-OV temps are above
-  if(consec>=3&&abovePct>=70)return{pct:95,lbl:"Confirmed — "+consec+" consecutive temps above coverline, "+abovePct+"% overall"};
-  if(consec>=3&&abovePct>=50)return{pct:85,lbl:"Very likely — "+consec+" initial rise, "+above+"/"+total+" above coverline"};
-  if(consec>=3)return{pct:80,lbl:"Likely confirmed — "+consec+" consecutive above coverline"};
-  if(consec>=2&&abovePct>=60)return{pct:70,lbl:"Probable — "+above+"/"+total+" temps above coverline"};
-  if(consec>=2)return{pct:60,lbl:"Likely — need 1 more high temp to confirm"};
-  if(consec>=1&&above>=2)return{pct:45,lbl:"Possible — "+above+"/"+total+" above, watching pattern"};
-  if(consec>=1)return{pct:30,lbl:"Early — waiting for sustained rise"};
-  if(above>0)return{pct:20,lbl:"Unclear — temps inconsistent above coverline"};
-  return{pct:10,lbl:"Unlikely — temps below coverline"};
+  // Scoring: combine shift magnitude + consistency
+  var shiftStr=shift>=0?"+"+shift.toFixed(2):shift.toFixed(2);
+  if(total<2)return{pct:25,lbl:"Only "+total+" reading — need 2-3 more days to confirm (shift "+shiftStr+"°)"};
+  if(shift>=0.2&&consec>=3&&abovePct>=70)return{pct:95,lbl:"Confirmed — clear "+shiftStr+"° shift, "+consec+" consecutive above baseline"};
+  if(shift>=0.15&&consec>=3)return{pct:90,lbl:"Confirmed — "+shiftStr+"° shift sustained over "+consec+" days"};
+  if(shift>=0.2&&consec>=2)return{pct:85,lbl:"Very likely — "+shiftStr+"° shift, "+above+"/"+total+" above baseline"};
+  if(shift>=0.15&&consec>=2)return{pct:80,lbl:"Likely — "+shiftStr+"° shift, building confirmation"};
+  if(shift>=0.1&&above>=2)return{pct:70,lbl:"Probable — "+shiftStr+"° shift, "+above+"/"+total+" readings up"};
+  if(shift>=0.1&&consec>=1)return{pct:55,lbl:"Emerging — "+shiftStr+"° shift starting, need more data"};
+  if(shift>=0.05)return{pct:40,lbl:"Possible — small "+shiftStr+"° shift, watching pattern"};
+  if(shift>0)return{pct:25,lbl:"Minimal shift ("+shiftStr+"°) — may be too early or no clear rise yet"};
+  return{pct:10,lbl:"No temp shift detected — temps flat or dropping"};
 }
 
 /* RENDER */
