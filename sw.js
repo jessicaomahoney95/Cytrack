@@ -1,60 +1,55 @@
-var CACHE_NAME = 'cytrack-v1';
-var ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+var CACHE_NAME = 'cytrack-v14';
+var urlsToCache = [
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png'
+];
 
-// Install: cache core assets
-self.addEventListener('install', function(e) {
-  e.waitUntil(
+// Install — cache core files
+self.addEventListener('install', function(event) {
+  event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
-      return cache.addAll(ASSETS);
-    }).then(function() {
-      return self.skipWaiting();
+      return cache.addAll(urlsToCache);
     })
   );
+  self.skipWaiting();
 });
 
-// Activate: clean old caches
-self.addEventListener('activate', function(e) {
-  e.waitUntil(
-    caches.keys().then(function(names) {
+// Activate — clean up old caches
+self.addEventListener('activate', function(event) {
+  event.waitUntil(
+    caches.keys().then(function(cacheNames) {
       return Promise.all(
-        names.filter(function(n) { return n !== CACHE_NAME; })
-          .map(function(n) { return caches.delete(n); })
+        cacheNames.filter(function(name) {
+          return name !== CACHE_NAME;
+        }).map(function(name) {
+          return caches.delete(name);
+        })
       );
-    }).then(function() {
-      return self.clients.claim();
     })
   );
+  self.clients.claim();
 });
 
-// Fetch: network-first for HTML (always get latest), cache-first for assets
-self.addEventListener('fetch', function(e) {
-  var url = new URL(e.request.url);
-  
-  // HTML files: try network first, fall back to cache
-  if (e.request.mode === 'navigate' || url.pathname.endsWith('.html')) {
-    e.respondWith(
-      fetch(e.request).then(function(response) {
-        var clone = response.clone();
-        caches.open(CACHE_NAME).then(function(cache) {
-          cache.put(e.request, clone);
-        });
-        return response;
+// Fetch — serve from cache, fall back to network
+self.addEventListener('fetch', function(event) {
+  event.respondWith(
+    caches.match(event.request).then(function(response) {
+      if (response) return response;
+      return fetch(event.request).then(function(networkResponse) {
+        // Cache new successful requests
+        if (networkResponse && networkResponse.status === 200) {
+          var responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then(function(cache) {
+            cache.put(event.request, responseClone);
+          });
+        }
+        return networkResponse;
       }).catch(function() {
-        return caches.match(e.request);
-      })
-    );
-    return;
-  }
-  
-  // Everything else: cache first, network fallback
-  e.respondWith(
-    caches.match(e.request).then(function(cached) {
-      return cached || fetch(e.request).then(function(response) {
-        var clone = response.clone();
-        caches.open(CACHE_NAME).then(function(cache) {
-          cache.put(e.request, clone);
-        });
-        return response;
+        // Offline fallback — return cached index
+        return caches.match('./index.html');
       });
     })
   );
