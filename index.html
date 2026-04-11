@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<title>Jess's Cycle Tracker</title>
+<title>Jess's Cycle Tracker v14</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#B25835;color:#3D2C2C;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -599,7 +599,11 @@ function journeyData(){
 }
 function load(){
   var s=localStorage.getItem(SK);
-  if(s){try{D=JSON.parse(s)}catch(e){D=null}}
+  if(!s){s=localStorage.getItem("bbt-jess-v13")}
+  if(!s){s=localStorage.getItem("bbt-jess-v12")}
+  if(!s){s=localStorage.getItem("bbt-jess-v11")}
+  if(!s){s=localStorage.getItem("bbt-jess-v9")}
+  if(s){try{D=JSON.parse(s);localStorage.setItem(SK,s)}catch(e){D=null}}
   if(!D)D={cycles:JSON.parse(JSON.stringify(SEED_C)),sex:JSON.parse(JSON.stringify(SEED_SEX)),sym:JSON.parse(JSON.stringify(SEED_SYM)),mood:JSON.parse(JSON.stringify(SEED_MOOD)),notes:JSON.parse(JSON.stringify(SEED_NOTES)),photos:{},excl:{11:true},ptests:[],meds:{}};
   if(!D.photos)D.photos={};if(!D.notes)D.notes={};if(!D.mood)D.mood={};if(!D.sym)D.sym={};
   if(!D.excl)D.excl={11:true};if(!D.ptests)D.ptests=[];if(!D.meds)D.meds={};if(!D.myOv)D.myOv={};
@@ -844,7 +848,7 @@ function rToday(info){
     if(todayWrist){var wDev=todayWrist-WRIST_BASELINE;h+='<div><div style="font-size:15px;font-weight:700;color:var(--txt3)">'+(wDev>=0?'+':'')+wDev.toFixed(2)+'°</div>';
     var wYest=D.wrist[ad(td(),-1)];
     var wTrend=wYest?(todayWrist-wYest):null;
-    h+='<div style="font-size:9px;color:var(--txt4)">Wrist'+(wTrend!=null?' <span style=color:'+(wTrend>=0?'var(--burnt)':'var(--cobalt)')+'>'+(wTrend>=0?'↑':'↓')+Math.abs(wTrend).toFixed(2)+'°</span>':'')+'</div></div>'}
+    h+='<div style="font-size:9px;color:var(--txt4)">Wrist'+(wTrend!=null?' <span style="color:'+(wTrend>=0?'var(--burnt)':'var(--cobalt)')+';">'+(wTrend>=0?'↑':'↓')+Math.abs(wTrend).toFixed(2)+'°</span>':'')+'</div></div>'}
     if(todaySleep){var slCol=todaySleep==='Good'?'var(--forest)':todaySleep==='OK'?'var(--gold)':'var(--rose)';
     var slHrs=D.sleepTimes&&D.sleepTimes[td()]?calcSleepHrs(D.sleepTimes[td()].asleep,D.sleepTimes[td()].woke):null;
     h+='<div><div style="font-size:13px;font-weight:700;color:'+slCol+'">'+todaySleep+'</div>';
@@ -2273,7 +2277,16 @@ function backup(){var b=JSON.stringify(D,null,2);var blob=new Blob([b],{type:"ap
   }else{dlFB(blob,"bbt_backup_"+td()+".json")}
 }
 function dlFB(blob,name){var u=URL.createObjectURL(blob);var a=document.createElement("a");a.href=u;a.download=name;a.style.display="none";document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u)},1000);flash("Saved ✓")}
-function restore(inp){var f=inp.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(e){try{var d=JSON.parse(e.target.result);if(d.cycles){D=d;save();render();flash("Restored ✓")}else flash("Invalid file")}catch(err){flash("Error: bad JSON")}};rd.readAsText(f)}
+function restore(inp){var f=inp.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(e){try{var d=JSON.parse(e.target.result);if(d.cycles){D=d;
+  // Re-init any fields that might be missing from older backups
+  if(!D.photos)D.photos={};if(!D.notes)D.notes={};if(!D.mood)D.mood={};if(!D.sym)D.sym={};
+  if(!D.excl)D.excl={};if(!D.ptests)D.ptests=[];if(!D.meds)D.meds={};if(!D.myOv)D.myOv={};
+  if(!D.appts)D.appts=[];if(!D.journal)D.journal={};if(!D.checks)D.checks={};if(!D.opks)D.opks={};
+  if(!D.tqual)D.tqual={};if(!D.wrist)D.wrist={};if(!D.sleep)D.sleep={};if(!D.ttime)D.ttime={};
+  if(!D.sleepHrs)D.sleepHrs={};if(!D.sleepTimes)D.sleepTimes={};if(!D.opkPhotos)D.opkPhotos={};
+  if(!D.bedtime)D.bedtime='22:30';if(!D.waketime)D.waketime='06:30';
+  save();location.reload();
+  }else flash("Invalid file")}catch(err){flash("Error: "+err.message)}};rd.readAsText(f)}
 function exp(){
   var csv="Cycle,Day,Date,Temp,Ovulation,Flow,Intimacy,Moods,Symptoms,Meds,Notes\n";
   D.cycles.forEach(function(c,i){c.readings.forEach(function(r){csv+=(i+1)+","+r.day+","+r.date+","+(r.temp!=null?r.temp.toFixed(2):'')+","+(r.ov?"Yes":"")+","+(r.flow||"")+","+(D.sex[r.date]?"Yes":"")+",\""+(D.mood[r.date]||[]).join("; ")+"\",\""+(D.sym[r.date]||[]).join("; ")+"\",\""+(D.meds[r.date]||[]).join("; ")+"\","+(D.notes[r.date]||"")+"\n"})});
@@ -2291,7 +2304,7 @@ load();if(D.darkMode)document.documentElement.classList.add('dark');render();
 window.addEventListener('orientationchange',function(){setTimeout(render,200)});
 window.addEventListener('resize',function(){clearTimeout(window._rsz);window._rsz=setTimeout(render,150)});
 // PWA Service Worker
-if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').then(function(reg){
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js?v=14').then(function(reg){
   reg.addEventListener('updatefound',function(){var w=reg.installing;if(w)w.addEventListener('statechange',function(){if(w.state==='activated')flash('App updated ✓')})});
 }).catch(function(e){console.log('SW registration failed:',e)})}
 </script>

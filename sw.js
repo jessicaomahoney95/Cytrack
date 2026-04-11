@@ -1,4 +1,4 @@
-var CACHE_NAME = 'cytrack-v14';
+var CACHE_NAME = 'cytrack-v14b';
 var urlsToCache = [
   './',
   './index.html',
@@ -7,7 +7,6 @@ var urlsToCache = [
   './icon-512.png'
 ];
 
-// Install — cache core files
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
@@ -17,7 +16,6 @@ self.addEventListener('install', function(event) {
   self.skipWaiting();
 });
 
-// Activate — clean up old caches
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
@@ -33,23 +31,20 @@ self.addEventListener('activate', function(event) {
   self.clients.claim();
 });
 
-// Fetch — serve from cache, fall back to network
 self.addEventListener('fetch', function(event) {
+  // Network-first strategy: always try fresh, fall back to cache
   event.respondWith(
-    caches.match(event.request).then(function(response) {
-      if (response) return response;
-      return fetch(event.request).then(function(networkResponse) {
-        // Cache new successful requests
-        if (networkResponse && networkResponse.status === 200) {
-          var responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then(function(cache) {
-            cache.put(event.request, responseClone);
-          });
-        }
-        return networkResponse;
-      }).catch(function() {
-        // Offline fallback — return cached index
-        return caches.match('./index.html');
+    fetch(event.request).then(function(networkResponse) {
+      if (networkResponse && networkResponse.status === 200) {
+        var responseClone = networkResponse.clone();
+        caches.open(CACHE_NAME).then(function(cache) {
+          cache.put(event.request, responseClone);
+        });
+      }
+      return networkResponse;
+    }).catch(function() {
+      return caches.match(event.request).then(function(cached) {
+        return cached || caches.match('./index.html');
       });
     })
   );
