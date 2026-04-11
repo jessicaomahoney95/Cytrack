@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CyTrack">
 <meta name="theme-color" content="#B25835">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Jess's Cycle Tracker</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -525,7 +529,7 @@ function load(){
   if(!D)D={cycles:JSON.parse(JSON.stringify(SEED_C)),sex:JSON.parse(JSON.stringify(SEED_SEX)),sym:JSON.parse(JSON.stringify(SEED_SYM)),mood:JSON.parse(JSON.stringify(SEED_MOOD)),notes:JSON.parse(JSON.stringify(SEED_NOTES)),photos:{},excl:{11:true},ptests:[],meds:{}};
   if(!D.photos)D.photos={};if(!D.notes)D.notes={};if(!D.mood)D.mood={};if(!D.sym)D.sym={};
   if(!D.excl)D.excl={11:true};if(!D.ptests)D.ptests=[];if(!D.meds)D.meds={};if(!D.myOv)D.myOv={};
-  if(!D.appts)D.appts=[];if(!D.journal)D.journal={};if(!D.checks)D.checks={};if(!D.opks)D.opks={};
+  if(!D.appts)D.appts=[];if(!D.journal)D.journal={};if(!D.checks)D.checks={};if(!D.opks)D.opks={};if(!D.tqual)D.tqual={};
   var validSyms=["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting","CM: Egg white","CM: Watery","CM: Creamy","CM: Dry"];
   var validMoods=["Happy","Calm","Energetic","Tired","Irritable","Anxious","Sad","Emotional"];
   Object.keys(D.sym||{}).forEach(function(d){if(D.sym[d])D.sym[d]=D.sym[d].filter(function(s){return validSyms.indexOf(s)>-1})});
@@ -555,6 +559,71 @@ function timeline(){var n=[];Object.keys(D.notes).forEach(function(d){if(!D.note
 function togExcl(i){if(!D.excl)D.excl={};if(D.excl[i])delete D.excl[i];else D.excl[i]=true;save();render()}
 function setMyOv(ci,day){if(!D.myOv)D.myOv={};D.myOv[ci]=parseInt(day);save();render();flash("OV estimate set to Day "+day)}
 function clearMyOv(ci){if(D.myOv)delete D.myOv[ci];save();render();flash("OV estimate cleared")}
+
+/* DPO comparison across cycles */
+function dpoCompare(targetDPO){
+  var results=[];
+  D.cycles.forEach(function(c,i){
+    var eod=effOv(i);if(!eod)return;
+    var targetDay=eod+targetDPO;
+    var r=c.readings.find(function(x){return x.day===targetDay});
+    if(r&&r.temp!=null){
+      results.push({i:i,temp:r.temp,date:r.date,day:r.day,dpo:targetDPO,
+        syms:D.sym[r.date]||[],mood:D.mood[r.date]||[],sex:!!D.sex[r.date],
+        flow:r.flow,note:D.notes[r.date]||'',tqual:D.tqual&&D.tqual[r.date]||null,
+        len:c.length,label:c.label});
+    }
+  });
+  return results;
+}
+
+/* Fertile window success rate across cycles */
+function fwSuccess(){
+  var results=[];
+  D.cycles.forEach(function(c,i){
+    if(isExcl(i))return;
+    var eod=effOv(i);if(!eod)return;
+    var cStart=new Date(c.key+'T12:00:00');
+    var hitOV=false,hitOV1=false,hitOV2=false,totalHits=0;
+    for(var d=eod-5;d<=eod;d++){
+      var dt=new Date(cStart);dt.setDate(dt.getDate()+d-1);var ds=dt.toISOString().slice(0,10);
+      if(D.sex[ds]){totalHits++;if(d===eod)hitOV=true;if(d===eod-1)hitOV1=true;if(d===eod-2)hitOV2=true}
+    }
+    results.push({i:i,label:c.label,hitOV:hitOV,hitOV1:hitOV1,hitOV2:hitOV2,totalHits:totalHits,hasData:true});
+  });
+  return results;
+}
+
+/* Cycle prediction accuracy */
+function predAccuracy(){
+  var results=[];
+  D.cycles.forEach(function(c,i){
+    if(i===0||!c.length||isExcl(i))return;
+    // What would we have predicted based on cycles before this one?
+    var prevLens=[];
+    for(var j=0;j<i;j++){if(!isExcl(j)&&D.cycles[j].length&&D.cycles[j].length<45)prevLens.push(D.cycles[j].length)}
+    if(!prevLens.length)return;
+    var predicted=Math.round(prevLens.reduce(function(a,b){return a+b},0)/prevLens.length);
+    var actual=c.length;
+    var diff=actual-predicted;
+    results.push({i:i,label:c.label,predicted:predicted,actual:actual,diff:diff});
+  });
+  return results;
+}
+
+/* Cycle regularity score */
+function regularityScore(){
+  var lens=[];
+  D.cycles.forEach(function(c,i){if(!isExcl(i)&&c.length&&c.length<45)lens.push(c.length)});
+  if(lens.length<3)return null;
+  var avg=lens.reduce(function(a,b){return a+b},0)/lens.length;
+  var variance=lens.reduce(function(a,b){return a+(b-avg)*(b-avg)},0)/lens.length;
+  var sd=Math.sqrt(variance);
+  // Score: 100 = perfectly regular, 0 = chaotic
+  var score=Math.max(0,Math.round(100-sd*15));
+  var lbl=score>=85?"Very regular":score>=70?"Regular":score>=50?"Somewhat variable":score>=30?"Variable":"Irregular";
+  return{score:score,sd:sd.toFixed(1),lbl:lbl,count:lens.length};
+}
 
 /* FIXED: OV probability — count TOTAL post-OV temps above coverline, not just consecutive */
 function ovProb(c,ci){
@@ -1064,6 +1133,7 @@ function showTip(canvasId,hits,ex,ey){
   if(best.lh)tags.push('🧪 LH+');
   if(best.flow)tags.push('🔴 '+best.flow);
   if(best.sex)tags.push('💙');
+  if(best.tqual)tags.push('⚠️ '+best.tqual);
   if(tags.length)lines.push(tags.join(' '));
   var syms=(D.sym[best.date]||[]).concat(D.mood[best.date]||[]);
   if(syms.length)lines.push(syms.slice(0,3).map(function(s){return s.replace('CM: ','')}).join(', '));
@@ -1106,7 +1176,7 @@ function rCycle(){
   h+='</div>';
   h+=colEnd()+'</div>';return h;
 }
-function dCyc(){var cv=document.getElementById('cC');if(!cv)return;var c=D.cycles[curCyc];var _hits=[];var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight,p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b;var ts=c.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});if(!ts.length){ctx.fillStyle='#A0928A';ctx.font='13px -apple-system';ctx.textAlign='center';ctx.fillText('No temperature data for this cycle',W/2,H/2);return};var mn=Math.floor(Math.min.apply(null,ts)*10)/10-.05,mx2=Math.ceil(Math.max.apply(null,ts)*10)/10+.05;var mxDay=c.readings[c.readings.length-1].day;function x(d){return p.l+(d-1)/(Math.max(mxDay,2)-1)*gW}function y(t){return p.t+(1-(t-mn)/(mx2-mn))*gH}ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;for(var t2=Math.ceil(mn*10)/10;t2<=mx2;t2=Math.round((t2+.1)*10)/10){ctx.beginPath();ctx.moveTo(p.l,y(t2));ctx.lineTo(W-p.r,y(t2));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t2.toFixed(1),p.l-4,y(t2)+3)}var cl=avgCL2();if(cl){ctx.save();ctx.setLineDash([5,3]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();ctx.moveTo(p.l,y(cl));ctx.lineTo(W-p.r,y(cl));ctx.stroke();ctx.restore();ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.font="bold 8px -apple-system";ctx.textAlign="left";ctx.fillText("CL "+cl.toFixed(2),W-p.r-52,y(cl)-4)}ctx.strokeStyle="#C4652A";ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();c.readings.forEach(function(r,i){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();var eov=effOv(curCyc);c.readings.forEach(function(r){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);_hits.push({x:px,y:py,day:r.day,date:r.date,temp:r.temp,cycle:'C'+(curCyc+1),ov:eov&&r.day===eov,lh:!!r.ov,flow:r.flow,sex:!!D.sex[r.date],dpo:eov&&r.day>eov?(r.day-eov):null});ctx.fillStyle=r.ov?"#9A7B1E":r.flow?"#A84455":"#C4652A";ctx.beginPath();ctx.arc(px,py,r.ov?4:3,0,Math.PI*2);ctx.fill();if(r.ov&&sOv){ctx.fillStyle="#fff";ctx.font="bold 6px sans-serif";ctx.textAlign="center";ctx.fillText("+",px,py+2)}if(eov&&r.day===eov&&!r.ov&&sOv){ctx.fillStyle="#9A7B1E";ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}if(r.flow&&sPer){ctx.fillStyle="#A84455";ctx.beginPath();ctx.arc(px,py+10,3,0,Math.PI*2);ctx.fill()}if(D.sex[r.date]&&sSex){ctx.fillStyle="#2B5C8A";ctx.globalAlpha=.7;ctx.save();ctx.translate(px,H-p.b-8);ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore();ctx.globalAlpha=1}if(r.day%5===0||r.day===1||r.ov||r.day===eov){ctx.fillStyle="#A0928A";ctx.font="8px -apple-system";ctx.textAlign="center";ctx.fillText(r.day,px,H-p.b+12)}});cycHits=_hits;cv.onclick=function(e){showTip('cC',cycHits,e.clientX,e.clientY)}}
+function dCyc(){var cv=document.getElementById('cC');if(!cv)return;var c=D.cycles[curCyc];var _hits=[];var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight,p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b;var ts=c.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});if(!ts.length){ctx.fillStyle='#A0928A';ctx.font='13px -apple-system';ctx.textAlign='center';ctx.fillText('No temperature data for this cycle',W/2,H/2);return};var mn=Math.floor(Math.min.apply(null,ts)*10)/10-.05,mx2=Math.ceil(Math.max.apply(null,ts)*10)/10+.05;var mxDay=c.readings[c.readings.length-1].day;function x(d){return p.l+(d-1)/(Math.max(mxDay,2)-1)*gW}function y(t){return p.t+(1-(t-mn)/(mx2-mn))*gH}ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;for(var t2=Math.ceil(mn*10)/10;t2<=mx2;t2=Math.round((t2+.1)*10)/10){ctx.beginPath();ctx.moveTo(p.l,y(t2));ctx.lineTo(W-p.r,y(t2));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t2.toFixed(1),p.l-4,y(t2)+3)}var cl=avgCL2();if(cl){ctx.save();ctx.setLineDash([5,3]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();ctx.moveTo(p.l,y(cl));ctx.lineTo(W-p.r,y(cl));ctx.stroke();ctx.restore();ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.font="bold 8px -apple-system";ctx.textAlign="left";ctx.fillText("CL "+cl.toFixed(2),W-p.r-52,y(cl)-4)}ctx.strokeStyle="#C4652A";ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();c.readings.forEach(function(r,i){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();var eov=effOv(curCyc);c.readings.forEach(function(r){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);_hits.push({x:px,y:py,day:r.day,date:r.date,temp:r.temp,cycle:'C'+(curCyc+1),ov:eov&&r.day===eov,lh:!!r.ov,flow:r.flow,sex:!!D.sex[r.date],dpo:eov&&r.day>eov?(r.day-eov):null,tqual:D.tqual&&D.tqual[r.date]||null});var _fl=D.tqual&&D.tqual[r.date];ctx.fillStyle=r.ov?"#9A7B1E":r.flow?"#A84455":"#C4652A";if(_fl){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.stroke()}else{ctx.beginPath();ctx.arc(px,py,r.ov?4:3,0,Math.PI*2);ctx.fill()};if(r.ov&&sOv){ctx.fillStyle="#fff";ctx.font="bold 6px sans-serif";ctx.textAlign="center";ctx.fillText("+",px,py+2)}if(eov&&r.day===eov&&!r.ov&&sOv){ctx.fillStyle="#9A7B1E";ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}if(r.flow&&sPer){ctx.fillStyle="#A84455";ctx.beginPath();ctx.arc(px,py+10,3,0,Math.PI*2);ctx.fill()}if(D.sex[r.date]&&sSex){ctx.fillStyle="#2B5C8A";ctx.globalAlpha=.7;ctx.save();ctx.translate(px,H-p.b-8);ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore();ctx.globalAlpha=1}if(r.day%5===0||r.day===1||r.ov||r.day===eov){ctx.fillStyle="#A0928A";ctx.font="8px -apple-system";ctx.textAlign="center";ctx.fillText(r.day,px,H-p.b+12)}});cycHits=_hits;cv.onclick=function(e){showTip('cC',cycHits,e.clientX,e.clientY)}}
 
 /* COMPARE */
 function rCompare(){
@@ -1233,6 +1303,35 @@ function rCompare(){
   }
   h+='</div>';
 
+  // DPO COMPARISON — only show if current cycle has OV detected
+  var info2=cInfo();
+  if(info2.ho){
+    var curDPO=info2.cd-info2.od;
+    var dpoData=dpoCompare(curDPO);
+    if(dpoData.length){
+      var dpoTemps=dpoData.map(function(d){return d.temp});
+      var dpoAvg=dpoTemps.reduce(function(a,b){return a+b},0)/dpoTemps.length;
+      h+='<div class="section"><div class="sec-hdr"><span class="sec-title">'+curDPO+' DPO across cycles</span><span class="sec-title">'+dpoData.length+' cycles</span></div>';
+      h+='<div class="card" style="padding:14px 16px">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
+      h+='<div><span style="font-size:18px;font-weight:800;color:var(--plum)">'+dpoAvg.toFixed(2)+'°</span><span style="font-size:11px;color:var(--txt3);margin-left:6px">avg at '+curDPO+' DPO</span></div></div>';
+      dpoData.forEach(function(d){
+        var diff=d.temp-dpoAvg;var ds=diff>=0?'+'+diff.toFixed(2):diff.toFixed(2);
+        var dc=Math.abs(diff)<0.05?'var(--txt4)':diff>0?'var(--burnt)':'var(--cobalt)';
+        h+='<div style="padding:6px 0;border-bottom:1px solid rgba(0,0,0,.04);display:flex;justify-content:space-between;align-items:center">';
+        h+='<div><span style="font-size:12px;font-weight:600;color:'+PAL[d.i%7]+'">C'+(d.i+1)+'</span>';
+        h+='<span style="font-size:10px;color:var(--txt3);margin-left:6px">'+fd(d.date)+'</span>';
+        var tags2=[];if(d.sex)tags2.push('💙');
+        d.syms.concat(d.mood).slice(0,2).forEach(function(s){tags2.push(s.replace('CM: ',''))});
+        if(tags2.length)h+='<span style="font-size:9px;color:var(--txt4);margin-left:6px">'+tags2.join(' · ')+'</span>';
+        h+='</div>';
+        h+='<div style="text-align:right"><span style="font-size:14px;font-weight:700;color:var(--txt)">'+d.temp.toFixed(2)+'°</span>';
+        h+='<span style="font-size:10px;font-weight:600;color:'+dc+';margin-left:4px">'+ds+'°</span></div></div>';
+      });
+      h+='</div></div>';
+    }
+  }
+
   // CYCLE VS CYCLE comparison
   h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Compare Two Cycles</span></div>';
   h+='<div class="cmp-sel">';
@@ -1349,6 +1448,66 @@ function rInsights(){
   if(cp2)h+='<div class="sum-row"><span class="sum-lbl">Conception score</span><span class="sum-val" style="color:'+(cp2.pct>=70?'var(--forest)':cp2.pct>=40?'var(--gold)':'var(--txt4)')+'">'+cp2.pct+'%</span></div>';
   h+='</div>'+colEnd()+'</div>';
 
+  // Cycle regularity
+  var reg=regularityScore();
+  if(reg){
+    var regCol=reg.score>=70?"var(--forest)":reg.score>=50?"var(--gold)":"var(--burnt)";
+    h+='<div class="section">'+colHdr('i-reg','Cycle Regularity');
+    h+=colBody('i-reg');
+    h+='<div class="card" style="padding:14px 16px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
+    h+='<span style="font-size:20px;font-weight:800;color:'+regCol+'">'+reg.score+'%</span>';
+    h+='<span style="font-size:11px;font-weight:600;color:'+regCol+'">'+reg.lbl+'</span></div>';
+    h+='<div class="reg-bar"><div class="reg-fill" style="width:'+reg.score+'%;background:'+regCol+'"></div></div>';
+    h+='<div style="font-size:10px;color:var(--txt3);margin-top:6px">Based on '+reg.count+' cycles · SD: ±'+reg.sd+' days</div>';
+    h+='</div>'+colEnd()+'</div>';
+  }
+
+  // Fertile window success rate
+  var fws=fwSuccess();
+  if(fws.length>=2){
+    var ov1Hit=fws.filter(function(f){return f.hitOV1}).length;
+    var ov2Hit=fws.filter(function(f){return f.hitOV2}).length;
+    var ovHit2=fws.filter(function(f){return f.hitOV}).length;
+    var anyPeak=fws.filter(function(f){return f.hitOV1||f.hitOV2||f.hitOV}).length;
+    h+='<div class="section">'+colHdr('i-fws','Fertile Window Success',fws.length+' cycles');
+    h+=colBody('i-fws');
+    h+='<div class="card" style="padding:14px 16px">';
+    h+='<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">How often you hit the key days</div>';
+    function fwBar(label,count,total,col){
+      var pct=Math.round(count/total*100);
+      return '<div class="pr"><span class="pn">'+label+'</span><div class="pt"><div class="pb" style="width:'+pct+'%;background:'+col+'"></div></div><span style="font-size:10px;color:var(--txt3);width:36px">'+count+'/'+total+'</span></div>';
+    }
+    h+=fwBar('OV-1 (peak)',ov1Hit,fws.length,'var(--burnt)');
+    h+=fwBar('OV-2 (high)',ov2Hit,fws.length,'var(--gold)');
+    h+=fwBar('OV day',ovHit2,fws.length,'var(--forest)');
+    h+=fwBar('Any peak day',anyPeak,fws.length,'var(--cobalt)');
+    h+='<div style="font-size:10px;color:var(--txt4);margin-top:8px">OV-1 and OV-2 have the highest conception rates (~25-30%)</div>';
+    h+='</div>'+colEnd()+'</div>';
+  }
+
+  // Prediction accuracy
+  var pa=predAccuracy();
+  if(pa.length>=2){
+    var avgErr=pa.reduce(function(a,b){return a+Math.abs(b.diff)},0)/pa.length;
+    var within1=pa.filter(function(p){return Math.abs(p.diff)<=1}).length;
+    var within3=pa.filter(function(p){return Math.abs(p.diff)<=3}).length;
+    h+='<div class="section">'+colHdr('i-pred','Prediction Accuracy');
+    h+=colBody('i-pred');
+    h+='<div class="card" style="padding:14px 16px">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
+    h+='<div><span style="font-size:18px;font-weight:800;color:var(--cobalt)">±'+avgErr.toFixed(1)+'d</span><span style="font-size:11px;color:var(--txt3);margin-left:6px">avg error</span></div>';
+    h+='<span style="font-size:10px;color:var(--txt4)">'+within1+'/'+pa.length+' within 1 day</span></div>';
+    pa.forEach(function(p){
+      var col=Math.abs(p.diff)<=1?'var(--forest)':Math.abs(p.diff)<=3?'var(--gold)':'var(--burnt)';
+      h+='<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.04);font-size:11px">';
+      h+='<span style="color:'+PAL[p.i%7]+';font-weight:600">C'+(p.i+1)+'</span>';
+      h+='<span style="color:var(--txt3)">Predicted '+p.predicted+'d</span>';
+      h+='<span style="color:var(--txt)">Actual '+p.actual+'d</span>';
+      h+='<span style="color:'+col+';font-weight:700">'+(p.diff>0?'+':'')+p.diff+'d</span></div>';
+    });
+    h+='</div>'+colEnd()+'</div>';
+  }
+
   h+='<div class="section">'+colHdr('i-trend','Cycle Length Trend');
   h+=colBody('i-trend')+'<div class="cw"><canvas id="tC" style="height:140px"></canvas></div>'+colEnd()+'</div>';
 
@@ -1411,7 +1570,13 @@ function showM(date,r,ci2){
   h+='<div class="fr"><div class="fl">Date</div><input class="fi" type="date" id="mD" value="'+date+'"></div>';
   h+='<div class="fr"><div class="fl">Temperature (°C)</div><input class="fi" type="number" step="0.01" id="mT" value="'+(r&&r.temp!=null?r.temp.toFixed(2):'')+'"></div>';
   h+='<div class="fr"><div class="tr"><span class="tl">Ovulation (LH+)</span><div class="tg'+(r&&r.ov?' on':'')+'" id="mOv" onclick="this.classList.toggle(\'on\')"></div></div>';
-  h+='<div class="tr"><span class="tl">Intimacy</span><div class="tg'+(sx?' on':'')+'" id="mSx" onclick="this.classList.toggle(\'on\')"></div></div></div>';
+  h+='<div class="tr"><span class="tl">Intimacy</span><div class="tg'+(sx?' on':'')+'" id="mSx" onclick="this.classList.toggle(\'on\')"></div></div>';
+  var tq=D.tqual&&D.tqual[date]?D.tqual[date]:'';
+  h+='<div class="tr"><span class="tl">Temp unreliable?</span><div class="tg'+(tq?' on':'')+'" id="mTQ" onclick="this.classList.toggle(\'on\')"></div></div>';
+  if(tq||( document.getElementById&&false))h+='';
+  h+='<div class="chips" style="margin-top:4px" id="tqReasons">';
+  ["Bad sleep","Alcohol","Illness","Different time","Mouth breathing"].forEach(function(q){h+='<button class="chip chip-s'+(tq===q?' on':'')+'" onclick="this.parentElement.querySelectorAll(\'.chip\').forEach(function(c){c.classList.remove(\'on\')});this.classList.add(\'on\')">'+q+'</button>'});
+  h+='</div></div></div>';
   h+='<div class="fr"><div class="fl">Period Flow</div><div class="chips">';
   ["none","light","medium","heavy"].forEach(function(f){var on=(r&&r.flow===f)||(f==="none"&&(!r||!r.flow));h+='<button class="chip chip-f'+(on?' on':'')+'" data-f="'+f+'" onclick="pF(this)">'+f+'</button>'});h+='</div></div>';
   h+='<div class="fr"><div class="fl">Mood</div><div class="chips">';
@@ -1449,6 +1614,11 @@ function saveR(){
   if(sx)D.sex[date]=1;else delete D.sex[date];
   if(nt)D.notes[date]=nt;else delete D.notes[date];
   if(md.length)D.meds[date]=md;else delete D.meds[date];
+  // Temp quality
+  if(!D.tqual)D.tqual={};
+  var tqOn=document.getElementById('mTQ').classList.contains('on');
+  if(tqOn){var tqChip=document.querySelector('#tqReasons .chip.on');D.tqual[date]=tqChip?tqChip.textContent:'flagged'}
+  else delete D.tqual[date];
   save();closeM();render();flash("Saved ✓");
 }
 function delR(date,ci2){if(!confirm("Delete?"))return;D.cycles[ci2].readings=D.cycles[ci2].readings.filter(function(r){return r.date!==date});delete D.sym[date];delete D.mood[date];delete D.sex[date];delete D.notes[date];delete D.photos[date];delete D.meds[date];save();closeM();render();flash("Deleted")}
@@ -1530,6 +1700,10 @@ function flash(m){var t=document.createElement('div');t.className='toast';t.text
 load();render();
 window.addEventListener('orientationchange',function(){setTimeout(render,200)});
 window.addEventListener('resize',function(){clearTimeout(window._rsz);window._rsz=setTimeout(render,150)});
+// PWA Service Worker
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').then(function(reg){
+  reg.addEventListener('updatefound',function(){var w=reg.installing;if(w)w.addEventListener('statechange',function(){if(w.state==='activated')flash('App updated ✓')})});
+}).catch(function(e){console.log('SW registration failed:',e)})}
 </script>
 </body>
 </html>
