@@ -176,15 +176,15 @@ canvas{width:100%;display:block}
 .rdg-tags{display:flex;flex-wrap:wrap;gap:2px;margin-top:2px}
 .rdg-tag{font-size:8px;padding:2px 5px;border-radius:6px;font-weight:600}
 /* Modal */
-.mbg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(60,30,10,.45);z-index:100;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);overflow:hidden}
-.mdl{background:var(--cream);border-radius:20px 20px 0 0;padding:20px 16px calc(30px + env(safe-area-inset-bottom,0px));max-height:85vh;overflow-y:scroll;-webkit-overflow-scrolling:touch;width:100%;max-width:480px;position:relative;z-index:101}
+.mbg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(60,30,10,.45);z-index:100;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.mdl{background:var(--cream);border-radius:20px 20px 0 0;padding:20px 16px calc(30px + env(safe-area-inset-bottom,0px));max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;width:100%;max-width:480px;position:relative;z-index:101}
 .mt{font-size:17px;font-weight:800;color:var(--txt);margin-bottom:14px}
 .fl{font-size:10px;font-weight:600;color:var(--txt3);letter-spacing:.2px;margin-bottom:5px}
 .fi{width:100%;padding:11px;border:1.5px solid var(--cream3);border-radius:12px;font-size:15px;background:var(--card);color:var(--txt);outline:none;transition:border-color .15s}
 .fi:focus{border-color:var(--cobalt)}
 .fr{margin-bottom:12px;position:relative;overflow:visible}
-.chips{display:flex;flex-wrap:wrap;gap:5px;max-width:100%;position:relative;z-index:0}
-.chip{padding:6px 11px;border-radius:18px;font-size:10px;font-weight:600;background:var(--cream3);color:var(--txt4);position:relative;z-index:0}
+.chips{display:flex;flex-wrap:wrap;gap:5px;max-width:100%;overflow:hidden}
+.chip{padding:6px 11px;border-radius:18px;font-size:10px;font-weight:600;background:var(--cream3);color:var(--txt4)}
 .chip.on{color:#fff;border-color:transparent}
 .chip-m.on{background:var(--cobalt)}.chip-s.on{background:var(--burnt)}.chip-c.on{background:var(--gold)}.chip-f.on{background:var(--rose)}
 .br{display:flex;gap:8px;margin-top:14px}
@@ -356,7 +356,10 @@ var sOv=true,sPer=true,sSex=true,sCM=true;
 var cVis=[],zm={s:1,ox:0,oy:0,drag:false,lx:0,ly:0,pinch:0};
 var cmpA=-1,cmpB=-1;
 var smooth=false;
+var sBBT=true;
+var sCmpWrist=false;
 var sWrist=false;
+var sBBTcyc=true;
 /* Collapsed section state — persisted in localStorage */
 var collapsed={};
 try{var _cs=localStorage.getItem('bbt-collapsed');if(_cs)collapsed=JSON.parse(_cs);else{
@@ -813,25 +816,105 @@ function quickLog3(){saveUndo();var inp=document.getElementById('mornT');var raw
   save();render();flash(t.toFixed(2)+"° logged",true)}
 
 /* TODAY — with collapsible sections */
-function rToday(info){
-  var h='';
+function rToday(info){  var h='';
   var todaySy=D.sym[td()]||[];var todayMo=D.mood[td()]||[];
   var streak=getStreak();
 
-  // GAME PLAN
-  var gp=gamePlan(info);
-  h+='<div class="section"><div class="gp" style="--gpc:'+gp.color+'">';
-  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start"><div class="gp-title">'+gp.title+'</div>';
-  if(streak>1)h+='<span class="streak">🔥 '+streak+' days</span>';
+
+  // HERO CARD — DPO + Biology + Ring + Phase + Tips
+  var pct=Math.min(1,info.cd/info.av);var r2=34,circ=2*Math.PI*r2,off=circ*(1-pct);
+  var ph=phase(info.cd,info.av,info.ao,info.ho,info.od);
+  var bio=getBiology(info);
+  var dpo=info.ho?(info.cd-info.od):null;
+
+  h+='<div class="section"><div class="card" style="padding:16px">';
+  // Top row: DPO/Day + Biology title + Ring
+  h+='<div style="display:flex;align-items:flex-start;gap:14px">';
+  // Ring — compact
+  h+='<div style="position:relative;width:70px;height:70px;flex-shrink:0"><svg width="70" height="70" viewBox="0 0 70 70"><defs><linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="var(--cobalt)"/><stop offset="100%" stop-color="var(--burnt)"/></linearGradient></defs>';
+  h+='<circle fill="none" stroke="var(--cream3)" stroke-width="5" cx="35" cy="35" r="'+r2+'"/>';
+  h+='<circle fill="none" stroke="url(#rg)" stroke-width="5" stroke-linecap="round" cx="35" cy="35" r="'+r2+'" stroke-dasharray="'+circ+'" stroke-dashoffset="'+off+'" transform="rotate(-90 35 35)"/>';
+  h+='</svg><div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">';
+  if(info.dtp>0)h+='<div style="font-size:20px;font-weight:800;color:var(--txt)">'+info.dtp+'</div><div style="font-size:7px;font-weight:600;color:var(--txt4);text-transform:uppercase">days</div>';
+  else h+='<div style="font-size:10px;font-weight:700;color:var(--rose)">Due</div>';
+  h+='</div></div>';
+  // DPO headline + biology
+  h+='<div style="flex:1">';
+  h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+  h+='<span style="font-size:22px">'+bio.icon+'</span>';
+  if(dpo!=null)h+='<span style="font-size:18px;font-weight:800;color:var(--txt)">'+dpo+' DPO</span>';
+  else h+='<span style="font-size:18px;font-weight:800;color:var(--txt)">Day '+info.cd+'</span>';
   h+='</div>';
-  h+='<div class="gp-sub">'+gp.sub+'</div>';
-  h+='<div class="gp-actions">';
-  gp.actions.forEach(function(a,idx){
-    var done=a.done;
-    if(!done&&D.checks&&D.checks[td()]&&D.checks[td()][idx])done=true;
-    h+='<div class="gp-action" onclick="toggleCheck('+idx+')" style="cursor:pointer"><div class="gp-check'+(done?' done':'')+'">✓</div>'+a.txt+'</div>'
-  });
-  h+='</div></div></div>';
+  h+='<div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:3px">'+bio.title+'</div>';
+  h+='<div style="font-size:11px;color:var(--txt2);line-height:1.5">'+bio.body+'</div>';
+  h+='</div></div>';
+
+  // Phase badge
+  h+='<div style="margin-top:12px;display:flex;align-items:center;gap:8px">';
+  h+='<span class="phase-badge" style="background:'+ph.bg+';color:'+ph.c+'"><span class="phase-dot" style="background:'+ph.c+'"></span>'+ph.n+'</span>';
+  h+='<span style="font-size:10px;color:var(--txt3)">'+ph.d+'</span>';
+  h+='</div>';
+
+  // Tips
+  var tips=getPhaseTips(ph.n,info);
+  if(tips.length){h+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(0,0,0,.06)">';
+    tips.forEach(function(t){h+='<div style="display:flex;gap:7px;padding:3px 0;font-size:11px;color:var(--txt);line-height:1.4"><span style="flex-shrink:0">'+t.icon+'</span><span>'+t.text+'</span></div>'});
+  h+='</div>'}
+
+  // Fertility fact
+  h+='<div style="margin-top:10px;padding:10px 12px;background:var(--cob-bg);border-radius:10px">';
+  h+='<div style="font-size:9px;font-weight:600;color:var(--cobalt);margin-bottom:3px">Fertility Fact</div>';
+  h+='<div style="font-size:11px;color:var(--txt);line-height:1.4">'+getFact()+'</div></div>';
+  h+='</div></div>';
+
+  // CIRCULAR CYCLE VIEW
+  h+='<div class="section"><div class="card" style="padding:14px 10px 10px;text-align:center">';
+  h+='<canvas id="circC" width="520" height="520" style="width:min(260px,70vw);height:min(260px,70vw);margin:0 auto;display:block"></canvas>';
+  h+='<div style="display:flex;justify-content:center;gap:10px;margin-top:10px;font-size:9px;font-weight:600;color:var(--txt3)">';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#A84455"></span>Period</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#4A7D5E"></span>Follicular</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#9A7B1E"></span>Ovulatory</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#6B4E8B"></span>Luteal</span>';
+  h+='</div>';
+  h+='<div style="display:flex;justify-content:center;gap:10px;margin-top:5px;font-size:8px;font-weight:600;color:var(--txt4)">';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:#C4652A"></span>Above CL</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:#2B5C8A"></span>Below CL</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:#9A7B1E"></span>LH+</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:5px;height:5px;transform:rotate(45deg);background:#2B5C8A"></span>Sex</span>';
+  h+='</div>';
+  h+='</div></div>';
+  setTimeout(function(){drawCircle(info)},80);
+
+  // Notifications & alerts
+  var notifs=getNotifs(info);var alerts=tempAlerts(info);
+  if(notifs.length||alerts.length){h+='<div class="section">';
+    notifs.forEach(function(n){h+='<div class="notif" style="border-left:3px solid '+n.color+';color:'+n.color+'"><span class="notif-icon">'+n.icon+'</span>'+n.msg+'</div>'});
+    alerts.forEach(function(a){h+='<div class="notif" style="border-left:3px solid '+a.color+';color:'+a.color+'"><span class="notif-icon">'+a.icon+'</span>'+a.msg+'</div>'});
+  h+='</div>'}
+
+  // Stats row — with inline temp deviation
+  h+='<div class="section"><div class="sg">';
+  var tr=info.c.readings.find(function(x){return x.date===td()});
+  var at=ats();var av=atVar();
+  var tempDev=null;
+  if(tr&&tr.temp!=null&&at[info.cd]){var td2=tr.temp-at[info.cd];tempDev={diff:td2,avg:at[info.cd]}}
+  h+='<div class="sc"><div class="sv">'+(tr&&tr.temp!=null?tr.temp.toFixed(2)+'°':'—')+'</div>';
+  if(tempDev){var dc=Math.abs(tempDev.diff)<0.05?'var(--txt4)':tempDev.diff>0?'var(--burnt)':'var(--cobalt)';
+    h+='<div style="font-size:9px;font-weight:600;color:'+dc+';margin-top:1px">'+(tempDev.diff>=0?'+':'')+tempDev.diff.toFixed(2)+'° vs avg</div>'}
+  else h+='<div class="sl">Today\'s Temp</div>';
+  h+='</div>';
+  if(info.ho){var dpo=info.cd-info.od;h+='<div class="sc"><div class="sv" style="color:var(--gold)">'+dpo+' DPO</div><div class="sl">Post Ovulation</div></div>'}
+  else{var fw=info.ao-5;var inFW=info.cd>=fw&&info.cd<=info.ao;
+    if(inFW)h+='<div class="sc"><div class="sv" style="color:var(--burnt)">Now!</div><div class="sl">Fertile Window</div></div>';
+    else if(info.cd<fw)h+='<div class="sc"><div class="sv">'+(fw-info.cd)+'d</div><div class="sl">To Fertile Window</div></div>';
+    else h+='<div class="sc"><div class="sv">Day '+info.ao+'</div><div class="sl">Avg Ovulation</div></div>'}
+  h+='<div class="sc"><div class="sv">'+info.av+'d</div><div class="sl">Avg Cycle</div></div>';
+  var cl=avgCL2();
+  // Tomorrow's predicted temp merged into 4th stat box
+  var tmrw=info.cd+1;
+  if(at[tmrw]){h+='<div class="sc"><div class="sv">'+at[tmrw].toFixed(2)+'°</div><div style="font-size:9px;font-weight:600;color:var(--txt4);margin-top:1px">Day '+tmrw+' expected</div></div>'}
+  else{h+='<div class="sc"><div class="sv">'+(cl?cl.toFixed(2)+'°':'—')+'</div><div class="sl">Coverline</div></div>'}
+  h+='</div></div>';
 
   // QUICK LOG — smart state
   var todayR2=info.c.readings.find(function(x){return x.date===td()});
@@ -965,89 +1048,20 @@ function rToday(info){
     h+=colEnd()+'</div>';
   }
 
-  // Notifications & alerts
-  var notifs=getNotifs(info);var alerts=tempAlerts(info);
-  if(notifs.length||alerts.length){h+='<div class="section">';
-    notifs.forEach(function(n){h+='<div class="notif" style="border-left:3px solid '+n.color+';color:'+n.color+'"><span class="notif-icon">'+n.icon+'</span>'+n.msg+'</div>'});
-    alerts.forEach(function(a){h+='<div class="notif" style="border-left:3px solid '+a.color+';color:'+a.color+'"><span class="notif-icon">'+a.icon+'</span>'+a.msg+'</div>'});
-  h+='</div>'}
-
-  // Ring + phase
-  var pct=Math.min(1,info.cd/info.av);var r2=40,circ=2*Math.PI*r2,off=circ*(1-pct);
-  var ph=phase(info.cd,info.av,info.ao,info.ho,info.od);
-  h+='<div class="section"><div class="card" style="display:flex;align-items:center;gap:16px;padding:16px">';
-  h+='<div style="position:relative;width:90px;height:90px;flex-shrink:0"><svg width="90" height="90" viewBox="0 0 90 90"><defs><linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="var(--cobalt)"/><stop offset="100%" stop-color="var(--burnt)"/></linearGradient></defs>';
-  h+='<circle fill="none" stroke="var(--cream3)" stroke-width="6" cx="45" cy="45" r="'+r2+'"/>';
-  h+='<circle fill="none" stroke="url(#rg)" stroke-width="6" stroke-linecap="round" cx="45" cy="45" r="'+r2+'" stroke-dasharray="'+circ+'" stroke-dashoffset="'+off+'" transform="rotate(-90 45 45)"/>';
-  h+='</svg><div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">';
-  if(info.dtp>0)h+='<div style="font-size:24px;font-weight:800;color:var(--txt)">'+info.dtp+'</div><div style="font-size:8px;font-weight:600;color:var(--txt4);text-transform:uppercase">days left</div>';
-  else h+='<div style="font-size:11px;font-weight:700;color:var(--rose)">Due now</div>';
-  h+='</div></div>';
-  h+='<div><span class="phase-badge" style="background:'+ph.bg+';color:'+ph.c+'"><span class="phase-dot" style="background:'+ph.c+'"></span>'+ph.n+'</span>';
-  h+='<div class="phase-desc" style="margin-top:6px">'+ph.d+'</div>';
-  var tips=getPhaseTips(ph.n,info);
-  if(tips.length){h+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(0,0,0,.06)">';
-    h+='<div style="font-size:9px;font-weight:700;color:var(--txt4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Tips for today</div>';
-    tips.forEach(function(t){h+='<div style="display:flex;gap:7px;padding:3px 0;font-size:11px;color:var(--txt);line-height:1.4"><span style="flex-shrink:0">'+t.icon+'</span><span>'+t.text+'</span></div>'});
-  h+='</div>'}
+  // GAME PLAN
+  var gp=gamePlan(info);
+  h+='<div class="section"><div class="gp" style="--gpc:'+gp.color+'">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start"><div class="gp-title">'+gp.title+'</div>';
+  if(streak>1)h+='<span class="streak">🔥 '+streak+' days</span>';
+  h+='</div>';
+  h+='<div class="gp-sub">'+gp.sub+'</div>';
+  h+='<div class="gp-actions">';
+  gp.actions.forEach(function(a,idx){
+    var done=a.done;
+    if(!done&&D.checks&&D.checks[td()]&&D.checks[td()][idx])done=true;
+    h+='<div class="gp-action" onclick="toggleCheck('+idx+')" style="cursor:pointer"><div class="gp-check'+(done?' done':'')+'">✓</div>'+a.txt+'</div>'
+  });
   h+='</div></div></div>';
-  // CIRCULAR CYCLE VIEW
-  h+='<div class="section"><div class="card" style="padding:14px 10px 10px;text-align:center">';
-  h+='<canvas id="circC" width="520" height="520" style="width:min(260px,70vw);height:min(260px,70vw);margin:0 auto;display:block"></canvas>';
-  // Phase legend
-  h+='<div style="display:flex;justify-content:center;gap:10px;margin-top:10px;font-size:9px;font-weight:600;color:var(--txt3)">';
-  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#A84455"></span>Period</span>';
-  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#4A7D5E"></span>Follicular</span>';
-  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#9A7B1E"></span>Ovulatory</span>';
-  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#6B4E8B"></span>Luteal</span>';
-  h+='</div>';
-  // Dot legend
-  h+='<div style="display:flex;justify-content:center;gap:10px;margin-top:5px;font-size:8px;font-weight:600;color:var(--txt4)">';
-  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:#C4652A"></span>Above CL</span>';
-  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:#2B5C8A"></span>Below CL</span>';
-  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:#9A7B1E"></span>LH+</span>';
-  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:5px;height:5px;transform:rotate(45deg);background:#2B5C8A"></span>Sex</span>';
-  h+='</div>';
-  h+='</div></div>';
-  setTimeout(function(){drawCircle(info)},80);
-
-  // Biology
-  var bio=getBiology(info);
-  h+='<div class="section">'+colHdr('t-bio','What\'s happening');
-  h+=colBody('t-bio');
-  h+='<div class="card" style="padding:14px 16px"><div style="display:flex;align-items:flex-start;gap:10px">';
-  h+='<div style="font-size:24px;flex-shrink:0;margin-top:-2px">'+bio.icon+'</div>';
-  h+='<div><div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:4px">'+bio.title+'</div>';
-  h+='<div style="font-size:12px;color:var(--txt2);line-height:1.6">'+bio.body+'</div></div>';
-  h+='</div></div>';
-  h+='<div class="card" style="padding:12px 14px">';
-  h+='<div style="font-size:10px;font-weight:600;color:var(--cobalt);margin-bottom:4px">Fertility Fact</div>';
-  h+='<div style="font-size:12px;color:var(--txt);line-height:1.5">'+getFact()+'</div></div>';
-  h+=colEnd()+'</div>';
-
-  // Stats row — with inline temp deviation
-  h+='<div class="section"><div class="sg">';
-  var tr=info.c.readings.find(function(x){return x.date===td()});
-  var at=ats();var av=atVar();
-  var tempDev=null;
-  if(tr&&tr.temp!=null&&at[info.cd]){var td2=tr.temp-at[info.cd];tempDev={diff:td2,avg:at[info.cd]}}
-  h+='<div class="sc"><div class="sv">'+(tr&&tr.temp!=null?tr.temp.toFixed(2)+'°':'—')+'</div>';
-  if(tempDev){var dc=Math.abs(tempDev.diff)<0.05?'var(--txt4)':tempDev.diff>0?'var(--burnt)':'var(--cobalt)';
-    h+='<div style="font-size:9px;font-weight:600;color:'+dc+';margin-top:1px">'+(tempDev.diff>=0?'+':'')+tempDev.diff.toFixed(2)+'° vs avg</div>'}
-  else h+='<div class="sl">Today\'s Temp</div>';
-  h+='</div>';
-  if(info.ho){var dpo=info.cd-info.od;h+='<div class="sc"><div class="sv" style="color:var(--gold)">'+dpo+' DPO</div><div class="sl">Post Ovulation</div></div>'}
-  else{var fw=info.ao-5;var inFW=info.cd>=fw&&info.cd<=info.ao;
-    if(inFW)h+='<div class="sc"><div class="sv" style="color:var(--burnt)">Now!</div><div class="sl">Fertile Window</div></div>';
-    else if(info.cd<fw)h+='<div class="sc"><div class="sv">'+(fw-info.cd)+'d</div><div class="sl">To Fertile Window</div></div>';
-    else h+='<div class="sc"><div class="sv">Day '+info.ao+'</div><div class="sl">Avg Ovulation</div></div>'}
-  h+='<div class="sc"><div class="sv">'+info.av+'d</div><div class="sl">Avg Cycle</div></div>';
-  var cl=avgCL2();
-  // Tomorrow's predicted temp merged into 4th stat box
-  var tmrw=info.cd+1;
-  if(at[tmrw]){h+='<div class="sc"><div class="sv">'+at[tmrw].toFixed(2)+'°</div><div style="font-size:9px;font-weight:600;color:var(--txt4);margin-top:1px">Day '+tmrw+' expected</div></div>'}
-  else{h+='<div class="sc"><div class="sv">'+(cl?cl.toFixed(2)+'°':'—')+'</div><div class="sl">Coverline</div></div>'}
-  h+='</div></div>';
 
   // OV probability — now with FIXED algorithm
   var op=ovProb(info.c,info.ci);
@@ -1460,8 +1474,17 @@ function rCycle(){
   else{h+='<div class="filters"><button class="flt" onclick="togExcl('+curCyc+')" style="color:var(--rose)">Exclude</button>';
     h+='<button class="flt flt-ov'+(sOv?' on':'')+'" onclick="sOv=!sOv;render()">OV</button>';
     h+='<button class="flt flt-per'+(sPer?' on':'')+'" onclick="sPer=!sPer;render()">Period</button>';
-    h+='<button class="flt flt-sex'+(sSex?' on':'')+'" onclick="sSex=!sSex;render()">Intimacy</button></div>'}
-  h+='<div class="section"><div class="cw"><canvas id="cC" style="height:200px"></canvas></div></div>';
+    h+='<button class="flt flt-sex'+(sSex?' on':'')+'" onclick="sSex=!sSex;render()">Intimacy</button>';
+    h+='<button class="flt" style="'+(sBBTcyc?'background:var(--burnt);color:#fff':'')+'" onclick="sBBTcyc=!sBBTcyc;render()">BBT</button>';
+    h+='<button class="flt" style="'+(sWrist?'background:var(--plum);color:#fff':'')+'" onclick="sWrist=!sWrist;render()">Wrist</button></div>'}
+  h+='<div class="section"><div class="cw"><canvas id="cC" style="height:200px"></canvas></div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 6px;font-size:9px;font-weight:600;color:var(--txt4)">';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:2px;background:#C4652A;border-radius:1px"></span>BBT</span>';
+  if(sWrist)h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:0;border-top:2px dashed #6B4E8B"></span>Wrist</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:0;border-top:2px dashed #2B5C8A"></span>Coverline</span>';
+  h+='</div></div>';
+  // Calendar
+  h+='<div class="section">'+buildCalendar(cInfo(),curCyc)+'</div>';
   var od2=ovDay(c);var cl2=avgCL2();var lp=od2&&c.length?(c.length-od2):null;
   h+='<div class="section land-hide"><div class="sg"><div class="sc"><div class="sv">'+(c.length||'Current')+'</div><div class="sl">'+(c.length?'Days':'Cycle')+'</div></div>';
   h+='<div class="sc"><div class="sv">'+(od2?'Day '+od2:'—')+'</div><div class="sl">Ovulation</div></div>';
@@ -1482,8 +1505,12 @@ function rCycle(){
   h+='</div>';
   h+=colEnd()+'</div>';return h;
 }
-function dCyc(){var cv=document.getElementById('cC');if(!cv)return;var c=D.cycles[curCyc];var _hits=[];var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight,p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b;var ts=c.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});if(!ts.length){ctx.fillStyle='#A0928A';ctx.font='13px -apple-system';ctx.textAlign='center';ctx.fillText('No temperature data for this cycle',W/2,H/2);return};var mn=Math.floor(Math.min.apply(null,ts)*10)/10-.05,mx2=Math.ceil(Math.max.apply(null,ts)*10)/10+.05;var mxDay=c.readings[c.readings.length-1].day;function x(d){return p.l+(d-1)/(Math.max(mxDay,2)-1)*gW}function y(t){return p.t+(1-(t-mn)/(mx2-mn))*gH}ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;for(var t2=Math.ceil(mn*10)/10;t2<=mx2;t2=Math.round((t2+.1)*10)/10){ctx.beginPath();ctx.moveTo(p.l,y(t2));ctx.lineTo(W-p.r,y(t2));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t2.toFixed(1),p.l-4,y(t2)+3)}var cl=avgCL2();if(cl){ctx.save();ctx.setLineDash([5,3]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();ctx.moveTo(p.l,y(cl));ctx.lineTo(W-p.r,y(cl));ctx.stroke();ctx.restore();ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.font="bold 8px -apple-system";ctx.textAlign="left";ctx.fillText("CL "+cl.toFixed(2),W-p.r-52,y(cl)-4)}ctx.strokeStyle="#C4652A";ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();c.readings.forEach(function(r,i){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();var eov=effOv(curCyc);c.readings.forEach(function(r){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);_hits.push({x:px,y:py,day:r.day,date:r.date,temp:r.temp,cycle:'C'+(curCyc+1),ov:eov&&r.day===eov,lh:!!r.ov,flow:r.flow,sex:!!D.sex[r.date],dpo:eov&&r.day>eov?(r.day-eov):null,tqual:D.tqual&&D.tqual[r.date]||null});var _fl=D.tqual&&D.tqual[r.date];ctx.fillStyle=r.ov?"#9A7B1E":r.flow?"#A84455":"#C4652A";if(_fl){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.stroke()}else{ctx.beginPath();ctx.arc(px,py,r.ov?4:3,0,Math.PI*2);ctx.fill()};if(r.ov&&sOv){ctx.fillStyle="#fff";ctx.font="bold 6px sans-serif";ctx.textAlign="center";ctx.fillText("+",px,py+2)}if(eov&&r.day===eov&&!r.ov&&sOv){ctx.fillStyle="#9A7B1E";ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}if(r.flow&&sPer){ctx.fillStyle="#A84455";ctx.beginPath();ctx.arc(px,py+10,3,0,Math.PI*2);ctx.fill()}if(D.sex[r.date]&&sSex){ctx.fillStyle="#2B5C8A";ctx.globalAlpha=.7;ctx.save();ctx.translate(px,H-p.b-8);ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore();ctx.globalAlpha=1}if(r.day%5===0||r.day===1||r.ov||r.day===eov){ctx.fillStyle="#A0928A";ctx.font="8px -apple-system";ctx.textAlign="center";ctx.fillText(r.day,px,H-p.b+12)}});// Wrist temp dashed line
-var wristPts=[];c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){var wt=D.wrist[r.date];if(wt>=mn&&wt<=mx2)wristPts.push({day:r.day,temp:wt})}});if(wristPts.length>1){ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle='#6B4E8B';ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();wristPts.forEach(function(w,i){var px=x(w.day),py=y(w.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();wristPts.forEach(function(w){ctx.fillStyle='#6B4E8B';ctx.beginPath();ctx.arc(x(w.day),y(w.temp),2.5,0,Math.PI*2);ctx.fill()});ctx.restore()}cycHits=_hits;cv.onclick=function(e){showTip('cC',cycHits,e.clientX,e.clientY)}}
+function dCyc(){var cv=document.getElementById('cC');if(!cv)return;var c=D.cycles[curCyc];var _hits=[];var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight,p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b;var ts=c.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
+  // Include wrist temps in Y range if wrist toggled on
+  var wts=[];if(sWrist){c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date])wts.push(D.wrist[r.date])})}
+  var allTs=ts.concat(wts);
+  if(!allTs.length){ctx.fillStyle='#A0928A';ctx.font='13px -apple-system';ctx.textAlign='center';ctx.fillText('No temperature data',W/2,H/2);return};var mn=Math.floor(Math.min.apply(null,allTs)*10)/10-.05,mx2=Math.ceil(Math.max.apply(null,allTs)*10)/10+.05;var mxDay=c.readings[c.readings.length-1].day;function x(d){return p.l+(d-1)/(Math.max(mxDay,2)-1)*gW}function y(t){return p.t+(1-(t-mn)/(mx2-mn))*gH}ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;for(var t2=Math.ceil(mn*10)/10;t2<=mx2;t2=Math.round((t2+.1)*10)/10){ctx.beginPath();ctx.moveTo(p.l,y(t2));ctx.lineTo(W-p.r,y(t2));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t2.toFixed(1),p.l-4,y(t2)+3)}var cl=avgCL2();if(cl){ctx.save();ctx.setLineDash([5,3]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();ctx.moveTo(p.l,y(cl));ctx.lineTo(W-p.r,y(cl));ctx.stroke();ctx.restore();ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.font="bold 8px -apple-system";ctx.textAlign="left";ctx.fillText("CL "+cl.toFixed(2),W-p.r-52,y(cl)-4)}if(sBBTcyc){ctx.strokeStyle="#C4652A";ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();c.readings.forEach(function(r,i){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();var eov=effOv(curCyc);c.readings.forEach(function(r){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);_hits.push({x:px,y:py,day:r.day,date:r.date,temp:r.temp,cycle:'C'+(curCyc+1),ov:eov&&r.day===eov,lh:!!r.ov,flow:r.flow,sex:!!D.sex[r.date],dpo:eov&&r.day>eov?(r.day-eov):null,tqual:D.tqual&&D.tqual[r.date]||null});var _fl=D.tqual&&D.tqual[r.date];ctx.fillStyle=r.ov?"#9A7B1E":r.flow?"#A84455":"#C4652A";if(_fl){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.stroke()}else{ctx.beginPath();ctx.arc(px,py,r.ov?4:3,0,Math.PI*2);ctx.fill()};if(r.ov&&sOv){ctx.fillStyle="#fff";ctx.font="bold 6px sans-serif";ctx.textAlign="center";ctx.fillText("+",px,py+2)}if(eov&&r.day===eov&&!r.ov&&sOv){ctx.fillStyle="#9A7B1E";ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}if(r.flow&&sPer){ctx.fillStyle="#A84455";ctx.beginPath();ctx.arc(px,py+10,3,0,Math.PI*2);ctx.fill()}if(D.sex[r.date]&&sSex){ctx.fillStyle="#2B5C8A";ctx.globalAlpha=.7;ctx.save();ctx.translate(px,H-p.b-8);ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore();ctx.globalAlpha=1}if(r.day%5===0||r.day===1||r.ov||r.day===eov){ctx.fillStyle="#A0928A";ctx.font="8px -apple-system";ctx.textAlign="center";ctx.fillText(r.day,px,H-p.b+12)}})};// Wrist temp dashed line
+if(sWrist){var wristPts=[];c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){var wt=D.wrist[r.date];if(wt>=mn&&wt<=mx2)wristPts.push({day:r.day,temp:wt})}});if(wristPts.length>1){ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle='#6B4E8B';ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();wristPts.forEach(function(w,i){var px=x(w.day),py=y(w.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();wristPts.forEach(function(w){ctx.fillStyle='#6B4E8B';ctx.beginPath();ctx.arc(x(w.day),y(w.temp),2.5,0,Math.PI*2);ctx.fill()});ctx.restore()}}cycHits=_hits;cv.onclick=function(e){showTip('cC',cycHits,e.clientX,e.clientY)}}
 
 /* COMPARE */
 function rCompare(){
@@ -1651,6 +1678,8 @@ function rCompare(){
   D.cycles.forEach(function(c,i){h+='<option value="'+i+'"'+(cmpB===i?' selected':'')+'>C'+(i+1)+' · '+c.label+'</option>'});
   h+='</select></div></div>';
   if(cmpA>=0&&cmpB>=0&&cmpA!==cmpB){
+    h+='<div class="sm-tg" style="padding:0 16px;margin-bottom:4px"><span>BBT</span><div class="tg'+(sBBT!==false?' on':'')+'" onclick="sBBT=sBBT===false?true:false;render()" style="width:36px;height:20px"></div></div>';
+    h+='<div class="sm-tg" style="padding:0 16px;margin-bottom:4px"><span>Wrist</span><div class="tg'+(sCmpWrist?' on':'')+'" onclick="sCmpWrist=!sCmpWrist;render()" style="width:36px;height:20px"></div></div>';
     h+='<div class="section"><div class="cw"><canvas id="cmpC" style="height:220px"></canvas></div></div>';
     // Side-by-side stats
     var ca=D.cycles[cmpA],cb=D.cycles[cmpB];
@@ -1685,6 +1714,23 @@ function rCompare(){
     var avgB=tsB.length?(tsB.reduce(function(a,b){return a+b},0)/tsB.length):null;
     h+=cmpRow('Avg temp',avgA?avgA.toFixed(2)+'°':null,avgB?avgB.toFixed(2)+'°':null);
     h+=cmpRow('Readings',tsA.length,tsB.length,'high');
+    // Wrist avg
+    var wA=[],wB=[];ca.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date])wA.push(D.wrist[r.date])});cb.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date])wB.push(D.wrist[r.date])});
+    var wAvgA=wA.length?(wA.reduce(function(a,b){return a+b},0)/wA.length):null;
+    var wAvgB=wB.length?(wB.reduce(function(a,b){return a+b},0)/wB.length):null;
+    h+=cmpRow('Avg wrist',wAvgA?wAvgA.toFixed(2)+'°':null,wAvgB?wAvgB.toFixed(2)+'°':null);
+    // Sleep quality breakdown
+    var slA={Good:0,OK:0,Poor:0,Broken:0,total:0},slB={Good:0,OK:0,Poor:0,Broken:0,total:0};
+    ca.readings.forEach(function(r){var s=D.sleep&&D.sleep[r.date];if(s){slA[s]=(slA[s]||0)+1;slA.total++}});
+    cb.readings.forEach(function(r){var s=D.sleep&&D.sleep[r.date];if(s){slB[s]=(slB[s]||0)+1;slB.total++}});
+    var slStrA=slA.total?slA.Good+'/'+slA.total+' good':null;
+    var slStrB=slB.total?slB.Good+'/'+slB.total+' good':null;
+    h+=cmpRow('Sleep',slStrA,slStrB,'high');
+    // Avg sleep hours
+    var shA=[],shB=[];ca.readings.forEach(function(r){var h2=D.sleepHrs&&D.sleepHrs[r.date];if(h2)shA.push(h2)});cb.readings.forEach(function(r){var h2=D.sleepHrs&&D.sleepHrs[r.date];if(h2)shB.push(h2)});
+    var shAvgA=shA.length?(shA.reduce(function(a,b){return a+b},0)/shA.length):null;
+    var shAvgB=shB.length?(shB.reduce(function(a,b){return a+b},0)/shB.length):null;
+    h+=cmpRow('Avg sleep',shAvgA?shAvgA.toFixed(1)+'h':null,shAvgB?shAvgB.toFixed(1)+'h':null,'high');
     h+='</tbody></table></div></div>';
     var diffs=[];
     if(lpA&&lpB&&Math.abs(lpA-lpB)>=3)diffs.push('Luteal phase differs by '+(Math.abs(lpA-lpB))+' days');
@@ -1735,10 +1781,12 @@ function dCmp(){var cv=document.getElementById('cmpC');if(!cv||cmpA<0||cmpB<0)re
   for(var t=Math.ceil(mn*10)/10;t<=mx;t=Math.round((t+.1)*10)/10){ctx.beginPath();ctx.moveTo(pad.l,y(t));ctx.lineTo(W-pad.r,y(t));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t.toFixed(1),pad.l-4,y(t)+3)}
   for(var d=5;d<=mxD;d+=5){ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="center";ctx.fillText(d,x(d),H-pad.b+14)}
   // Draw lines with labels
-  [ca,cb].forEach(function(c,idx){var col=idx===0?PAL[cmpA%7]:PAL[cmpB%7];var ci2=idx===0?cmpA:cmpB;ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.setLineDash(idx===1?[6,3]:[]);ctx.beginPath();var st=false;var lastPx=0,lastPy=0;c.readings.forEach(function(r){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);st?ctx.lineTo(px,py):ctx.moveTo(px,py);st=true;lastPx=px;lastPy=py});ctx.stroke();ctx.setLineDash([]);
-    // Label at end of line
+  // BBT lines
+  if(sBBT!==false){[ca,cb].forEach(function(c,idx){var col=idx===0?PAL[cmpA%7]:PAL[cmpB%7];var ci2=idx===0?cmpA:cmpB;ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.setLineDash(idx===1?[6,3]:[]);ctx.beginPath();var st=false;var lastPx=0,lastPy=0;c.readings.forEach(function(r){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);st?ctx.lineTo(px,py):ctx.moveTo(px,py);st=true;lastPx=px;lastPy=py});ctx.stroke();ctx.setLineDash([]);
     ctx.fillStyle=col;ctx.font="bold 9px -apple-system";ctx.textAlign="left";ctx.fillText("C"+(ci2+1),lastPx+4,lastPy+3);
-    c.readings.forEach(function(r){var px=x(r.day),py=y(r.temp);if(r.ov){ctx.fillStyle="#9A7B1E";ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}})});
+    c.readings.forEach(function(r){var px=x(r.day),py=y(r.temp);if(r.ov){ctx.fillStyle="#9A7B1E";ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}})})}
+  // Wrist lines
+  if(sCmpWrist){[ca,cb].forEach(function(c,idx){var col=idx===0?PAL[cmpA%7]:PAL[cmpB%7];var ci2=idx===0?cmpA:cmpB;var wPts=[];c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){var wt=D.wrist[r.date];wPts.push({day:r.day,temp:wt})}});if(wPts.length>1){ctx.save();ctx.setLineDash([3,3]);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.globalAlpha=.5;ctx.beginPath();wPts.forEach(function(w,i){var px=x(w.day),py=y(w.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();ctx.restore()}})}
   // Wrist temp lines on overlay
   if(sWrist){D.cycles.forEach(function(c,ci){if(!cVis[ci])return;var col=PAL[ci%7];var wPts=[];c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){var wt=D.wrist[r.date];if(wt>=mn&&wt<=mx)wPts.push({day:r.day,temp:wt})}});if(wPts.length>1){ctx.save();ctx.setLineDash([3,3]);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.globalAlpha=.4;ctx.beginPath();wPts.forEach(function(w,i){var px=x(w.day),py=y(w.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();ctx.restore()}})}
   var acl3=avgCL2();if(acl3){ctx.save();ctx.setLineDash([6,4]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1;ctx.globalAlpha=.4;ctx.beginPath();ctx.moveTo(pad.l,y(acl3));ctx.lineTo(W-pad.r,y(acl3));ctx.stroke();ctx.restore()}}
@@ -2114,9 +2162,104 @@ function drawCircle(info){
   ctx.font='800 44px '+F;ctx.fillText(cd,cx,cy+20);
   ctx.font='600 13px '+F;ctx.fillStyle='#A0928A';ctx.fillText('of ~'+total,cx,cy+44);
 }
+function buildCalendar(info,ci){
+  var c=info.c||D.cycles[ci];var cKey=c.key;
+  var h='<div class="card" style="padding:10px 12px">';
+  h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);margin-bottom:6px">Cycle calendar</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center">';
+  ['M','T','W','T','F','S','S'].forEach(function(d){h+='<div style="font-size:8px;font-weight:600;color:var(--txt5);padding:2px 0">'+d+'</div>'});
+  var cycStart=new Date(cKey+'T12:00:00');
+  var startDow=(cycStart.getDay()+6)%7;
+  for(var bl=0;bl<startDow;bl++)h+='<div></div>';
+  var maxD=c.length||Math.max(db(cKey,td())+8,35);
+  // Predicted period start
+  var predPeriod=c.length?null:ad(cKey,acl()-1);
+  for(var d=1;d<=maxD;d++){
+    var dt=ad(cKey,d-1);
+    var isToday=dt===td();
+    var hasTemp=c.readings.some(function(r){return r.date===dt&&r.temp!=null});
+    var hasFlow=c.readings.some(function(r){return r.date===dt&&r.flow});
+    var hasSex=!!D.sex[dt];
+    var isOV=c.readings.some(function(r){return r.date===dt&&r.ov});
+    var isFuture=dt>td();
+    var hasSym=(D.sym[dt]||[]).length>0;
+    var hasMood=(D.mood[dt]||[]).length>0;
+    var hasWrist=D.wrist&&D.wrist[dt];
+    var hasSleep=D.sleep&&D.sleep[dt];
+    var hasOPK=D.opks&&D.opks[dt];
+    var hasNote=D.notes&&D.notes[dt];
+    var hasMeds=(D.meds[dt]||[]).length>0;
+    var isPeriodStart=d===1;
+    var isPredPeriod=predPeriod&&dt===predPeriod;
+    var bg='transparent';
+    if(isToday)bg='var(--cobalt)';
+    else if(isOV)bg='var(--gold)';
+    else if(hasFlow)bg='rgba(168,68,85,.2)';
+    else if(isPredPeriod)bg='rgba(168,68,85,.1)';
+    else if(hasTemp)bg='var(--cream3)';
+    var col=isToday?'#fff':isFuture?'var(--txt5)':'var(--txt)';
+    var border=hasSex?'2px solid var(--cobalt)':'2px solid transparent';
+    if(isPredPeriod&&!isToday)border='2px dashed var(--rose)';
+    var dots='';
+    if(hasSym||hasMood)dots+='<span style="width:3px;height:3px;border-radius:50%;background:var(--burnt)"></span>';
+    if(hasWrist)dots+='<span style="width:3px;height:3px;border-radius:50%;background:var(--plum)"></span>';
+    if(hasSleep)dots+='<span style="width:3px;height:3px;border-radius:50%;background:var(--forest)"></span>';
+    if(hasOPK)dots+='<span style="width:3px;height:3px;border-radius:50%;background:var(--gold)"></span>';
+    if(hasNote||hasMeds)dots+='<span style="width:3px;height:3px;border-radius:50%;background:var(--txt4)"></span>';
+    h+='<div onclick="openDayView(\''+dt+'\','+(ci!=null?ci:info.ci)+')" style="cursor:pointer;padding:3px 0 1px;border-radius:8px;background:'+bg+';color:'+col+';font-size:11px;font-weight:'+(isToday||isOV?'800':'600')+';border:'+border+';position:relative">';
+    if(isPeriodStart)h+='<div style="position:absolute;top:-2px;right:1px;font-size:6px">🔴</div>';
+    if(isPredPeriod&&!isPeriodStart)h+='<div style="position:absolute;top:-2px;right:1px;font-size:6px">🔮</div>';
+    h+=d;
+    if(dots)h+='<div style="display:flex;justify-content:center;gap:1px;margin-top:1px">'+dots+'</div>';
+    h+='</div>';
+  }
+  h+='</div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:8px;color:var(--txt4)">';
+  h+='<span style="display:flex;align-items:center;gap:2px"><span style="width:10px;height:10px;border-radius:3px;background:var(--cobalt)"></span>Today</span>';
+  h+='<span style="display:flex;align-items:center;gap:2px"><span style="width:10px;height:10px;border-radius:3px;background:var(--gold)"></span>OV</span>';
+  h+='<span style="display:flex;align-items:center;gap:2px"><span style="width:10px;height:10px;border-radius:3px;background:rgba(168,68,85,.2)"></span>Flow</span>';
+  h+='<span style="display:flex;align-items:center;gap:2px"><span style="width:10px;height:10px;border-radius:3px;border:1.5px solid var(--cobalt)"></span>Sex</span>';
+  h+='<span style="display:flex;align-items:center;gap:2px"><span style="width:10px;height:10px;border-radius:3px;border:1.5px dashed var(--rose)"></span>Predicted</span>';
+  h+='<span style="display:flex;align-items:center;gap:2px"><span style="width:3px;height:3px;border-radius:50%;background:var(--burnt)"></span>Sym</span>';
+  h+='<span style="display:flex;align-items:center;gap:2px"><span style="width:3px;height:3px;border-radius:50%;background:var(--plum)"></span>Wrist</span>';
+  h+='</div>';
+  h+='</div>';
+  return h;
+}
 function dTrend(){var cv=document.getElementById('tC');if(!cv)return;var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight,p={t:10,r:10,b:28,l:36},gW=W-p.l-p.r,gH=H-p.t-p.b;var ls=[];D.cycles.forEach(function(c,i){if(c.length)ls.push({i:i,l:c.length,ex:isExcl(i)})});if(ls.length<2)return;var mn2=Math.min.apply(null,ls.map(function(l){return l.l}))-2,mx2=Math.max.apply(null,ls.map(function(l){return l.l}))+2;function x(i){return p.l+i/(ls.length-1)*gW}function y(v){return p.t+(1-(v-mn2)/(mx2-mn2))*gH}ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;for(var v=Math.ceil(mn2/5)*5;v<=mx2;v+=5){ctx.beginPath();ctx.moveTo(p.l,y(v));ctx.lineTo(W-p.r,y(v));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="9px -apple-system";ctx.textAlign="right";ctx.fillText(v,p.l-4,y(v)+3)}ctx.strokeStyle="#2B5C8A";ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();ls.forEach(function(l,i){i===0?ctx.moveTo(x(i),y(l.l)):ctx.lineTo(x(i),y(l.l))});ctx.stroke();ls.forEach(function(l,i){ctx.globalAlpha=l.ex?.35:1;ctx.fillStyle=PAL[l.i%7];ctx.beginPath();ctx.arc(x(i),y(l.l),5,0,Math.PI*2);ctx.fill();ctx.fillStyle="var(--txt)";ctx.font="bold 11px -apple-system";ctx.textAlign="center";ctx.fillText(l.l+(l.ex?' ✕':''),x(i),y(l.l)-8);ctx.fillStyle="#A0928A";ctx.font="9px -apple-system";ctx.fillText(D.cycles[l.i].label,x(i),H-p.b+14);ctx.globalAlpha=1});var incl=ls.filter(function(l){return!l.ex});var avg=incl.length?incl.reduce(function(a,b){return a+b.l},0)/incl.length:0;if(avg){ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle="#C4652A";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.l,y(avg));ctx.lineTo(W-p.r,y(avg));ctx.stroke();ctx.restore();ctx.fillStyle="#C4652A";ctx.font="9px -apple-system";ctx.textAlign="left";ctx.fillText('avg '+Math.round(avg),W-p.r-40,y(avg)-4)}}
 
 /* MODALS */
+function openDayView(date,ci){
+  var c=D.cycles[ci];var r=c.readings.find(function(x){return x.date===date});
+  var day=db(c.key,date)+1;var sy=D.sym[date]||[];var mo=D.mood[date]||[];
+  var sx=D.sex[date];var nt=D.notes[date];var sl=D.sleep[date];var wt=D.wrist[date];
+  var slT=D.sleepTimes&&D.sleepTimes[date];var opk=D.opks&&D.opks[date];
+  var h='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl" style="max-height:70vh">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+  h+='<div><div class="mt" style="margin:0">Day '+day+'</div><div style="font-size:12px;color:var(--txt3)">'+fdf(date)+'</div></div>';
+  h+='<button onclick="closeM();openEdit(\''+date+'\','+ci+')" style="padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;background:var(--cobalt);color:#fff">Edit</button></div>';
+  // Summary
+  if(r&&r.temp!=null)h+='<div style="font-size:28px;font-weight:800;color:var(--txt)">'+r.temp.toFixed(2)+'°</div>';
+  else h+='<div style="font-size:16px;color:var(--txt4)">No temp logged</div>';
+  var tags=[];
+  if(r&&r.flow)tags.push('<span style="color:var(--rose)">'+r.flow+' flow</span>');
+  if(r&&r.ov)tags.push('<span style="color:var(--gold)">LH+ / OV</span>');
+  if(sx)tags.push('<span style="color:var(--cobalt)">Intimacy</span>');
+  if(opk)tags.push('<span style="color:var(--gold)">OPK '+(opk==='pos'?'+':'−')+'</span>');
+  if(wt){var wd=wt-WRIST_BASELINE;tags.push('<span style="color:var(--plum)">Wrist '+(wd>=0?'+':'')+wd.toFixed(2)+'°</span>')}
+  if(sl)tags.push('<span style="color:var(--forest)">Sleep: '+sl+'</span>');
+  if(slT)tags.push('<span style="color:var(--txt3)">'+slT.asleep+' → '+slT.woke+'</span>');
+  if(tags.length)h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:11px;font-weight:600">'+tags.join('')+'</div>';
+  if(sy.length||mo.length){h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">';
+    sy.forEach(function(s){h+='<span class="rdg-tag" style="background:var(--burnt-bg);color:var(--burnt);font-size:10px;padding:3px 8px;border-radius:8px">'+s+'</span>'});
+    mo.forEach(function(m){h+='<span class="rdg-tag" style="background:var(--cob-bg);color:var(--cobalt);font-size:10px;padding:3px 8px;border-radius:8px">'+m+'</span>'});
+  h+='</div>'}
+  if(nt)h+='<div style="margin-top:8px;font-size:12px;color:var(--txt2);line-height:1.5;font-style:italic">📝 '+nt+'</div>';
+  // Photos
+  var ph=D.photos[date];if(ph)h+='<div style="margin-top:8px"><img src="'+ph+'" style="width:100%;max-height:200px;object-fit:contain;border-radius:12px"></div>';
+  h+='<button class="cb" style="width:100%;margin-top:12px" onclick="closeM()">Close</button>';
+  h+='</div></div>';var div=document.createElement('div');div.id='mdl';div.innerHTML=h;document.body.appendChild(div);
+}
 function fabAction(){if(curTab!=='today'){sw('today');setTimeout(function(){var el=document.getElementById('qlT')||document.getElementById('mornT');if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.focus()}},150)}else{var el=document.getElementById('qlT')||document.getElementById('mornT');if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.focus()}else{openAdd()}}}
 function openAdd(){editDate=null;showM(td(),null)}
 function openEdit(d,ci2){editDate=d;var c=D.cycles[ci2];var r=c.readings.find(function(x){return x.date===d});showM(d,r,ci2)}
@@ -2136,7 +2279,7 @@ function showM(date,r,ci2){
   
   h+='<div class="chips" style="margin-top:4px" id="tqReasons">';
   ["Bad sleep","Alcohol","Illness","Different time","Mouth breathing"].forEach(function(q){h+='<button class="chip chip-s'+(tq===q?' on':'')+'" onclick="this.parentElement.querySelectorAll(\'.chip\').forEach(function(c){c.classList.remove(\'on\')});this.classList.add(\'on\')">'+q+'</button>'});
-  h+='</div></div></div>';
+  h+='</div></div>';
   h+='<div class="fr"><div class="fl">Period Flow</div><div class="chips">';
   ["none","light","medium","heavy"].forEach(function(f){var on=(r&&r.flow===f)||(f==="none"&&(!r||!r.flow));h+='<button class="chip chip-f'+(on?' on':'')+'" data-f="'+f+'" onclick="pF(this)">'+f+'</button>'});h+='</div></div>';
   h+='<div class="fr"><div class="fl">Mood</div><div class="chips" style="max-height:none">';
