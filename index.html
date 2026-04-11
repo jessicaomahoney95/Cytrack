@@ -14,39 +14,82 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#B25835;color:#3D2C2C;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
-.app{max-width:480px;margin:0 auto;padding:0 0 110px}
-button{border:none;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;transition:all .12s}
+.app{max-width:480px;margin:0 auto;padding:0 0 100px}
+button{border:none;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;transition:all .15s ease}
 input,select,textarea{font-family:inherit}
 ::-webkit-scrollbar{display:none}
 :root{
 --bg:#B25835;--cream:#FFF6F0;--cream2:#FEEDE3;--cream3:#F0DDD0;
---cobalt:#2B5C8A;--cob-bg:rgba(43,92,138,.1);
---burnt:#C4652A;--burnt-bg:rgba(196,101,42,.1);
---gold:#9A7B1E;--gold-bg:rgba(154,123,30,.1);
---rose:#A84455;--rose-bg:rgba(168,68,85,.08);
---plum:#6B4E8B;--plum-bg:rgba(107,78,139,.08);
---forest:#4A7D5E;--forest-bg:rgba(74,125,94,.08);
+--cobalt:#2B5C8A;--cob-bg:rgba(43,92,138,.08);
+--burnt:#C4652A;--burnt-bg:rgba(196,101,42,.08);
+--gold:#9A7B1E;--gold-bg:rgba(154,123,30,.08);
+--rose:#A84455;--rose-bg:rgba(168,68,85,.06);
+--plum:#6B4E8B;--plum-bg:rgba(107,78,139,.06);
+--forest:#4A7D5E;--forest-bg:rgba(74,125,94,.06);
 --txt:#3D2C2C;--txt2:#6B5E56;--txt3:#8A7D74;--txt4:#A0928A;--txt5:#B8ADA4;
---card:#fff;--sh:0 1px 4px rgba(60,30,10,.06);
+--card:#fff;--sh:0 1px 3px rgba(60,30,10,.05),0 4px 12px rgba(60,30,10,.04);
 }
-.hdr{padding:28px 20px 16px;background:var(--bg)}
+/* Dark mode */
+.dark{--bg:#1C1210;--cream:#2A201C;--cream2:#1C1210;--cream3:#3D2C24;
+--card:#2A201C;--txt:#E8DDD6;--txt2:#B8ADA4;--txt3:#8A7D74;--txt4:#6B5E56;--txt5:#4A3E36;
+--cob-bg:rgba(43,92,138,.15);--burnt-bg:rgba(196,101,42,.15);--gold-bg:rgba(154,123,30,.15);
+--rose-bg:rgba(168,68,85,.12);--plum-bg:rgba(107,78,139,.12);--forest-bg:rgba(74,125,94,.12);
+--sh:0 1px 3px rgba(0,0,0,.2)}
+.dark .hdr{background:#1C1210}
+.dark .content{background:#1C1210}
+.dark .tabs .tab{background:rgba(255,255,255,.06);color:rgba(255,255,255,.35)}
+.dark .tabs .tab.on{background:var(--cream3);color:var(--burnt)}
+.dark .notif{background:var(--card)}
+.dark .gp{background:var(--card)}
+.dark .sum-card{background:var(--card)}
+.dark .tww-card{background:var(--card)}
+.dark .morning-temp input{background:rgba(255,255,255,.08)}
+.dark .morning-fact{background:rgba(255,255,255,.06)}
+.dark .ql input{background:var(--card);border-color:var(--cream3);color:var(--txt)}
+.dark .fi{background:var(--card);border-color:var(--cream3);color:var(--txt)}
+.dark .mbg{background:rgba(0,0,0,.6)}
+.dark .mdl{background:#2A201C}
+.dark .hdr-btn{background:rgba(255,255,255,.08);color:rgba(255,255,255,.5)}
+.dark .qs-chip{background:var(--cream3);color:var(--txt3)}
+.dark .chip{background:var(--cream3);color:var(--txt3)}
+.dark .pill{background:var(--card);color:var(--txt4)}
+.dark .flt{background:var(--card);color:var(--txt4)}
+.dark .toast{background:var(--burnt)}
+/* Header */
+.hdr{padding:20px 20px 0;background:#B25835}
 .hdr-row{display:flex;justify-content:space-between;align-items:flex-start}
-.hdr h1{font-size:24px;font-weight:800;color:#fff;letter-spacing:-.5px;margin:0}
-.hdr-sub{font-size:11px;color:rgba(255,255,255,.55);margin-top:3px}
-.csv-btn{background:rgba(255,255,255,.15);border-radius:10px;padding:8px 12px;color:#fff;font-size:11px;font-weight:600}
-.tabs{display:flex;gap:2px;padding:3px 16px 14px;background:var(--bg)}
-.tab.on{background:var(--cream);color:var(--txt)}
-.content{background:var(--cream2);border-radius:24px 24px 0 0;min-height:80vh;padding:8px 0 40px}
-.section{padding:0 16px;margin-bottom:12px}
-.sec-hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 0 8px}
-.sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--txt3)}
-.card{background:var(--card);border-radius:16px;padding:16px;box-shadow:var(--sh);margin-bottom:10px}
-/* Collapsible sections */
-.sec-hdr-col{display:flex;justify-content:space-between;align-items:center;padding:14px 0 8px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
-.sec-hdr-col .sec-arrow{font-size:12px;color:var(--txt4);transition:transform .2s ease;margin-left:6px;display:inline-block}
+.hdr h1{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.5px;margin:0}
+.hdr-sub{font-size:11px;color:rgba(255,255,255,.45);margin-top:2px;font-weight:500}
+.hdr-btns{display:flex;gap:4px;align-items:center}
+.hdr-btn{background:rgba(255,255,255,.1);border-radius:8px;padding:7px 10px;color:rgba(255,255,255,.6);font-size:9px;font-weight:600;letter-spacing:.3px}
+.hdr-btn:active{background:rgba(255,255,255,.2)}
+/* Tabs at top */
+.tabs{display:flex;gap:2px;padding:10px 16px 14px;background:transparent}
+.tab{flex:1;padding:8px 0;border-radius:10px;font-size:11px;font-weight:600;background:rgba(255,255,255,.1);color:rgba(255,255,255,.5);text-align:center;transition:all .15s}
+.tab.on{background:var(--cream);color:var(--txt);font-weight:700}
+/* Content */
+.content{background:#B25835;border-radius:0;min-height:80vh;padding:6px 0 40px}
+.section{padding:0 14px;margin-bottom:6px}
+.sec-hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 0 6px}
+.sec-title{font-size:11px;font-weight:600;letter-spacing:.2px;color:rgba(255,255,255,.7)}
+.card{background:var(--cream);border-radius:16px;padding:14px;box-shadow:0 2px 8px rgba(80,30,10,.08);margin-bottom:8px}
+/* Collapsible */
+.sec-hdr-col{display:flex;justify-content:space-between;align-items:center;padding:12px 0 6px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
+.sec-hdr-col .sec-arrow{font-size:10px;color:var(--txt5);transition:transform .2s ease;margin-left:5px;display:inline-block}
 .sec-hdr-col.collapsed .sec-arrow{transform:rotate(-90deg)}
-.sec-body{overflow:hidden;transition:max-height .3s ease,opacity .2s ease;max-height:2000px;opacity:1}
+.sec-body{overflow:hidden;transition:max-height .3s ease,opacity .25s ease;max-height:2000px;opacity:1}
 .sec-body.collapsed{max-height:0;opacity:0;margin:0;padding:0}
+/* Morning welcome */
+.morning-wrap{padding:8px 0 0}
+.morning-hi{font-size:24px;font-weight:800;color:#fff;letter-spacing:-.5px}
+.morning-fact{margin:14px 0;padding:12px 14px;background:rgba(255,255,255,.08);border-radius:12px;font-size:11px;color:rgba(255,255,255,.75);line-height:1.5;font-weight:400}
+.morning-phase{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:16px}
+.morning-temp{display:flex;gap:8px;align-items:center}
+.morning-temp input{flex:1;padding:14px;border:none;border-radius:12px;font-size:18px;font-weight:700;background:rgba(255,255,255,.12);color:#fff;text-align:center;outline:none}
+.morning-temp input::placeholder{color:rgba(255,255,255,.3)}
+.morning-temp input:focus{background:rgba(255,255,255,.18)}
+.morning-temp button{padding:14px 22px;border-radius:12px;font-size:14px;font-weight:700;background:rgba(255,255,255,.9);color:var(--burnt)}
+/* Ring */
 .ring-container{position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center;margin:0 auto}
 .ring-svg{width:150px;height:150px}
 .ring-bg{fill:none;stroke:var(--cream3);stroke-width:8}
@@ -54,216 +97,194 @@ input,select,textarea{font-family:inherit}
 .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .ring-num{font-size:38px;font-weight:800;color:var(--txt);line-height:1}
 .ring-lbl{font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
-.phase-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700}
-.phase-dot{width:8px;height:8px;border-radius:50%}
-.phase-desc{font-size:12px;color:var(--txt2);line-height:1.5;margin-top:6px}
-.sg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.sc{background:var(--card);border-radius:14px;padding:14px;box-shadow:var(--sh)}
-.sv{font-size:20px;font-weight:800;color:var(--txt)}
-.sl{font-size:10px;font-weight:600;color:var(--txt4);text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
-.cw{background:var(--card);border-radius:16px;padding:12px 8px 8px;box-shadow:var(--sh);margin-bottom:10px}
+.phase-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700}
+.phase-dot{width:7px;height:7px;border-radius:50%}
+.phase-desc{font-size:12px;color:var(--txt2);line-height:1.5;margin-top:5px}
+/* Stats grid */
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sc{background:var(--cream);border-radius:14px;padding:12px 14px;box-shadow:0 2px 8px rgba(80,30,10,.08)}
+.sv{font-size:18px;font-weight:800;color:var(--txt)}
+.sl{font-size:9px;font-weight:600;color:var(--txt4);letter-spacing:.2px;margin-top:2px}
+/* Chart */
+.cw{background:var(--cream);border-radius:16px;padding:10px 6px 6px;box-shadow:0 2px 8px rgba(80,30,10,.08);margin-bottom:8px}
 canvas{width:100%;display:block}
-.filters{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px;margin-bottom:10px}
-.flt{padding:6px 12px;border-radius:20px;font-size:11px;font-weight:700;background:var(--card);color:var(--txt3);box-shadow:var(--sh)}
+/* Filters & pills */
+.filters{display:flex;flex-wrap:wrap;gap:5px;padding:0 16px;margin-bottom:8px}
+.flt{padding:5px 11px;border-radius:20px;font-size:10px;font-weight:600;background:var(--cream);color:var(--txt4);box-shadow:0 1px 4px rgba(80,30,10,.1)}
 .flt.on{color:#fff}
 .flt-ov.on{background:var(--gold)}.flt-per.on{background:var(--rose)}.flt-sex.on{background:var(--cobalt)}.flt-cm.on{background:var(--burnt)}
-.pills{display:flex;gap:6px;padding:0 16px;overflow-x:auto;margin-bottom:10px;-webkit-overflow-scrolling:touch}
-.pill{padding:7px 14px;border-radius:20px;font-size:12px;font-weight:700;background:var(--card);color:var(--txt3);white-space:nowrap;box-shadow:var(--sh);flex-shrink:0}
+.pills{display:flex;gap:5px;padding:0 16px;overflow-x:auto;margin-bottom:8px;-webkit-overflow-scrolling:touch}
+.pill{padding:6px 12px;border-radius:18px;font-size:11px;font-weight:600;background:var(--cream);color:var(--txt4);white-space:nowrap;flex-shrink:0;box-shadow:0 1px 4px rgba(80,30,10,.1)}
 .pill.on{background:var(--cobalt);color:#fff}
-.pill.dim{opacity:.35}
+.pill.dim{opacity:.25}
 .pill.clr{color:#fff}
-.rdg{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid rgba(0,0,0,.04);cursor:pointer}
+/* Readings */
+.rdg{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.04);cursor:pointer}
 .rdg:last-child{border-bottom:none}
-.rdg-d{width:32px;font-size:18px;font-weight:800;color:var(--txt);text-align:center}
-.rdg-dt{font-size:10px;color:var(--txt4);text-align:center}
-.rdg-m{flex:1}.rdg-t{font-size:15px;font-weight:700;color:var(--txt)}
-.rdg-tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
-.rdg-tag{font-size:9px;padding:2px 6px;border-radius:8px;font-weight:600}
-.mbg{position:fixed;inset:0;background:rgba(60,30,10,.5);z-index:100;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px)}
-.mdl{background:var(--cream);border-radius:24px 24px 0 0;padding:20px 20px calc(30px + env(safe-area-inset-bottom,0px));max-height:90vh;overflow-y:auto;width:100%;max-width:480px}
-.mt{font-size:17px;font-weight:800;color:var(--txt);margin-bottom:16px}
-.fl{font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
-.fi{width:100%;padding:12px;border:2px solid var(--cream3);border-radius:12px;font-size:15px;background:var(--card);color:var(--txt);outline:none}
+.rdg-d{width:30px;font-size:17px;font-weight:800;color:var(--txt);text-align:center}
+.rdg-dt{font-size:9px;color:var(--txt4);text-align:center}
+.rdg-m{flex:1}.rdg-t{font-size:14px;font-weight:700;color:var(--txt)}
+.rdg-tags{display:flex;flex-wrap:wrap;gap:2px;margin-top:2px}
+.rdg-tag{font-size:8px;padding:2px 5px;border-radius:6px;font-weight:600}
+/* Modal */
+.mbg{position:fixed;inset:0;background:rgba(60,30,10,.45);z-index:100;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.mdl{background:var(--cream);border-radius:20px 20px 0 0;padding:20px 16px calc(30px + env(safe-area-inset-bottom,0px));max-height:85vh;overflow-y:auto;width:100%;max-width:480px;-webkit-overflow-scrolling:touch}
+.mt{font-size:17px;font-weight:800;color:var(--txt);margin-bottom:14px}
+.fl{font-size:10px;font-weight:600;color:var(--txt3);letter-spacing:.2px;margin-bottom:5px}
+.fi{width:100%;padding:11px;border:1.5px solid var(--cream3);border-radius:12px;font-size:15px;background:var(--card);color:var(--txt);outline:none;transition:border-color .15s}
 .fi:focus{border-color:var(--cobalt)}
-.fr{margin-bottom:14px}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{padding:7px 12px;border-radius:20px;font-size:11px;font-weight:700;background:var(--card);color:var(--txt3);box-shadow:var(--sh)}
-.chip.on{color:#fff}
+.fr{margin-bottom:12px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;max-width:100%}
+.chip{padding:6px 11px;border-radius:18px;font-size:10px;font-weight:600;background:var(--cream3);color:var(--txt4)}
+.chip.on{color:#fff;border-color:transparent}
 .chip-m.on{background:var(--cobalt)}.chip-s.on{background:var(--burnt)}.chip-c.on{background:var(--gold)}.chip-f.on{background:var(--rose)}
-.br{display:flex;gap:10px;margin-top:16px}
-.cb{flex:1;padding:14px;border-radius:14px;font-size:14px;font-weight:700;background:var(--cream3);color:var(--txt2)}
-.sb{flex:2;padding:14px;border-radius:14px;font-size:14px;font-weight:800;background:var(--burnt);color:#fff}
-.db{width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--rose-bg);color:var(--rose);margin-top:10px}
-.fab{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom,0px));right:calc(50% - 220px);width:56px;height:56px;border-radius:50%;background:var(--cobalt);color:#fff;font-size:28px;font-weight:300;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(43,92,138,.35);z-index:50}
-@media(max-width:480px){.fab{right:20px}}
-.toast{position:fixed;top:calc(16px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:999;background:var(--cobalt);border-radius:20px;padding:8px 20px;font-size:12px;font-weight:700;color:#fff;animation:fi .2s;pointer-events:none}
-@keyframes fi{from{opacity:0;transform:translateX(-50%) translateY(-8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-.tr{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
+.br{display:flex;gap:8px;margin-top:14px}
+.cb{flex:1;padding:13px;border-radius:14px;font-size:14px;font-weight:700;background:var(--cream3);color:var(--txt3)}
+.sb{flex:2;padding:13px;border-radius:14px;font-size:14px;font-weight:800;background:var(--burnt);color:#fff}
+.sb:active{transform:scale(.97)}
+.db{width:100%;padding:11px;border-radius:12px;font-size:12px;font-weight:700;background:var(--rose-bg);color:var(--rose);margin-top:8px}
+/* FAB */
+.fab{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom,0px));right:20px;width:52px;height:52px;border-radius:50%;background:var(--cobalt);color:#fff;font-size:26px;font-weight:300;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(43,92,138,.3);z-index:55}
+.fab:active{transform:scale(.9)}
+@media(min-width:481px){.fab{right:calc(50% - 220px)}}
+/* Toast */
+.toast{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:999;background:var(--txt);border-radius:14px;padding:8px 18px;font-size:11px;font-weight:700;color:#fff;animation:fi .2s;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+@keyframes fi{from{opacity:0;transform:translateX(-50%) translateY(-6px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+/* Toggle */
+.tr{display:flex;align-items:center;justify-content:space-between;padding:7px 0}
 .tl{font-size:13px;font-weight:600;color:var(--txt)}
-.tg{width:44px;height:26px;border-radius:13px;background:var(--cream3);position:relative;transition:background .2s;cursor:pointer}
+.tg{width:42px;height:24px;border-radius:12px;background:var(--cream3);position:relative;transition:background .2s;cursor:pointer}
 .tg.on{background:var(--cobalt)}
-.tg::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.tg::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .tg.on::after{transform:translateX(18px)}
-.pr{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.pn{font-size:11px;font-weight:600;color:var(--txt2);width:80px;text-align:right;flex-shrink:0}
-.pt{flex:1;background:var(--cream3);border-radius:4px;height:8px;overflow:hidden}
-.pb{height:8px;border-radius:4px}
-.ni{padding:12px 0;border-bottom:1px solid rgba(0,0,0,.04)}.ni:last-child{border-bottom:none}
-.nm{font-size:10px;font-weight:600;color:var(--txt4);margin-bottom:4px}
-.nt{font-size:13px;color:var(--txt);line-height:1.4}
-.pu{width:100%;padding:20px;border:2px dashed var(--cream3);border-radius:14px;text-align:center;color:var(--txt4);font-size:12px;font-weight:600;cursor:pointer;background:var(--card)}
-.pth{width:60px;height:60px;border-radius:10px;object-fit:cover;border:2px solid var(--cream3)}
-textarea{resize:vertical;min-height:60px}
-/* Landscape mode */
+/* Progress bars */
+.pr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.pn{font-size:10px;font-weight:600;color:var(--txt3);width:76px;text-align:right;flex-shrink:0}
+.pt{flex:1;background:var(--cream3);border-radius:4px;height:6px;overflow:hidden}
+.pb{height:6px;border-radius:4px}
+/* Notes */
+.ni{padding:10px 0;border-bottom:1px solid rgba(0,0,0,.04)}.ni:last-child{border-bottom:none}
+.nm{font-size:9px;font-weight:600;color:var(--txt4);margin-bottom:3px}
+.nt{font-size:12px;color:var(--txt);line-height:1.4}
+/* Photo & upload */
+.pu{width:100%;padding:18px;border:1.5px dashed var(--cream3);border-radius:14px;text-align:center;color:var(--txt4);font-size:11px;font-weight:600;cursor:pointer;background:var(--card)}
+.pth{width:56px;height:56px;border-radius:10px;object-fit:cover;border:1.5px solid var(--cream3)}
+textarea{resize:vertical;min-height:56px}
+/* Landscape */
 @media(orientation:landscape) and (max-height:500px){
-  .hdr{padding:12px 20px 8px}
-  .hdr h1{font-size:18px}
+  .hdr{padding:10px 20px 6px}
+  .hdr h1{font-size:17px}
   .hdr-sub{display:none}
-  .tabs{padding:2px 16px 6px}
-  .tab{padding:6px 0;font-size:11px}
-  .content{padding:4px 0 20px;border-radius:16px 16px 0 0}
-  .app{max-width:100%;padding-bottom:60px}
-  .section{padding:0 12px;margin-bottom:6px}
-  .card{padding:10px;margin-bottom:6px;border-radius:12px}
-  .cw{padding:6px 4px 4px;border-radius:12px;margin-bottom:6px}
-  .cw canvas{height:calc(100vh - 160px)!important;min-height:200px}
-  .pills{margin-bottom:6px;padding:0 12px}
-  .pill{padding:5px 10px;font-size:11px}
-  .filters{padding:0 12px;margin-bottom:6px;gap:4px}
-  .flt{padding:4px 10px;font-size:10px}
-  .fab{width:44px;height:44px;font-size:22px;bottom:calc(12px + env(safe-area-inset-bottom,0px))}
-  .sg{gap:6px}
-  .sc{padding:10px}
-  .sv{font-size:16px}
-  .ring-container{width:100px;height:100px}
-  .ring-svg{width:100px;height:100px}
-  .ring-num{font-size:26px}
-  .sec-hdr{padding:8px 0 4px}
-  .sec-hdr-col{padding:8px 0 4px}
+  .tabs{padding:4px 0 calc(4px + env(safe-area-inset-bottom,0px))}
+  .content{padding:4px 0 16px;border-radius:0}
+  .app{max-width:100%;padding-bottom:56px}
+  .section{padding:0 12px;margin-bottom:3px}
+  .card{padding:8px;margin-bottom:4px;border-radius:12px}
+  .cw{padding:4px;border-radius:10px;margin-bottom:4px}
+  .cw canvas{height:calc(100vh - 140px)!important;min-height:180px}
+  .pills{margin-bottom:4px;padding:0 12px}.pill{padding:4px 8px;font-size:10px}
+  .filters{padding:0 12px;margin-bottom:4px;gap:3px}.flt{padding:3px 8px;font-size:9px}
+  .fab{width:40px;height:40px;font-size:20px;bottom:calc(50px + env(safe-area-inset-bottom,0px))}
+  .sg{gap:4px}.sc{padding:8px}.sv{font-size:15px}
+  .sec-hdr{padding:6px 0 3px}.sec-hdr-col{padding:6px 0 3px}
   .land-hide{display:none!important}
 }
 /* Quick log */
-.ql{display:flex;gap:8px;align-items:center}
-.ql input{flex:1;padding:10px 12px;border:2px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:700;background:var(--card);color:var(--txt);text-align:center;outline:none}
+.ql{display:flex;gap:6px;align-items:center}
+.ql input{flex:1;padding:12px;border:1.5px solid var(--cream3);border-radius:12px;font-size:20px;font-weight:700;background:var(--card);color:var(--txt);text-align:center;outline:none;-moz-appearance:textfield}
+.ql input::-webkit-outer-spin-button,.ql input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .ql input:focus{border-color:var(--cobalt)}
-.ql button{padding:10px 16px;border-radius:12px;font-size:13px;font-weight:800;background:var(--cobalt);color:#fff}
-/* OV prob */
-.prob-bar{height:24px;border-radius:12px;background:var(--cream3);overflow:hidden;position:relative}
-.prob-fill{height:100%;border-radius:12px;transition:width .5s ease}
-.prob-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--txt)}
+.ql button{padding:12px 18px;border-radius:12px;font-size:13px;font-weight:700;background:var(--cobalt);color:#fff}
+/* OV prob bar */
+.prob-bar{height:22px;border-radius:11px;background:var(--cream3);overflow:hidden;position:relative}
+.prob-fill{height:100%;border-radius:11px;transition:width .5s ease}
+.prob-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:var(--txt)}
 /* Compare */
-.cmp-sel{display:flex;gap:8px;margin-bottom:10px}
-.cmp-sel select{flex:1;padding:10px;border:2px solid var(--cream3);border-radius:12px;font-size:13px;font-weight:600;background:var(--card);color:var(--txt);outline:none;-webkit-appearance:none}
+.cmp-sel{display:flex;gap:6px;margin-bottom:8px}
+.cmp-sel select{flex:1;padding:9px;border:1.5px solid var(--cream3);border-radius:12px;font-size:12px;font-weight:600;background:var(--card);color:var(--txt);outline:none;-webkit-appearance:none}
 /* PT log */
-.pt-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.04)}
+.pt-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.04)}
 .pt-row:last-child{border-bottom:none}
-.pt-res{padding:4px 10px;border-radius:10px;font-size:11px;font-weight:700}
+.pt-res{padding:3px 8px;border-radius:8px;font-size:10px;font-weight:700}
 /* Meds */
-.med-chip{padding:6px 10px;border-radius:10px;font-size:11px;font-weight:600;background:var(--forest-bg);color:var(--forest);display:inline-flex;align-items:center;gap:4px}
+.med-chip{padding:5px 9px;border-radius:8px;font-size:10px;font-weight:600;background:var(--forest-bg);color:var(--forest);display:inline-flex;align-items:center;gap:3px}
 /* Backup */
-.bk-row{display:flex;gap:8px}
-.bk-btn{flex:1;padding:12px;border-radius:12px;font-size:12px;font-weight:700;text-align:center}
-/* Heatmap */
-.hm{display:grid;grid-template-columns:repeat(auto-fill,22px);gap:2px}
-.hm-cell{width:22px;height:22px;border-radius:4px;font-size:7px;display:flex;align-items:center;justify-content:center;font-weight:700;color:rgba(0,0,0,.3)}
+.bk-row{display:flex;gap:6px}
+.bk-btn{flex:1;padding:10px;border-radius:12px;font-size:11px;font-weight:700;text-align:center}
 /* Summary card */
-.sum-card{background:var(--card);border-radius:16px;padding:20px;box-shadow:var(--sh);margin-bottom:10px;position:relative;overflow:hidden}
-.sum-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--cobalt),var(--burnt))}
-.sum-row{display:flex;justify-content:space-between;padding:4px 0}
-.sum-lbl{font-size:11px;color:var(--txt3)}.sum-val{font-size:11px;font-weight:700;color:var(--txt)}
+.sum-card{background:var(--cream);border-radius:16px;padding:18px;box-shadow:0 2px 8px rgba(80,30,10,.08);margin-bottom:8px;position:relative;overflow:hidden}
+.sum-row{display:flex;justify-content:space-between;padding:3px 0}
+.sum-lbl{font-size:10px;color:var(--txt3)}.sum-val{font-size:10px;font-weight:700;color:var(--txt)}
 /* Score ring */
-.score-ring{position:relative;width:60px;height:60px;display:inline-flex;align-items:center;justify-content:center}
-.score-ring svg{width:60px;height:60px}
+.score-ring{position:relative;width:56px;height:56px;display:inline-flex;align-items:center;justify-content:center}
+.score-ring svg{width:56px;height:56px}
 .score-ring .sr-bg{fill:none;stroke:var(--cream3);stroke-width:5}
 .score-ring .sr-fg{fill:none;stroke-width:5;stroke-linecap:round}
-.score-num{position:absolute;font-size:14px;font-weight:800}
-/* Notif banner */
-.notif{padding:10px 14px;border-radius:12px;margin-bottom:8px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px}
-.notif-icon{font-size:16px;flex-shrink:0}
+.score-num{position:absolute;font-size:13px;font-weight:800}
+/* Notifications */
+.notif{padding:10px 12px;border-radius:14px;margin-bottom:6px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:7px;background:var(--cream);box-shadow:0 2px 8px rgba(80,30,10,.08)}
+.notif-icon{font-size:15px;flex-shrink:0}
 /* Smooth toggle */
-.sm-tg{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--txt3);padding:0 16px;margin-bottom:6px}
-/* TWW tracker */
-.tww-card{background:var(--card);border-radius:16px;padding:16px;box-shadow:var(--sh);margin-bottom:10px}
-.tww-day{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.04)}
+.sm-tg{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:600;color:var(--txt4);padding:0 16px;margin-bottom:5px}
+/* TWW */
+.tww-card{background:var(--cream);border-radius:16px;padding:14px;box-shadow:0 2px 8px rgba(80,30,10,.08);margin-bottom:8px}
+.tww-day{display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid rgba(0,0,0,.04)}
 .tww-day:last-child{border-bottom:none}
-.tww-dpo{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0}
+.tww-dpo{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0}
 .tww-dpo.now{background:var(--cobalt);color:#fff}
-.tww-dpo.past{background:var(--cream3);color:var(--txt3)}
+.tww-dpo.past{background:var(--cream3);color:var(--txt4)}
 .tww-dpo.future{background:var(--cream);color:var(--txt5);border:1px dashed var(--cream3)}
-.tww-info{flex:1}
-.tww-title{font-size:12px;font-weight:700;color:var(--txt)}
-.tww-desc{font-size:11px;color:var(--txt3);line-height:1.4;margin-top:2px}
-/* Journey timeline */
-.jrn-line{position:relative;padding-left:24px;border-left:2px solid var(--cream3);margin-left:10px}
-.jrn-dot{position:absolute;left:-7px;top:8px;width:12px;height:12px;border-radius:50%}
-.jrn-item{padding:6px 0 16px;position:relative}
-.jrn-date{font-size:10px;font-weight:600;color:var(--txt4)}
-.jrn-text{font-size:12px;font-weight:600;color:var(--txt);margin-top:2px}
-/* Appointment */
-.appt-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.04)}
-.appt-item:last-child{border-bottom:none}
-/* Mood journal */
-.mj-entry{padding:12px 0;border-bottom:1px solid rgba(0,0,0,.04)}
-.mj-entry:last-child{border-bottom:none}
-.mj-date{font-size:10px;font-weight:600;color:var(--txt4);margin-bottom:4px}
-.mj-text{font-size:13px;color:var(--txt);line-height:1.5;white-space:pre-wrap}
+.tww-info{flex:1}.tww-title{font-size:11px;font-weight:700;color:var(--txt)}.tww-desc{font-size:10px;color:var(--txt3);line-height:1.4;margin-top:1px}
+/* Journey */
+.jrn-line{position:relative;padding-left:22px;border-left:2px solid var(--cream3);margin-left:10px}
+.jrn-dot{position:absolute;left:-7px;top:7px;width:12px;height:12px;border-radius:50%}
+.jrn-item{padding:5px 0 14px;position:relative}
+.jrn-date{font-size:9px;font-weight:600;color:var(--txt4)}
+.jrn-text{font-size:11px;font-weight:600;color:var(--txt);margin-top:1px}
 /* CM score */
-.cm-score{display:flex;align-items:center;gap:12px}
-.cm-bar{flex:1;height:8px;border-radius:4px;background:var(--cream3);overflow:hidden}
-.cm-fill{height:100%;border-radius:4px}
+.cm-score{display:flex;align-items:center;gap:10px}
+.cm-bar{flex:1;height:6px;border-radius:3px;background:var(--cream3);overflow:hidden}
+.cm-fill{height:100%;border-radius:3px}
 /* AI insight */
-.ai-card{background:var(--card);border-radius:16px;padding:16px;box-shadow:var(--sh);margin-bottom:10px;border-left:3px solid var(--cobalt)}
-.ai-btn{width:100%;padding:14px;border-radius:14px;font-size:13px;font-weight:700;background:var(--cob-bg);color:var(--cobalt);display:flex;align-items:center;justify-content:center;gap:8px}
-.ai-btn:active{background:var(--cobalt);color:#fff}
-.ai-loading{display:flex;align-items:center;gap:8px;color:var(--txt3);font-size:12px;padding:12px 0}
-.ai-dot{width:6px;height:6px;border-radius:50%;background:var(--cobalt);animation:pulse 1s infinite}
-.ai-dot:nth-child(2){animation-delay:.2s}.ai-dot:nth-child(3){animation-delay:.4s}
-@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
-.ai-text{font-size:13px;color:var(--txt);line-height:1.6;white-space:pre-wrap}
-.ai-disclaimer{font-size:9px;color:var(--txt4);margin-top:8px;font-style:italic}
+.ai-disclaimer{font-size:8px;color:var(--txt5);margin-top:6px;font-style:italic}
 /* Game plan */
-.gp{background:var(--card);border-radius:16px;padding:18px;box-shadow:var(--sh);margin-bottom:10px;position:relative;overflow:hidden}
-.gp::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
-.gp-title{font-size:15px;font-weight:800;color:var(--txt);margin-bottom:4px}
-.gp-sub{font-size:12px;color:var(--txt2);line-height:1.5}
-.gp-actions{margin-top:10px;display:flex;flex-direction:column;gap:6px}
-.gp-action{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--txt);padding:6px 0}
-.gp-check{width:20px;height:20px;border-radius:6px;border:2px solid var(--cream3);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+.gp{background:var(--cream);border-radius:16px;padding:16px;box-shadow:0 2px 8px rgba(80,30,10,.08);margin-bottom:8px;position:relative;overflow:hidden}
+.gp-title{font-size:14px;font-weight:800;color:var(--txt);margin-bottom:3px}
+.gp-sub{font-size:11px;color:var(--txt2);line-height:1.4}
+.gp-actions{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.gp-action{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--txt);padding:5px 0}
+.gp-check{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--cream3);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
 .gp-check.done{background:var(--forest);border-color:var(--forest);color:#fff}
-/* Quick symptom taps */
-.qs-wrap{padding:0 16px;margin-bottom:10px}
-.qs-chips{display:flex;flex-wrap:wrap;gap:5px}
-.qs-chip{padding:6px 10px;border-radius:16px;font-size:11px;font-weight:600;background:var(--card);color:var(--txt3);box-shadow:var(--sh)}
-.qs-chip.on{color:#fff;box-shadow:none}
+/* Quick symptom chips */
+.qs-chips{display:flex;flex-wrap:wrap;gap:4px}
+.qs-chip{padding:5px 9px;border-radius:14px;font-size:10px;font-weight:600;background:var(--cream3);color:var(--txt4)}
+.qs-chip.on{color:#fff;box-shadow:none;border-color:transparent}
 .qs-chip.on-s{background:var(--burnt)}.qs-chip.on-m{background:var(--cobalt)}.qs-chip.on-c{background:var(--gold)}
 /* Streak */
-.streak{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--burnt);padding:3px 8px;border-radius:8px;background:var(--burnt-bg)}
-/* Tab active indicator */
-.tab{flex:1;padding:9px 0;border-radius:10px;font-size:11px;font-weight:700;background:rgba(255,255,255,.1);color:rgba(255,255,255,.55);text-align:center;transition:all .15s ease}
-.tab.on{background:var(--cream);color:var(--txt);transform:scale(1.02)}
+.streak{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--burnt);padding:2px 7px;border-radius:8px;background:var(--burnt-bg)}
 /* Temp range bar */
 .tmp-range{height:6px;border-radius:3px;background:var(--cream3);position:relative;margin:6px 0}
 .tmp-range-fill{position:absolute;top:0;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--cobalt),var(--burnt))}
-.tmp-range-dot{position:absolute;top:-3px;width:12px;height:12px;border-radius:50%;border:2px solid var(--card);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.tmp-range-dot{position:absolute;top:-4px;width:14px;height:14px;border-radius:50%;border:2px solid var(--card);box-shadow:0 1px 4px rgba(0,0,0,.2)}
 /* Legend */
-.legend{display:flex;flex-wrap:wrap;gap:8px;padding:6px 16px;font-size:10px;font-weight:600;color:var(--txt3)}
-.legend-item{display:flex;align-items:center;gap:4px}
-.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.legend-sq{width:7px;height:7px;transform:rotate(45deg);flex-shrink:0}
-/* Compare stats table */
-.cmp-tbl{width:100%;border-collapse:collapse;font-size:11px}
-.cmp-tbl th{font-weight:600;color:var(--txt3);text-align:left;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06)}
-.cmp-tbl td{padding:6px 0;font-weight:600;color:var(--txt);border-bottom:1px solid rgba(0,0,0,.04)}
+.legend{display:flex;flex-wrap:wrap;gap:7px;padding:5px 16px;font-size:9px;font-weight:600;color:var(--txt4)}
+.legend-item{display:flex;align-items:center;gap:3px}
+.legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.legend-sq{width:6px;height:6px;transform:rotate(45deg);flex-shrink:0}
+/* Compare stats */
+.cmp-tbl{width:100%;border-collapse:collapse;font-size:10px}
+.cmp-tbl th{font-weight:600;color:var(--txt4);text-align:left;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.06)}
+.cmp-tbl td{padding:5px 0;font-weight:600;color:var(--txt);border-bottom:1px solid rgba(0,0,0,.03)}
 .cmp-tbl td:not(:first-child),.cmp-tbl th:not(:first-child){text-align:center}
 /* Empty state */
-.empty{padding:20px;text-align:center;color:var(--txt4);font-size:12px;line-height:1.5}
-.empty-icon{font-size:24px;margin-bottom:6px}
-/* Regularity score */
-.reg-bar{height:8px;border-radius:4px;background:var(--cream3);overflow:hidden}
-.reg-fill{height:100%;border-radius:4px;transition:width .4s ease}
+.empty{padding:20px;text-align:center;color:var(--txt4);font-size:11px;line-height:1.5}
+.empty-icon{font-size:22px;margin-bottom:5px}
+/* Regularity */
+.reg-bar{height:6px;border-radius:3px;background:var(--cream3);overflow:hidden}
+.reg-fill{height:100%;border-radius:3px;transition:width .4s ease}
 /* Chart tooltip */
-.chart-tip{position:absolute;background:var(--txt);color:#fff;border-radius:10px;padding:8px 12px;font-size:11px;font-weight:600;line-height:1.4;pointer-events:none;z-index:10;max-width:200px;box-shadow:0 4px 12px rgba(0,0,0,.3);white-space:nowrap}
-.chart-tip::after{content:'';position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid var(--txt)}
+.chart-tip{position:absolute;background:var(--txt);color:#fff;border-radius:10px;padding:7px 11px;font-size:10px;font-weight:600;line-height:1.4;pointer-events:none;z-index:10;max-width:190px;box-shadow:0 4px 14px rgba(0,0,0,.25);white-space:nowrap}
+.chart-tip::after{content:'';position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:4px solid var(--txt)}
 </style>
 </head>
 <body>
@@ -530,6 +551,7 @@ function load(){
   if(!D.photos)D.photos={};if(!D.notes)D.notes={};if(!D.mood)D.mood={};if(!D.sym)D.sym={};
   if(!D.excl)D.excl={11:true};if(!D.ptests)D.ptests=[];if(!D.meds)D.meds={};if(!D.myOv)D.myOv={};
   if(!D.appts)D.appts=[];if(!D.journal)D.journal={};if(!D.checks)D.checks={};if(!D.opks)D.opks={};if(!D.tqual)D.tqual={};
+  if(!D.wrist)D.wrist={};if(!D.sleep)D.sleep={};if(!D.darkMode)D.darkMode=false;if(!D.ttime)D.ttime={};
   var validSyms=["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting","CM: Egg white","CM: Watery","CM: Creamy","CM: Dry"];
   var validMoods=["Happy","Calm","Energetic","Tired","Irritable","Anxious","Sad","Emotional"];
   Object.keys(D.sym||{}).forEach(function(d){if(D.sym[d])D.sym[d]=D.sym[d].filter(function(s){return validSyms.indexOf(s)>-1})});
@@ -665,15 +687,59 @@ function ovProb(c,ci){
 /* RENDER */
 function render(){
   var app=document.getElementById('app');var info=cInfo();
-  var h='<div class="hdr"><div class="hdr-row"><div><h1>'+greet()+'</h1><div class="hdr-sub">Cycle Day '+info.cd+' · '+fd(td())+'</div></div>';
-  h+='<div style="display:flex;gap:6px;align-items:center">';
-  h+='<button class="csv-btn" onclick="backup()" style="padding:8px 10px">💾 Save</button>';
-  h+='<button class="csv-btn" onclick="document.getElementById(\'hdrRest\').click()" style="padding:8px 10px">📂 Load</button>';
-  h+='<input type="file" id="hdrRest" style="display:none" accept=".json" onchange="restore(this)">';
-  h+='</div></div></div>';
+  var todayR=info.c.readings.find(function(x){return x.date===td()});
+  var showMorning=!todayR&&curTab==='today';
+  var ph=phase(info.cd,info.av,info.ao,info.ho,info.od);
+
+  var h='<div class="hdr">';
+  if(showMorning){
+    // Conversational morning message
+    var dpo=info.ho?(info.cd-info.od):null;
+    var morningMsg='';
+    var hiMsg=greet();
+    if(dpo&&dpo>=6&&dpo<=9){morningMsg='You\'re '+dpo+' DPO today — right in the implantation window. No need to test yet, but do note anything that feels different. Your body might be doing something amazing right now.';}
+    else if(dpo&&dpo>=10&&dpo<=12){morningMsg='You\'re '+dpo+' DPO. If you\'re feeling brave, a FRER with first morning urine could show something. But a negative today doesn\'t mean anything definitive yet.';}
+    else if(dpo&&dpo>=13){morningMsg=''+dpo+' DPO — this is a reliable testing day if you haven\'t already. Whatever happens, you\'ve shown up every single day this cycle.';}
+    else if(dpo&&dpo<=5){morningMsg=''+dpo+' DPO — it\'s genuinely too early for anything to be happening that you\'d feel. Just log your temp and carry on with your day.';}
+    else if(!info.ho){var fw2=info.ao-5;if(info.cd>=fw2&&info.cd<=info.ao){morningMsg='You\'re in your fertile window right now. If you can, today\'s a good day.';}
+    else if(info.cd>=fw2-2){morningMsg='Fertile window opens in '+(fw2-info.cd)+' day'+(fw2-info.cd>1?'s':'')+'. Your body is getting ready — start OPK testing if you haven\'t.';}
+    else if(info.cd<=5){morningMsg='Period day '+info.cd+'. Be kind to yourself today. Rest if you need to — your body\'s resetting for the next round.';}
+    else{morningMsg='Follicular phase — your body is quietly building towards ovulation. Oestrogen\'s rising, energy should be good.';}}
+  } else {
+    // Welcome back message — they've already logged today
+    var hiMsg=greet();
+    var wbMsg='';
+    if(info.ho){var dpo2=info.cd-info.od;
+      if(dpo2>=6&&dpo2<=9)wbMsg='Implantation window · '+dpo2+' DPO';
+      else if(dpo2>=10)wbMsg='Testing window · '+dpo2+' DPO';
+      else wbMsg=dpo2+' DPO · '+ph.n;
+    } else wbMsg='Day '+info.cd+' · '+ph.n;
+  }
+
+  if(showMorning){
+    h+='<div class="morning-wrap">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:flex-start">';
+    h+='<div><div class="morning-hi">'+hiMsg+'</div>';
+    h+='<div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">Day '+info.cd+' · '+ph.n+'</div></div>';
+    h+='<div class="hdr-btns"><button class="hdr-btn" onclick="toggleDark()">'+(D.darkMode?'Light':'Dark')+'</button><button class="hdr-btn" onclick="backup()">Save</button><button class="hdr-btn" onclick="document.getElementById(\'hdrRest\').click()">Load</button>';
+    h+='<input type="file" id="hdrRest" style="display:none" accept=".json" onchange="restore(this)"></div></div>';
+    h+='<div style="font-size:13px;color:rgba(255,255,255,.8);margin:16px 0 12px;line-height:1.6;font-weight:400">'+morningMsg+'</div>';
+    h+='<div class="morning-fact">'+getFact()+'</div>';
+    h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:5px">Temperature</div>';
+    h+='<div class="morning-temp"><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="mornT" placeholder="3650" oninput="autoDecimal(this)"><input type="time" id="mornTime" style="padding:10px 8px;border:none;border-radius:12px;font-size:13px;background:rgba(255,255,255,.12);color:#fff;outline:none;width:90px;text-align:center" value="'+(new Date().getHours().toString().padStart(2,'0')+':'+new Date().getMinutes().toString().padStart(2,'0'))+'"><button onclick="quickLog3()">Log</button></div>';
+    h+='</div>';
+  } else {
+    h+='<div class="hdr-row"><div><h1>'+hiMsg+'</h1><div class="hdr-sub">'+wbMsg+'</div></div>';
+    h+='<div class="hdr-btns"><button class="hdr-btn" onclick="toggleDark()">'+(D.darkMode?'Light':'Dark')+'</button><button class="hdr-btn" onclick="backup()">Save</button><button class="hdr-btn" onclick="document.getElementById(\'hdrRest\').click()">Load</button>';
+    h+='<input type="file" id="hdrRest" style="display:none" accept=".json" onchange="restore(this)"></div></div>';
+  }
+  // Tabs at top
   h+='<div class="tabs">';
-  ["today","overlay","cycle","compare","insights"].forEach(function(t){h+='<button class="tab'+(curTab===t?' on':'')+'" onclick="sw(\''+t+'\')">'+t[0].toUpperCase()+t.slice(1)+'</button>'});
-  h+='</div><div class="content">';
+  ["today","overlay","cycle","compare","insights"].forEach(function(t){
+    h+='<button class="tab'+(curTab===t?' on':'')+'" onclick="sw(\''+t+'\')">'+t[0].toUpperCase()+t.slice(1)+'</button>';
+  });
+  h+='</div></div>';
+  h+='<div class="content">';
   if(curTab==="today")h+=rToday(info);
   else if(curTab==="overlay")h+=rOverlay();
   else if(curTab==="cycle")h+=rCycle();
@@ -685,6 +751,9 @@ function render(){
     if(curTab==="today"&&document.getElementById('aiResult'))showInsight(td());
   },60);
 }
+function quickLog3(){var inp=document.getElementById('mornT');var raw=inp.value.replace(/[^0-9]/g,'');if(raw.length<4){flash("Type 4 digits, e.g. 3650");return}var t=parseFloat(raw.slice(0,2)+'.'+raw.slice(2,4));if(isNaN(t)||t<35||t>38){flash("Temperature out of range");return}var date=td();var last=D.cycles[D.cycles.length-1];var day=db(last.key,date)+1;var rdg={day:day,date:date,temp:t};var ei=last.readings.findIndex(function(r){return r.date===date});if(ei>-1)last.readings[ei].temp=t;else{last.readings.push(rdg);last.readings.sort(function(a,b){return a.day-b.day})}
+  if(!D.ttime)D.ttime={};var timeEl=document.getElementById('mornTime');if(timeEl&&timeEl.value)D.ttime[date]=timeEl.value;
+  save();render();flash(t.toFixed(2)+"° logged")}
 
 /* TODAY — with collapsible sections */
 function rToday(info){
@@ -694,7 +763,7 @@ function rToday(info){
 
   // GAME PLAN
   var gp=gamePlan(info);
-  h+='<div class="section"><div class="gp" style="--gpc:'+gp.color+'"><div style="position:absolute;top:0;left:0;right:0;height:3px;background:'+gp.color+'"></div>';
+  h+='<div class="section"><div class="gp" style="--gpc:'+gp.color+'">';
   h+='<div style="display:flex;justify-content:space-between;align-items:flex-start"><div class="gp-title">'+gp.title+'</div>';
   if(streak>1)h+='<span class="streak">🔥 '+streak+' days</span>';
   h+='</div>';
@@ -707,39 +776,82 @@ function rToday(info){
   });
   h+='</div></div></div>';
 
-  // QUICK LOG
+  // QUICK LOG — smart state
+  var todayR2=info.c.readings.find(function(x){return x.date===td()});
+  var todayWrist=D.wrist[td()];
+  var todaySleep=D.sleep[td()];
+  var todayTime=D.ttime&&D.ttime[td()]||'';
   h+='<div class="section"><div class="card" style="padding:14px 16px">';
-  h+='<div class="fl" style="margin-bottom:8px">Quick Log</div>';
-  h+='<div class="ql"><input type="number" step="0.01" id="qlT" placeholder="36.50"><button onclick="quickLog()">Log Temp</button></div>';
-  h+='<div class="fl" style="margin:10px 0 6px">CM</div>';
+  if(todayR2&&todayR2.temp!=null){
+    // Already logged
+    h+='<div style="display:flex;justify-content:space-between;align-items:center">';
+    h+='<div style="display:flex;gap:14px;align-items:baseline">';
+    h+='<div><div style="font-size:20px;font-weight:800;color:var(--txt)">'+todayR2.temp.toFixed(2)+'°</div>';
+    h+='<div style="font-size:9px;color:var(--txt4)">BBT'+(todayTime?' · '+todayTime:'')+'</div></div>';
+    if(todayWrist){h+='<div><div style="font-size:15px;font-weight:700;color:var(--txt3)">'+todayWrist.toFixed(2)+'°</div>';
+    h+='<div style="font-size:9px;color:var(--txt4)">Wrist</div></div>'}
+    if(todaySleep){var slCol=todaySleep==='Good'?'var(--forest)':todaySleep==='OK'?'var(--gold)':'var(--rose)';
+    h+='<div><div style="font-size:13px;font-weight:700;color:'+slCol+'">'+todaySleep+'</div>';
+    h+='<div style="font-size:9px;color:var(--txt4)">Sleep</div></div>'}
+    h+='</div>';
+    h+='<button style="font-size:11px;font-weight:600;color:var(--cobalt);background:none" onclick="editTodayTemp()">Edit</button></div>';
+    // Time if not yet set
+    if(!todayTime){
+      h+='<div style="margin-top:6px;display:flex;align-items:center;gap:6px">';
+      h+='<span style="font-size:9px;color:var(--txt4)">What time did you take it?</span>';
+      h+='<input type="time" id="qlTimePost" style="padding:4px 8px;border:1.5px solid var(--cream3);border-radius:8px;font-size:12px;background:var(--card);color:var(--txt);outline:none">';
+      h+='<button style="font-size:10px;font-weight:600;color:var(--cobalt);background:none" onclick="saveTimePost()">Save</button></div>';
+    }
+    // Show missing fields stacked
+    if(!todayWrist){
+      h+='<div style="margin-top:8px"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Wrist temp (optional)</div>';
+      h+='<div class="ql" style="gap:4px"><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="qlW" placeholder="3610" oninput="autoDecimal(this)" style="font-size:14px;padding:8px"><button onclick="logWrist()" style="padding:8px 12px;font-size:10px">Log</button></div></div>';
+    }
+    if(!todaySleep){
+      h+='<div style="margin-top:8px"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Sleep quality</div>';
+      h+='<div class="qs-chips" style="gap:6px">'+["Good","OK","Poor","Broken"].map(function(s){return '<button class="qs-chip" style="padding:6px 12px" onclick="logSleep(\''+s+'\')">'+s+'</button>'}).join('')+'</div></div>';
+    }
+  } else {
+    // Not logged
+    h+='<div class="fl">Temperature</div>';
+    h+='<div class="ql"><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="qlT" placeholder="3650" oninput="autoDecimal(this)"><button onclick="quickLog()">Log</button></div>';
+    h+='<div style="font-size:9px;color:var(--txt4);margin-top:3px">Type 4 digits — decimal added automatically</div>';
+    h+='<div style="margin-top:8px"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Time taken</div>';
+    h+='<input type="time" id="qlTime" style="padding:6px 10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:13px;background:var(--card);color:var(--txt);outline:none" value="'+(new Date().getHours().toString().padStart(2,'0')+':'+new Date().getMinutes().toString().padStart(2,'0'))+'"></div>';
+    h+='<div style="margin-top:8px"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Wrist temp (optional)</div>';
+    h+='<div class="ql" style="gap:4px"><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="qlW" placeholder="3610" oninput="autoDecimal(this)" style="font-size:14px;padding:8px"><button onclick="logWrist()" style="padding:8px 12px;font-size:10px">Log</button></div></div>';
+    h+='<div style="margin-top:8px"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Sleep quality</div>';
+    h+='<div class="qs-chips" style="gap:6px">'+["Good","OK","Poor","Broken"].map(function(s){return '<button class="qs-chip" style="padding:6px 12px" onclick="logSleep(\''+s+'\')">'+s+'</button>'}).join('')+'</div></div>';
+  }
+  h+='<div style="margin-top:10px"><div class="fl">Cervical mucus</div>';
   h+='<div class="qs-chips">';
   ["CM: Egg white","CM: Watery","CM: Creamy","CM: Dry"].forEach(function(s){
     var on=todaySy.indexOf(s)>-1;
     h+='<button class="qs-chip'+(on?' on on-c':'')+'" onclick="qSym(\''+s+'\')">'+s.replace("CM: ","")+'</button>';
   });
-  h+='</div>';
-  h+='<div class="fl" style="margin:10px 0 6px">Symptoms</div>';
+  h+='</div></div>';
+  h+='<div style="margin-top:10px"><div class="fl">Symptoms</div>';
   h+='<div class="qs-chips">';
   ["Cramps","Bloating","Headache","Fatigue","Nausea","Breast tenderness","Backache","Spotting","Acne","Insomnia"].forEach(function(s){
     var on=todaySy.indexOf(s)>-1;
     h+='<button class="qs-chip'+(on?' on on-s':'')+'" onclick="qSym(\''+s+'\')">'+s+'</button>';
   });
-  h+='</div>';
-  h+='<div class="fl" style="margin:10px 0 6px">Mood</div>';
+  h+='</div></div>';
+  h+='<div style="margin-top:10px"><div class="fl">Mood</div>';
   h+='<div class="qs-chips">';
   ["Happy","Calm","Energetic","Tired","Irritable","Anxious","Sad","Emotional"].forEach(function(m){
     var on=todayMo.indexOf(m)>-1;
     h+='<button class="qs-chip'+(on?' on on-m':'')+'" onclick="qMood(\''+m+'\')">'+m+'</button>';
   });
-  h+='</div>';
+  h+='</div></div>';
   h+='<div style="display:flex;gap:6px;margin-top:10px">';
-  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px;'+(D.sex[td()]?'background:var(--cobalt);color:#fff':'')+'" onclick="qSex()">💙 Sex</button>';
+  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px;'+(D.sex[td()]?'background:var(--cobalt);color:#fff':'')+'" onclick="qSex()">Sex</button>';
   var todayOPK=D.opks&&D.opks[td()];
-  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px;'+(todayOPK==='pos'?'background:var(--gold);color:#fff':todayOPK==='neg'?'background:var(--cream3);color:var(--txt3)':'')+'" onclick="cycleOPK()">🧪 OPK '+(todayOPK==='pos'?'➕':todayOPK==='neg'?'➖':'')+'</button>';
+  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px;'+(todayOPK==='pos'?'background:var(--gold);color:#fff':todayOPK==='neg'?'background:var(--cream3);color:var(--txt3)':'')+'" onclick="cycleOPK()">OPK'+(todayOPK==='pos'?' +':todayOPK==='neg'?' −':'')+'</button>';
   h+='</div>';
   h+='<div style="display:flex;gap:6px;margin-top:6px">';
-  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px" onclick="openPT()">🤰 Log Preg Test</button>';
-  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px" onclick="openAdd()">+ Full Entry</button>';
+  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px" onclick="openPT()">Pregnancy test</button>';
+  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px" onclick="openAdd()">Full entry</button>';
   h+='</div>';
   h+='</div></div>';
 
@@ -754,8 +866,8 @@ function rToday(info){
   // Notifications & alerts
   var notifs=getNotifs(info);var alerts=tempAlerts(info);
   if(notifs.length||alerts.length){h+='<div class="section">';
-    notifs.forEach(function(n){h+='<div class="notif" style="background:'+n.bg+';color:'+n.color+'"><span class="notif-icon">'+n.icon+'</span>'+n.msg+'</div>'});
-    alerts.forEach(function(a){h+='<div class="notif" style="background:'+a.bg+';color:'+a.color+'"><span class="notif-icon">'+a.icon+'</span>'+a.msg+'</div>'});
+    notifs.forEach(function(n){h+='<div class="notif" style="border-left:3px solid '+n.color+';color:'+n.color+'"><span class="notif-icon">'+n.icon+'</span>'+n.msg+'</div>'});
+    alerts.forEach(function(a){h+='<div class="notif" style="border-left:3px solid '+a.color+';color:'+a.color+'"><span class="notif-icon">'+a.icon+'</span>'+a.msg+'</div>'});
   h+='</div>'}
 
   // Ring + phase
@@ -782,9 +894,9 @@ function rToday(info){
   h+='<div><div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:4px">'+bio.title+'</div>';
   h+='<div style="font-size:12px;color:var(--txt2);line-height:1.6">'+bio.body+'</div></div>';
   h+='</div></div>';
-  h+='<div class="card" style="padding:10px 14px;background:var(--cob-bg);border:none;box-shadow:none">';
-  h+='<div style="font-size:10px;font-weight:700;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">💡 Fertility Fact</div>';
-  h+='<div style="font-size:11px;color:var(--txt2);line-height:1.4">'+getFact()+'</div></div>';
+  h+='<div class="card" style="padding:12px 14px">';
+  h+='<div style="font-size:10px;font-weight:600;color:var(--cobalt);margin-bottom:4px">Fertility Fact</div>';
+  h+='<div style="font-size:12px;color:var(--txt);line-height:1.5">'+getFact()+'</div></div>';
   h+=colEnd()+'</div>';
 
   // Stats row — with inline temp deviation
@@ -925,7 +1037,14 @@ function rToday(info){
   return h;
 }
 
-function quickLog(){var t=parseFloat(document.getElementById('qlT').value);if(isNaN(t)){flash("Enter a temp");return}var date=td();var last=D.cycles[D.cycles.length-1];var day=db(last.key,date)+1;var rdg={day:day,date:date,temp:t};var ei=last.readings.findIndex(function(r){return r.date===date});if(ei>-1)last.readings[ei].temp=t;else{last.readings.push(rdg);last.readings.sort(function(a,b){return a.day-b.day})}save();render();flash("Logged "+t.toFixed(2)+"° ✓")}
+function quickLog(){var inp=document.getElementById('qlT');var raw=inp.value.replace(/[^0-9]/g,'');if(raw.length<4){flash("Type 4 digits, e.g. 3650");return}var t=parseFloat(raw.slice(0,2)+'.'+raw.slice(2,4));if(isNaN(t)||t<35||t>38){flash("Temperature out of range");return}var date=td();var last=D.cycles[D.cycles.length-1];var day=db(last.key,date)+1;var rdg={day:day,date:date,temp:t};var ei=last.readings.findIndex(function(r){return r.date===date});if(ei>-1)last.readings[ei].temp=t;else{last.readings.push(rdg);last.readings.sort(function(a,b){return a.day-b.day})}
+  if(!D.ttime)D.ttime={};var timeEl=document.getElementById('qlTime');if(timeEl&&timeEl.value)D.ttime[date]=timeEl.value;
+  save();render();flash(t.toFixed(2)+"° logged")}
+function autoDecimal(el){var raw=el.value.replace(/[^0-9]/g,'');if(raw.length>=4){el.value=raw.slice(0,2)+'.'+raw.slice(2,4);el.setSelectionRange(5,5)}else{el.value=raw}}
+function editTodayTemp(){var last=D.cycles[D.cycles.length-1];var r=last.readings.find(function(x){return x.date===td()});if(r)openEdit(td(),D.cycles.length-1)}
+function logWrist(){var inp=document.getElementById('qlW');if(!inp)return;var raw=inp.value.replace(/[^0-9]/g,'');if(raw.length<4){flash("Type 4 digits");return}var t=parseFloat(raw.slice(0,2)+'.'+raw.slice(2,4));if(isNaN(t)||t<34||t>38){flash("Out of range");return}D.wrist[td()]=t;save();render();flash("Wrist "+t.toFixed(2)+"° logged")}
+function logSleep(q){D.sleep[td()]=q;save();render();flash("Sleep: "+q)}
+function saveTimePost(){var el=document.getElementById('qlTimePost');if(!el||!el.value)return;if(!D.ttime)D.ttime={};D.ttime[td()]=el.value;save();render();flash("Time saved")}
 
 /* Symptom knowledge base — keeping the full SKB from original */
 var SKB={"Cramps":{menstrual:"Ugh, cramps. Your uterus is doing its thing — squeezing to shed the lining. Totally normal. A hot water bottle and ibuprofen are your best friends today.",follicular:"A bit of cramping now is usually just your ovaries waking up and getting follicles ready.",ovulatory:"This could be mittelschmerz — happens when your follicle pops to release the egg. If it's on one side, even more likely. 🎯",luteal:"Progesterone is the culprit here — it makes everything a bit crampy after ovulation.",dpo:{"6-9":"Cramping at 6-9 DPO is in the implantation window. Some women feel a pulling or pinching when the embryo burrows in. Try not to obsess (easier said than done).","10-12":"Is this period or implantation? Honestly, impossible to tell from cramps alone. If your period doesn't show by 12 DPO, grab a test.","13-14":"Right at the point where your period would normally start. Test if you haven't."}},"Bloating":{menstrual:"Feeling like a balloon? Prostaglandins causing inflammation. It passes — promise.",follicular:"Bloating now isn't super common cycle-wise. Could be diet or stress.",ovulatory:"Blame oestrogen — it's peaking right now and makes you hold water.",luteal:"Welcome to the progesterone bloat club. It literally slows your digestion down.",dpo:{"6-9":"Progesterone bloat feels exactly the same whether or not there's a little embryo. Your body can't tell you yet.","10-14":"Still bloated? Could be PMS, could be early pregnancy — both involve the same hormones."}},"Headache":{menstrual:"Hormone headaches at period start are common — oestrogen just crashed. Water and paracetamol help.",follicular:"Probably not cycle-related. Check hydration and sleep.",ovulatory:"The oestrogen surge can trigger headaches, especially if migraine-prone.",luteal:"Hormones all over the place. Some women get headaches like clockwork here.",dpo:{"6-9":"Headaches during implantation window are common — hormonal shifts regardless.","10-14":"Headaches are commonly reported as early pregnancy symptoms because blood volume increases early."}},"Fatigue":{menstrual:"Your body is doing hard work. Iron dips during period. Rest and eat iron-rich food.",follicular:"Energy should be picking up as oestrogen rises.",ovulatory:"Most women feel energy burst around ovulation.",luteal:"Progesterone is literally a sedative. Feeling wiped is 100% normal. 😴",dpo:{"6-9":"The tiredness is progesterone. But if implantation happens, hCG adds to it.","10-14":"If this tiredness feels DIFFERENT — bone-deep, falling-asleep-at-your-desk tired — pay attention. Test at 12+ DPO. 🤞"}},"Nausea":{menstrual:"Prostaglandins can upset your stomach. Ginger tea helps.",follicular:"Not typically cycle-related.",ovulatory:"Some women get a wave from the hormone surge. Brief and harmless.",luteal:"Progesterone slows digestion. Eat little and often.",dpo:{"6-9":"At 6-9 DPO it's genuinely too early for pregnancy nausea — hCG isn't high enough yet.","10-14":"If genuinely nauseous at 10+ DPO and this isn't normal for you, pay attention. Test if you haven't. 🤞"}},"Backache":{menstrual:"Prostaglandins make back muscles contract. Heat pad helps.",follicular:"Probably posture or activity, not cycle-related.",ovulatory:"Some feel dull ache from follicle rupturing. Usually one-sided.",luteal:"Progesterone relaxes ligaments, making lower back achy.",dpo:{"6-12":"Lower back ache in TWW is progesterone. Some report it as early sign.","13-14":"Back ache near expected period could go either way. Test if late."}},"Breast tenderness":{menstrual:"Tenderness usually eases once period arrives as progesterone drops.",follicular:"Breasts usually least tender now.",ovulatory:"Mild tenderness makes sense — progesterone beginning to rise.",luteal:"Classic. Progesterone makes breast tissue swell. Most common luteal symptom.",dpo:{"6-9":"Your boobs hurt because of progesterone — they'd hurt whether pregnant or not.","10-14":"Women say pregnancy breast tenderness feels DIFFERENT — fuller, heavier, especially nipples."}},"Acne":{menstrual:"Hormone shift triggers extra oil. Calms in a few days.",follicular:"Skin should be at its best — oestrogen is a skin's friend.",ovulatory:"Mini breakout from hormone surge. Short-lived.",luteal:"Progesterone + oil = spots. More sebum in luteal phase.",dpo:{"1-14":"Acne doesn't tell you about pregnancy — all progesterone-driven."}},"Insomnia":{menstrual:"Sleep disruption from hormone nosedive. Settles in a day or two.",follicular:"Sleep usually improves as oestrogen rises.",ovulatory:"Some feel buzzy and wired around ovulation.",luteal:"Irony: progesterone makes you tired but disrupts deep sleep. 🙃",dpo:{"6-9":"Tossing and turning is normal — hormonal + emotional. Try magnesium.","10-14":"Insomnia at 10+ DPO is reported as early pregnancy symptom more than you'd think."}},"Spotting":{menstrual:"Normal at start/end of period.",follicular:"Not super common. Mention to GP if recurring.",ovulatory:"Ovulation spotting is real and a good sign you ovulated! ✨",luteal:"Spotting after OV grabs attention when TTC. Could be implantation or low progesterone.",dpo:{"6-9":"Deep breath. Light pink/brown, small amount, lasting hours not days — ticks implantation boxes. About 25% of pregnancies have some spotting. 🤞","10-12":"Could be late implantation or period starting. If it STOPS, more implantation-like.","13-14":"Right on the edge. Only way to know is to test."}},"CM: Egg white":{menstrual:"Unusual during period. Don't worry about tracking CM today.",follicular:"Your body is gearing up! Oestrogen rising nicely.",ovulatory:"THIS IS IT. Peak fertility. Superhighway for sperm. Go go go. 🏃‍♀️",luteal:"Unusual after confirmed OV — could be secondary oestrogen surge or early pregnancy sign.",dpo:{"1-5":"A bit right after OV can happen as hormones transition.","6-12":"EWCM is back after drying up? Mentioned a lot as early sign. Theory: rising hCG causes secondary mucus surge. 👀"}},"CM: Watery":{menstrual:"Hard to track during period.",follicular:"Oestrogen building — you're on the right track towards fertile mucus.",ovulatory:"Fertile! Not quite egg white but sperm can survive in it. 💪",luteal:"A bit unusual — progesterone normally thickens things.",dpo:{"6-14":"Noticing watery CM when normally dry? Common anecdotal observation before positive tests."}},"CM: Creamy":{menstrual:"Can't tell during period.",follicular:"Transitional — moving from dry towards fertile.",ovulatory:"Not quite peak but don't dismiss it — creamy might be YOUR peak.",luteal:"Classic luteal phase mucus. Totally normal.",dpo:{"1-14":"Standard throughout TWW. Some say MORE than usual before positive."}},"CM: Dry":{menstrual:"Normal.",follicular:"Normal at start. CM ramps up closer to OV. Stay hydrated.",ovulatory:"Not ideal for conception. Try Preseed lubricant during sex.",luteal:"Classic progesterone doing its job.",dpo:{"1-14":"Dryness in TWW is the norm. Don't read into it."}},"Tired":{menstrual:"Your body's saying 'slow down.' Listen to it. 💤",follicular:"Energy should pick up. Check sleep and iron.",ovulatory:"Energy usually peaks. If tired, something else might be off.",luteal:"Progesterone is nature's sleeping pill. Nap if you can. 😴",dpo:{"6-14":"If this tiredness feels DIFFERENT — bone-deep, can't-keep-your-eyes-open tired — that's what women describe as early pregnancy fatigue. 🤞"}},"Irritable":{menstrual:"Oestrogen and progesterone crashed simultaneously. Biological reason, not 'just you.'",follicular:"Mood usually lifts. Might be life stuff.",ovulatory:"High oestrogen usually makes you feel great.",luteal:"Progesterone affects serotonin. Genuinely chemical, not a character flaw. 💛",dpo:{"6-14":"Between progesterone messing with serotonin AND the emotional weight of waiting... anyone would be snappy."}},"Anxious":{menstrual:"Anxiety spikes when period arrives — hormonal + emotional. Both valid. 💜",follicular:"Usually eases as oestrogen rises.",ovulatory:"Might be about timing pressure rather than hormones.",luteal:"TWW is an anxiety generator. Progesterone makes it worse chemically. 🫂",dpo:{"6-14":"The anxiety of the TWW is one of the hardest parts. The outcome is already decided — worrying won't change it. 💜"}},"Emotional":{menstrual:"Hormones did a dramatic shift. Plus, getting your period when TTC is genuinely sad.",follicular:"Less common hormonally. Maybe still processing last cycle.",ovulatory:"Some feel everything more intensely around ovulation.",luteal:"Progesterone turns up the volume on ALL emotions. SO normal. 😭",dpo:{"6-14":"Being emotional in the TWW is part hormones, part hope, part fear. You're not 'too much.' You're human. 💛"}},"Sad":{menstrual:"This is grief. Each failed cycle carries a loss. You're allowed to be sad. 💜",follicular:"If sadness lingers, talk to someone.",ovulatory:"Can come from the pressure of it all.",luteal:"Emotionally heavy when TTC. Be gentle with yourself. 🫂",dpo:{"6-14":"Whatever happens this cycle — you showed up, you tracked, you tried. That takes courage. 💛"}},"Happy":{menstrual:"Feeling good? Hold onto it!",follicular:"Oestrogen is your mood's best friend.",ovulatory:"Peak mood time! ✨",luteal:"Hold onto the good moments.",dpo:{"1-14":"A good day in the TWW is a gift. Enjoy today. 💛"}},"Calm":{menstrual:"Feeling calm is a healthy sign.",follicular:"Soak it up.",ovulatory:"Feeling centred is lovely.",luteal:"Studies show chronic stress can affect implantation. Whatever you're doing, keep doing it. 🧘‍♀️",dpo:{"1-14":"Being calm during the TWW is rare and wonderful."}},"Energetic":{menstrual:"Make the most of it!",follicular:"Classic oestrogen boost! ⚡",ovulatory:"Peak energy by design.",luteal:"Unusual — some report unexpected bursts in early pregnancy.",dpo:{"1-14":"Energy in the TWW? Take it and run with it. 🙌"}}};
@@ -1091,7 +1210,8 @@ function attZm(){var cv=document.getElementById('oC');if(!cv)return;
 
 function dOv(){
   var cv=document.getElementById('oC');if(!cv)return;var _hits=[];var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight;ctx.save();ctx.translate(zm.ox,zm.oy);ctx.scale(zm.s,zm.s);
-  var p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b,mn=35.8,mx=37.1,mxD=55;
+  var p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b,mn=35.8,mx=37.1;
+  var mxD=1;D.cycles.forEach(function(c,ci){if(!cVis[ci])return;c.readings.forEach(function(r){if(r.day>mxD)mxD=r.day})});if(mxD<10)mxD=10;
   function x(d){return p.l+(d-1)/(mxD-1)*gW}function y(t){return p.t+(1-(t-mn)/(mx-mn))*gH}
   ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;
   for(var t=35.8;t<=37.1;t=Math.round((t+.1)*10)/10){ctx.beginPath();ctx.moveTo(p.l,y(t));ctx.lineTo(W-p.r,y(t));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t.toFixed(1),p.l-4,y(t)+3)}
@@ -1126,6 +1246,7 @@ function showTip(canvasId,hits,ex,ey){
   var tip=document.createElement('div');tip.id='chartTip';tip.className='chart-tip';
   var lines=[fd(best.date)+' · Day '+best.day];
   if(best.temp!=null)lines[0]+=' · '+best.temp.toFixed(2)+'°';
+  if(D.ttime&&D.ttime[best.date])lines[0]+=' ('+D.ttime[best.date]+')';
   if(best.cycle)lines.push(best.cycle);
   if(best.dpo)lines.push(best.dpo+' DPO');
   var tags=[];
@@ -1176,7 +1297,8 @@ function rCycle(){
   h+='</div>';
   h+=colEnd()+'</div>';return h;
 }
-function dCyc(){var cv=document.getElementById('cC');if(!cv)return;var c=D.cycles[curCyc];var _hits=[];var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight,p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b;var ts=c.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});if(!ts.length){ctx.fillStyle='#A0928A';ctx.font='13px -apple-system';ctx.textAlign='center';ctx.fillText('No temperature data for this cycle',W/2,H/2);return};var mn=Math.floor(Math.min.apply(null,ts)*10)/10-.05,mx2=Math.ceil(Math.max.apply(null,ts)*10)/10+.05;var mxDay=c.readings[c.readings.length-1].day;function x(d){return p.l+(d-1)/(Math.max(mxDay,2)-1)*gW}function y(t){return p.t+(1-(t-mn)/(mx2-mn))*gH}ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;for(var t2=Math.ceil(mn*10)/10;t2<=mx2;t2=Math.round((t2+.1)*10)/10){ctx.beginPath();ctx.moveTo(p.l,y(t2));ctx.lineTo(W-p.r,y(t2));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t2.toFixed(1),p.l-4,y(t2)+3)}var cl=avgCL2();if(cl){ctx.save();ctx.setLineDash([5,3]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();ctx.moveTo(p.l,y(cl));ctx.lineTo(W-p.r,y(cl));ctx.stroke();ctx.restore();ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.font="bold 8px -apple-system";ctx.textAlign="left";ctx.fillText("CL "+cl.toFixed(2),W-p.r-52,y(cl)-4)}ctx.strokeStyle="#C4652A";ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();c.readings.forEach(function(r,i){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();var eov=effOv(curCyc);c.readings.forEach(function(r){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);_hits.push({x:px,y:py,day:r.day,date:r.date,temp:r.temp,cycle:'C'+(curCyc+1),ov:eov&&r.day===eov,lh:!!r.ov,flow:r.flow,sex:!!D.sex[r.date],dpo:eov&&r.day>eov?(r.day-eov):null,tqual:D.tqual&&D.tqual[r.date]||null});var _fl=D.tqual&&D.tqual[r.date];ctx.fillStyle=r.ov?"#9A7B1E":r.flow?"#A84455":"#C4652A";if(_fl){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.stroke()}else{ctx.beginPath();ctx.arc(px,py,r.ov?4:3,0,Math.PI*2);ctx.fill()};if(r.ov&&sOv){ctx.fillStyle="#fff";ctx.font="bold 6px sans-serif";ctx.textAlign="center";ctx.fillText("+",px,py+2)}if(eov&&r.day===eov&&!r.ov&&sOv){ctx.fillStyle="#9A7B1E";ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}if(r.flow&&sPer){ctx.fillStyle="#A84455";ctx.beginPath();ctx.arc(px,py+10,3,0,Math.PI*2);ctx.fill()}if(D.sex[r.date]&&sSex){ctx.fillStyle="#2B5C8A";ctx.globalAlpha=.7;ctx.save();ctx.translate(px,H-p.b-8);ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore();ctx.globalAlpha=1}if(r.day%5===0||r.day===1||r.ov||r.day===eov){ctx.fillStyle="#A0928A";ctx.font="8px -apple-system";ctx.textAlign="center";ctx.fillText(r.day,px,H-p.b+12)}});cycHits=_hits;cv.onclick=function(e){showTip('cC',cycHits,e.clientX,e.clientY)}}
+function dCyc(){var cv=document.getElementById('cC');if(!cv)return;var c=D.cycles[curCyc];var _hits=[];var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight,p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b;var ts=c.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});if(!ts.length){ctx.fillStyle='#A0928A';ctx.font='13px -apple-system';ctx.textAlign='center';ctx.fillText('No temperature data for this cycle',W/2,H/2);return};var mn=Math.floor(Math.min.apply(null,ts)*10)/10-.05,mx2=Math.ceil(Math.max.apply(null,ts)*10)/10+.05;var mxDay=c.readings[c.readings.length-1].day;function x(d){return p.l+(d-1)/(Math.max(mxDay,2)-1)*gW}function y(t){return p.t+(1-(t-mn)/(mx2-mn))*gH}ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;for(var t2=Math.ceil(mn*10)/10;t2<=mx2;t2=Math.round((t2+.1)*10)/10){ctx.beginPath();ctx.moveTo(p.l,y(t2));ctx.lineTo(W-p.r,y(t2));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t2.toFixed(1),p.l-4,y(t2)+3)}var cl=avgCL2();if(cl){ctx.save();ctx.setLineDash([5,3]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();ctx.moveTo(p.l,y(cl));ctx.lineTo(W-p.r,y(cl));ctx.stroke();ctx.restore();ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.font="bold 8px -apple-system";ctx.textAlign="left";ctx.fillText("CL "+cl.toFixed(2),W-p.r-52,y(cl)-4)}ctx.strokeStyle="#C4652A";ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();c.readings.forEach(function(r,i){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();var eov=effOv(curCyc);c.readings.forEach(function(r){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);_hits.push({x:px,y:py,day:r.day,date:r.date,temp:r.temp,cycle:'C'+(curCyc+1),ov:eov&&r.day===eov,lh:!!r.ov,flow:r.flow,sex:!!D.sex[r.date],dpo:eov&&r.day>eov?(r.day-eov):null,tqual:D.tqual&&D.tqual[r.date]||null});var _fl=D.tqual&&D.tqual[r.date];ctx.fillStyle=r.ov?"#9A7B1E":r.flow?"#A84455":"#C4652A";if(_fl){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.stroke()}else{ctx.beginPath();ctx.arc(px,py,r.ov?4:3,0,Math.PI*2);ctx.fill()};if(r.ov&&sOv){ctx.fillStyle="#fff";ctx.font="bold 6px sans-serif";ctx.textAlign="center";ctx.fillText("+",px,py+2)}if(eov&&r.day===eov&&!r.ov&&sOv){ctx.fillStyle="#9A7B1E";ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}if(r.flow&&sPer){ctx.fillStyle="#A84455";ctx.beginPath();ctx.arc(px,py+10,3,0,Math.PI*2);ctx.fill()}if(D.sex[r.date]&&sSex){ctx.fillStyle="#2B5C8A";ctx.globalAlpha=.7;ctx.save();ctx.translate(px,H-p.b-8);ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore();ctx.globalAlpha=1}if(r.day%5===0||r.day===1||r.ov||r.day===eov){ctx.fillStyle="#A0928A";ctx.font="8px -apple-system";ctx.textAlign="center";ctx.fillText(r.day,px,H-p.b+12)}});// Wrist temp dashed line
+var wristPts=[];c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){var wt=D.wrist[r.date];if(wt>=mn&&wt<=mx2)wristPts.push({day:r.day,temp:wt})}});if(wristPts.length>1){ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle='#6B4E8B';ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();wristPts.forEach(function(w,i){var px=x(w.day),py=y(w.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();wristPts.forEach(function(w){ctx.fillStyle='#6B4E8B';ctx.beginPath();ctx.arc(x(w.day),y(w.temp),2.5,0,Math.PI*2);ctx.fill()});ctx.restore()}cycHits=_hits;cv.onclick=function(e){showTip('cC',cycHits,e.clientX,e.clientY)}}
 
 /* COMPARE */
 function rCompare(){
@@ -1551,6 +1673,93 @@ function rInsights(){
   });
   h+='</div></div>'+colEnd()+'</div>';
 
+  // Intercourse frequency patterns
+  var ixData=[];
+  D.cycles.forEach(function(c,i){
+    if(isExcl(i))return;
+    var count=0;var fwHits=0;var eod=effOv(i);
+    c.readings.forEach(function(r){if(D.sex[r.date])count++});
+    if(eod){var cStart=new Date(c.key+'T12:00:00');for(var d=eod-5;d<=eod;d++){var dt=new Date(cStart);dt.setDate(dt.getDate()+d-1);if(D.sex[dt.toISOString().slice(0,10)])fwHits++}}
+    ixData.push({i:i,label:c.label,total:count,fwHits:fwHits,len:c.length||30,hasOV:!!eod});
+  });
+  if(ixData.length>=2){
+    var avgIx=Math.round(ixData.reduce(function(a,b){return a+b.total},0)/ixData.length*10)/10;
+    h+='<div class="section">'+colHdr('i-ix','Intimacy Patterns',ixData.length+' cycles');
+    h+=colBody('i-ix');
+    h+='<div class="card" style="padding:14px 16px">';
+    h+='<div style="font-size:11px;color:var(--txt3);margin-bottom:8px">Average '+avgIx+' days per cycle</div>';
+    ixData.forEach(function(d){
+      var pct=Math.round(d.total/d.len*100);
+      h+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.04)">';
+      h+='<span style="font-size:11px;font-weight:600;color:'+PAL[d.i%7]+';width:32px">C'+(d.i+1)+'</span>';
+      h+='<div style="flex:1;height:6px;border-radius:3px;background:var(--cream3);overflow:hidden"><div style="height:6px;border-radius:3px;width:'+Math.min(100,pct*2)+'%;background:var(--cobalt)"></div></div>';
+      h+='<span style="font-size:10px;font-weight:600;color:var(--txt);width:24px;text-align:right">'+d.total+'</span>';
+      if(d.hasOV)h+='<span style="font-size:9px;color:var(--gold);width:24px">FW:'+d.fwHits+'</span>';
+      h+='</div>';
+    });
+    h+='</div>'+colEnd()+'</div>';
+  }
+
+  // Period flow trends
+  var flowData=[];
+  D.cycles.forEach(function(c,i){
+    if(isExcl(i))return;
+    var flows={heavy:0,medium:0,light:0};var total=0;
+    c.readings.forEach(function(r){if(r.flow&&r.flow!=='unspecified'&&r.flow!=='period'){flows[r.flow]=(flows[r.flow]||0)+1;total++}else if(r.flow==='period'){total++}});
+    if(total>0)flowData.push({i:i,label:c.label,flows:flows,total:total});
+  });
+  if(flowData.length>=2){
+    h+='<div class="section">'+colHdr('i-flow','Period Flow Trends',flowData.length+' cycles');
+    h+=colBody('i-flow');
+    h+='<div class="card" style="padding:14px 16px">';
+    flowData.forEach(function(d){
+      var h2=d.flows.heavy||0,m2=d.flows.medium||0,l2=d.flows.light||0;
+      var tot=Math.max(1,h2+m2+l2);
+      h+='<div style="padding:5px 0;border-bottom:1px solid rgba(0,0,0,.04)">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">';
+      h+='<span style="font-size:11px;font-weight:600;color:'+PAL[d.i%7]+'">C'+(d.i+1)+'</span>';
+      h+='<span style="font-size:10px;color:var(--txt3)">'+d.total+' days</span></div>';
+      h+='<div style="display:flex;height:6px;border-radius:3px;overflow:hidden">';
+      if(h2)h+='<div style="width:'+Math.round(h2/tot*100)+'%;background:var(--rose)"></div>';
+      if(m2)h+='<div style="width:'+Math.round(m2/tot*100)+'%;background:var(--burnt)"></div>';
+      if(l2)h+='<div style="width:'+Math.round(l2/tot*100)+'%;background:var(--gold)"></div>';
+      h+='</div></div>';
+    });
+    h+='<div style="display:flex;gap:12px;margin-top:8px;font-size:9px;color:var(--txt4)">';
+    h+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--rose);margin-right:3px;vertical-align:middle"></span>Heavy</span>';
+    h+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--burnt);margin-right:3px;vertical-align:middle"></span>Medium</span>';
+    h+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--gold);margin-right:3px;vertical-align:middle"></span>Light</span>';
+    h+='</div></div>'+colEnd()+'</div>';
+  }
+
+  // Sleep quality trends
+  var sleepData=[];
+  D.cycles.forEach(function(c,i){
+    if(isExcl(i))return;
+    var counts={Good:0,OK:0,Poor:0,Broken:0};var total=0;
+    c.readings.forEach(function(r){var sl=D.sleep&&D.sleep[r.date];if(sl){counts[sl]=(counts[sl]||0)+1;total++}});
+    if(total>0)sleepData.push({i:i,label:c.label,counts:counts,total:total});
+  });
+  if(sleepData.length>=1){
+    h+='<div class="section">'+colHdr('i-sleep','Sleep Quality');
+    h+=colBody('i-sleep');
+    h+='<div class="card" style="padding:14px 16px">';
+    sleepData.forEach(function(d){
+      var tot=Math.max(1,d.total);
+      h+='<div style="padding:5px 0;border-bottom:1px solid rgba(0,0,0,.04)">';
+      h+='<div style="display:flex;justify-content:space-between;margin-bottom:3px">';
+      h+='<span style="font-size:11px;font-weight:600;color:'+PAL[d.i%7]+'">C'+(d.i+1)+'</span>';
+      h+='<span style="font-size:10px;color:var(--txt3)">'+d.total+' nights logged</span></div>';
+      h+='<div style="display:flex;height:6px;border-radius:3px;overflow:hidden">';
+      if(d.counts.Good)h+='<div style="width:'+Math.round(d.counts.Good/tot*100)+'%;background:var(--forest)"></div>';
+      if(d.counts.OK)h+='<div style="width:'+Math.round(d.counts.OK/tot*100)+'%;background:var(--gold)"></div>';
+      if(d.counts.Poor)h+='<div style="width:'+Math.round(d.counts.Poor/tot*100)+'%;background:var(--burnt)"></div>';
+      if(d.counts.Broken)h+='<div style="width:'+Math.round(d.counts.Broken/tot*100)+'%;background:var(--rose)"></div>';
+      h+='</div></div>';
+    });
+    h+='</div>'+colEnd()+'</div>';
+  }
+
   // Notes
   var nl=timeline();
   h+='<div class="section">'+colHdr('i-notes','Notes Timeline',nl.length);
@@ -1569,6 +1778,10 @@ function showM(date,r,ci2){
   var h='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl"><div class="mt">'+(r?'Edit':'New')+' Reading</div>';
   h+='<div class="fr"><div class="fl">Date</div><input class="fi" type="date" id="mD" value="'+date+'"></div>';
   h+='<div class="fr"><div class="fl">Temperature (°C)</div><input class="fi" type="number" step="0.01" id="mT" value="'+(r&&r.temp!=null?r.temp.toFixed(2):'')+'"></div>';
+  var modalTime=D.ttime&&D.ttime[date]||'';
+  h+='<div class="fr"><div class="fl">Time taken</div><input class="fi" type="time" id="mTime" value="'+modalTime+'"></div>';
+  var wt=D.wrist&&D.wrist[date]?D.wrist[date]:'';
+  h+='<div class="fr"><div class="fl">Wrist temp (optional)</div><input class="fi" type="number" step="0.01" id="mWT" value="'+(wt?wt.toFixed(2):'')+'"></div>';
   h+='<div class="fr"><div class="tr"><span class="tl">Ovulation (LH+)</span><div class="tg'+(r&&r.ov?' on':'')+'" id="mOv" onclick="this.classList.toggle(\'on\')"></div></div>';
   h+='<div class="tr"><span class="tl">Intimacy</span><div class="tg'+(sx?' on':'')+'" id="mSx" onclick="this.classList.toggle(\'on\')"></div></div>';
   var tq=D.tqual&&D.tqual[date]?D.tqual[date]:'';
@@ -1619,6 +1832,13 @@ function saveR(){
   var tqOn=document.getElementById('mTQ').classList.contains('on');
   if(tqOn){var tqChip=document.querySelector('#tqReasons .chip.on');D.tqual[date]=tqChip?tqChip.textContent:'flagged'}
   else delete D.tqual[date];
+  // Wrist temp
+  if(!D.wrist)D.wrist={};
+  var wt=parseFloat(document.getElementById('mWT').value);
+  if(!isNaN(wt)&&wt>34&&wt<38)D.wrist[date]=wt;else delete D.wrist[date];
+  // Time
+  if(!D.ttime)D.ttime={};var mTimeEl=document.getElementById('mTime');
+  if(mTimeEl&&mTimeEl.value)D.ttime[date]=mTimeEl.value;else delete D.ttime[date];
   save();closeM();render();flash("Saved ✓");
 }
 function delR(date,ci2){if(!confirm("Delete?"))return;D.cycles[ci2].readings=D.cycles[ci2].readings.filter(function(r){return r.date!==date});delete D.sym[date];delete D.mood[date];delete D.sex[date];delete D.notes[date];delete D.photos[date];delete D.meds[date];save();closeM();render();flash("Deleted")}
@@ -1695,9 +1915,10 @@ function exp(){
 }
 
 function sw(t){curTab=t;render()}
+function toggleDark(){D.darkMode=!D.darkMode;document.documentElement.classList.toggle('dark',D.darkMode);document.querySelector('meta[name=theme-color]').content=D.darkMode?'#1C1210':'#B25835';save();render()}
 function flash(m){var t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(function(){t.remove()},1800)}
 
-load();render();
+load();if(D.darkMode)document.documentElement.classList.add('dark');render();
 window.addEventListener('orientationchange',function(){setTimeout(render,200)});
 window.addEventListener('resize',function(){clearTimeout(window._rsz);window._rsz=setTimeout(render,150)});
 // PWA Service Worker
