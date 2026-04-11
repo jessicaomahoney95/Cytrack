@@ -289,9 +289,9 @@ textarea{resize:vertical;min-height:56px}
 </head>
 <body>
 <div class="app" id="app"></div>
-<div class="fab" onclick="openAdd()">+</div>
+<div class="fab" onclick="fabAction()">+</div>
 <script>
-var SK="bbt-jess-v13";
+var SK="bbt-jess-v14";
 var PAL=["#E8636A","#5B9FD6","#5CC28F","#E8A84C","#9F7AEA","#ED7FA6","#3BBFA0"];
 var SEED_C=[{"key":"2024-12-10","label":"10 Dec","length":27,"readings":[{"day":1,"date":"2024-12-10","flow":"unspecified"},{"day":2,"date":"2024-12-11","flow":"unspecified"},{"day":3,"date":"2024-12-12","flow":"unspecified"}]},{"key":"2025-01-06","label":"6 Jan","length":28,"readings":[{"day":1,"date":"2025-01-06","flow":"unspecified"},{"day":2,"date":"2025-01-07","flow":"unspecified"},{"day":3,"date":"2025-01-08","flow":"unspecified"},{"day":4,"date":"2025-01-09","flow":"unspecified"}]},{"key":"2025-02-03","label":"3 Feb","length":30,"readings":[{"day":1,"date":"2025-02-03","flow":"unspecified"},{"day":2,"date":"2025-02-04","flow":"unspecified"},{"day":3,"date":"2025-02-05","flow":"unspecified"}]},{"key":"2025-03-05","label":"5 Mar","length":28,"readings":[{"day":1,"date":"2025-03-05","flow":"unspecified"},{"day":2,"date":"2025-03-06","flow":"unspecified"},{"day":3,"date":"2025-03-07","flow":"unspecified"},{"day":4,"date":"2025-03-08","flow":"unspecified"}]},{"key":"2025-04-02","label":"2 Apr","length":34,"readings":[{"day":1,"date":"2025-04-02","flow":"unspecified"},{"day":2,"date":"2025-04-03","flow":"unspecified"},{"day":3,"date":"2025-04-04","flow":"unspecified"},{"day":4,"date":"2025-04-05","flow":"unspecified"}]},{"key":"2025-05-06","label":"6 May","length":30,"readings":[{"day":1,"date":"2025-05-06","flow":"heavy"},{"day":2,"date":"2025-05-07","flow":"unspecified"},{"day":3,"date":"2025-05-08","flow":"light"}]},{"key":"2025-06-05","label":"5 Jun","length":29,"readings":[{"day":1,"date":"2025-06-05","flow":"heavy"},{"day":2,"date":"2025-06-06","flow":"heavy"},{"day":3,"date":"2025-06-07","flow":"medium"},{"day":4,"date":"2025-06-08","flow":"light"}]},{"key":"2025-07-04","label":"4 Jul","length":28,"readings":[{"day":1,"date":"2025-07-04","flow":"unspecified"},{"day":2,"date":"2025-07-05","flow":"unspecified"},{"day":3,"date":"2025-07-06","flow":"unspecified"},{"day":4,"date":"2025-07-07","flow":"unspecified"}]},{"key":"2025-08-01","label":"1 Aug","length":27,"readings":[{"day":1,"date":"2025-08-01","flow":"unspecified"},{"day":2,"date":"2025-08-02","flow":"unspecified"}]},{"key": "2025-08-28", "label": "28 Aug", "length": 30, "readings": [{"day": 6, "date": "2025-09-02", "temp": 36.61}, {"day": 7, "date": "2025-09-03", "temp": 36.61}, {"day": 8, "date": "2025-09-04", "temp": 36.66}, {"day": 9, "date": "2025-09-05", "temp": 36.62}, {"day": 10, "date": "2025-09-06", "temp": 36.42}, {"day": 11, "date": "2025-09-07", "temp": 36.56}, {"day": 12, "date": "2025-09-08", "temp": 36.65}, {"day": 13, "date": "2025-09-09", "temp": 36.72}, {"day": 14, "date": "2025-09-10", "temp": 36.56}, {"day": 15, "date": "2025-09-11", "temp": 36.54}, {"day": 16, "date": "2025-09-12", "temp": 36.68}, {"day": 17, "date": "2025-09-13", "temp": 36.6}, {"day": 18, "date": "2025-09-14", "temp": 36.6}, {"day": 19, "date": "2025-09-15", "temp": 36.66}, {"day": 20, "date": "2025-09-16", "temp": 36.59}, {"day": 21, "date": "2025-09-17", "temp": 36.71}, {"day": 22, "date": "2025-09-18", "temp": 36.83}, {"day": 23, "date": "2025-09-19", "temp": 36.8}, {"day": 24, "date": "2025-09-20", "temp": 36.66}, {"day": 25, "date": "2025-09-21", "temp": 36.86}, {"day": 26, "date": "2025-09-22", "temp": 36.74}, {"day": 27, "date": "2025-09-23", "temp": 36.77}, {"day": 28, "date": "2025-09-24", "temp": 36.77}, {"day": 29, "date": "2025-09-25", "temp": 36.85}, {"day": 30, "date": "2025-09-26", "temp": 36.87}]}, {"key": "2025-09-27", "label": "27 Sep", "length": 28, "readings": [{"day": 1, "date": "2025-09-27", "temp": 36.77, "flow": "period"}, {"day": 2, "date": "2025-09-28", "temp": 36.54, "flow": "period"}, {"day": 3, "date": "2025-09-29", "temp": 36.43, "flow": "period"}, {"day": 4, "date": "2025-09-30", "temp": 36.43}, {"day": 5, "date": "2025-10-01", "temp": 36.36}, {"day": 6, "date": "2025-10-02", "temp": 36.25}, {"day": 7, "date": "2025-10-03", "temp": 36.45}, {"day": 8, "date": "2025-10-04", "temp": 36.33}, {"day": 9, "date": "2025-10-05", "temp": 36.46}, {"day": 10, "date": "2025-10-06", "temp": 36.22}, {"day": 11, "date": "2025-10-07", "temp": 36.44}, {"day": 12, "date": "2025-10-08", "temp": 36.38}, {"day": 13, "date": "2025-10-09", "temp": 36.57}, {"day": 14, "date": "2025-10-10", "temp": 36.33}, {"day": 15, "date": "2025-10-11", "temp": 36.28}, {"day": 16, "date": "2025-10-12", "temp": 36.49, "ov": true}, {"day": 17, "date": "2025-10-13", "temp": 36.51}, {"day": 18, "date": "2025-10-14", "temp": 36.72}, {"day": 19, "date": "2025-10-15", "temp": 36.49}, {"day": 20, "date": "2025-10-16", "temp": 36.49}, {"day": 21, "date": "2025-10-17", "temp": 36.9}, {"day": 22, "date": "2025-10-18", "temp": 36.53}, {"day": 23, "date": "2025-10-19", "temp": 36.69}, {"day": 24, "date": "2025-10-20", "temp": 36.61}, {"day": 25, "date": "2025-10-21", "temp": 36.68}, {"day": 26, "date": "2025-10-22", "temp": 36.65}, {"day": 27, "date": "2025-10-23", "temp": 36.49}, {"day": 28, "date": "2025-10-24", "temp": 36.52}]}, {"key": "2025-10-25", "label": "25 Oct", "length": 55, "readings": [{"day": 1, "date": "2025-10-25", "temp": 36.28, "flow": "light"}, {"day": 2, "date": "2025-10-26", "temp": 36.33, "flow": "heavy"}, {"day": 3, "date": "2025-10-27", "temp": 36.13, "flow": "medium"}, {"day": 4, "date": "2025-10-28", "temp": 36.19}, {"day": 5, "date": "2025-10-29", "temp": 36.27}, {"day": 6, "date": "2025-10-30", "temp": 36.41}, {"day": 7, "date": "2025-10-31", "temp": 36.18}, {"day": 8, "date": "2025-11-01", "temp": 36.36}, {"day": 10, "date": "2025-11-03", "temp": 36.52}, {"day": 11, "date": "2025-11-04", "temp": 36.4}, {"day": 12, "date": "2025-11-05", "temp": 36.58}, {"day": 13, "date": "2025-11-06", "temp": 36.41}, {"day": 15, "date": "2025-11-08", "temp": 36.28}, {"day": 16, "date": "2025-11-09", "temp": 36.51}, {"day": 17, "date": "2025-11-10", "temp": 36.33}, {"day": 18, "date": "2025-11-11", "temp": 36.36, "ov": true}, {"day": 19, "date": "2025-11-12", "temp": 36.52, "ov": true}, {"day": 20, "date": "2025-11-13", "temp": 36.7}, {"day": 21, "date": "2025-11-14", "temp": 36.92}, {"day": 22, "date": "2025-11-15", "temp": 36.65}, {"day": 23, "date": "2025-11-16", "temp": 36.85}, {"day": 24, "date": "2025-11-17", "temp": 36.75}, {"day": 25, "date": "2025-11-18", "temp": 36.68}, {"day": 26, "date": "2025-11-19", "temp": 36.66}, {"day": 27, "date": "2025-11-20", "temp": 36.76}, {"day": 28, "date": "2025-11-21", "temp": 36.72}, {"day": 29, "date": "2025-11-22", "temp": 36.66}, {"day": 30, "date": "2025-11-23", "temp": 36.53}, {"day": 31, "date": "2025-11-24", "temp": 36.7}, {"day": 32, "date": "2025-11-25", "temp": 36.69}, {"day": 33, "date": "2025-11-26", "temp": 36.8}, {"day": 34, "date": "2025-11-27", "temp": 36.83}, {"day": 35, "date": "2025-11-28", "temp": 36.77}, {"day": 36, "date": "2025-11-29", "temp": 36.79}, {"day": 38, "date": "2025-12-01", "temp": 36.83}, {"day": 39, "date": "2025-12-02", "temp": 36.78}, {"day": 40, "date": "2025-12-03", "temp": 36.82}, {"day": 41, "date": "2025-12-04", "temp": 36.72}, {"day": 43, "date": "2025-12-06", "temp": 36.77}, {"day": 45, "date": "2025-12-08", "temp": 36.98}, {"day": 46, "date": "2025-12-09", "temp": 36.8}, {"day": 47, "date": "2025-12-10", "temp": 36.84}, {"day": 48, "date": "2025-12-11", "temp": 36.84}, {"day": 49, "date": "2025-12-12", "temp": 36.85}, {"day": 53, "date": "2025-12-16", "temp": 36.72}, {"day": 54, "date": "2025-12-17", "temp": 36.97}]}, {"key": "2025-12-19", "label": "19 Dec", "length": 33, "readings": [{"day": 16, "date": "2026-01-03", "temp": 36.18}, {"day": 17, "date": "2026-01-04", "temp": 36.3}, {"day": 18, "date": "2026-01-05", "temp": 35.99}, {"day": 20, "date": "2026-01-07", "temp": 36.61}, {"day": 21, "date": "2026-01-08", "temp": 36.58, "ov": true}, {"day": 22, "date": "2026-01-09", "temp": 36.52, "ov": true}, {"day": 23, "date": "2026-01-10", "temp": 36.69}, {"day": 24, "date": "2026-01-11", "temp": 36.68}, {"day": 25, "date": "2026-01-12", "temp": 36.7}, {"day": 26, "date": "2026-01-13", "temp": 36.84}, {"day": 27, "date": "2026-01-14", "temp": 36.88}, {"day": 28, "date": "2026-01-15", "temp": 36.63}, {"day": 29, "date": "2026-01-16", "temp": 36.79}, {"day": 30, "date": "2026-01-17", "temp": 36.9}, {"day": 31, "date": "2026-01-18", "temp": 36.82}, {"day": 32, "date": "2026-01-19", "temp": 36.75}, {"day": 33, "date": "2026-01-20", "temp": 36.78}]}, {"key": "2026-01-21", "label": "21 Jan", "length": 30, "readings": [{"day": 1, "date": "2026-01-21", "temp": 36.64, "flow": "light"}, {"day": 2, "date": "2026-01-22", "temp": 36.5, "flow": "medium"}, {"day": 4, "date": "2026-01-24", "temp": 36.53}, {"day": 5, "date": "2026-01-25", "temp": 36.51}, {"day": 6, "date": "2026-01-26", "temp": 36.49}, {"day": 7, "date": "2026-01-27", "temp": 36.43}, {"day": 8, "date": "2026-01-28", "temp": 36.37}, {"day": 9, "date": "2026-01-29", "temp": 36.14}, {"day": 10, "date": "2026-01-30", "temp": 36.42}, {"day": 11, "date": "2026-01-31", "temp": 36.43}, {"day": 13, "date": "2026-02-02", "temp": 36.44}, {"day": 14, "date": "2026-02-03", "temp": 36.48}, {"day": 15, "date": "2026-02-04", "temp": 36.38}, {"day": 16, "date": "2026-02-05", "temp": 36.52, "ov": true}, {"day": 17, "date": "2026-02-06", "temp": 36.5, "ov": true}, {"day": 18, "date": "2026-02-07", "temp": 36.48}, {"day": 19, "date": "2026-02-08", "temp": 36.68}, {"day": 20, "date": "2026-02-09", "temp": 36.72}, {"day": 21, "date": "2026-02-10", "temp": 36.82}, {"day": 22, "date": "2026-02-11", "temp": 36.73}, {"day": 23, "date": "2026-02-12", "temp": 36.86}, {"day": 24, "date": "2026-02-13", "temp": 36.76}, {"day": 25, "date": "2026-02-14", "temp": 36.78}, {"day": 26, "date": "2026-02-15", "temp": 36.79}, {"day": 27, "date": "2026-02-16", "temp": 36.74}, {"day": 28, "date": "2026-02-17", "temp": 36.67}, {"day": 29, "date": "2026-02-18", "temp": 36.76}, {"day": 30, "date": "2026-02-19", "temp": 36.76}]}, {"key": "2026-02-20", "label": "20 Feb", "length": 30, "readings": [{"day": 1, "date": "2026-02-20", "temp": 36.77, "flow": "medium"}, {"day": 5, "date": "2026-02-24", "temp": 35.98}, {"day": 6, "date": "2026-02-25", "temp": 36.45}, {"day": 7, "date": "2026-02-26", "temp": 36.5}, {"day": 8, "date": "2026-02-27", "temp": 36.61}, {"day": 9, "date": "2026-02-28", "temp": 36.5}, {"day": 10, "date": "2026-03-01", "temp": 36.38}, {"day": 11, "date": "2026-03-02", "temp": 36.37}, {"day": 12, "date": "2026-03-03", "temp": 36.39}, {"day": 13, "date": "2026-03-04", "temp": 36.43}, {"day": 14, "date": "2026-03-05", "temp": 36.28}, {"day": 15, "date": "2026-03-06", "temp": 36.27}, {"day": 16, "date": "2026-03-07", "temp": 36.43, "ov": true}, {"day": 17, "date": "2026-03-08", "temp": 36.59, "ov": true}, {"day": 18, "date": "2026-03-09", "temp": 36.61, "ov": true}, {"day": 19, "date": "2026-03-10", "temp": 36.64}, {"day": 20, "date": "2026-03-11", "temp": 36.71}, {"day": 21, "date": "2026-03-12", "temp": 36.68}, {"day": 22, "date": "2026-03-13", "temp": 36.64}, {"day": 23, "date": "2026-03-14", "temp": 36.88}, {"day": 24, "date": "2026-03-15", "temp": 36.79}, {"day": 25, "date": "2026-03-16", "temp": 36.71}, {"day": 26, "date": "2026-03-17", "temp": 36.95}, {"day": 27, "date": "2026-03-18", "temp": 36.79}, {"day": 28, "date": "2026-03-19", "temp": 36.75}, {"day": 29, "date": "2026-03-20", "temp": 36.92}, {"day": 30, "date": "2026-03-21", "temp": 36.69}]}, {"key": "2026-03-22", "label": "22 Mar", "length": null, "readings": [{"day": 1, "date": "2026-03-22", "temp": 36.49, "flow": "heavy"}, {"day": 2, "date": "2026-03-23", "temp": 36.32, "flow": "medium"}, {"day": 3, "date": "2026-03-24", "temp": 36.5, "flow": "light"}, {"day": 4, "date": "2026-03-25", "temp": 36.03}, {"day": 5, "date": "2026-03-26", "temp": 36.36}, {"day": 6, "date": "2026-03-27", "temp": 36.22}, {"day": 7, "date": "2026-03-28", "temp": 36.31}, {"day": 9, "date": "2026-03-30", "temp": 36.59}, {"day": 10, "date": "2026-03-31", "temp": 36.61}, {"day": 11, "date": "2026-04-01", "temp": 36.14}, {"day": 12, "date": "2026-04-02", "temp": 36.42}, {"day": 13, "date": "2026-04-03", "temp": 36.37}, {"day": 14, "date": "2026-04-04", "temp": 36.58, "ov": true}, {"day": 15, "date": "2026-04-05", "temp": 36.62, "ov": true}, {"day": 16, "date": "2026-04-06", "temp": 36.21}, {"day": 18, "date": "2026-04-08", "temp": 36.58}, {"day": 19, "date": "2026-04-09", "temp": 36.66}, {"day": 20, "date": "2026-04-10", "temp": 36.6}, {"day": 21, "date": "2026-04-11", "temp": 36.73}]}];
 var SEED_SEX={"2025-09-03":1,"2025-09-04":1,"2025-09-08":1,"2025-09-09":1,"2025-09-10":1,"2025-09-15":1,"2025-10-01":1,"2025-10-02":1,"2025-10-04":1,"2025-10-07":1,"2025-10-08":1,"2025-10-11":1,"2025-10-12":1,"2025-10-14":1,"2025-10-15":1,"2025-10-16":1,"2025-10-18":1,"2025-10-30":1,"2025-10-31":1,"2025-11-03":1,"2025-11-04":1,"2025-11-05":1,"2025-11-06":1,"2025-11-08":1,"2025-11-09":1,"2025-11-10":1,"2025-11-11":1,"2025-11-12":1,"2025-11-13":1,"2025-12-02":1,"2026-01-01":1,"2026-01-02":1,"2026-01-05":1,"2026-01-06":1,"2026-01-07":1,"2026-01-08":1,"2026-01-09":1,"2026-01-10":1,"2026-01-17":1,"2026-01-26":1,"2026-01-27":1,"2026-01-28":1,"2026-01-29":1,"2026-01-30":1,"2026-02-01":1,"2026-02-02":1,"2026-02-03":1,"2026-02-06":1,"2026-02-07":1,"2026-02-08":1,"2026-02-24":1,"2026-02-26":1,"2026-02-28":1,"2026-03-01":1,"2026-03-02":1,"2026-03-04":1,"2026-03-05":1,"2026-03-07":1,"2026-03-09":1,"2026-03-30":1,"2026-04-01":1};
@@ -550,8 +550,8 @@ function load(){
   if(!D)D={cycles:JSON.parse(JSON.stringify(SEED_C)),sex:JSON.parse(JSON.stringify(SEED_SEX)),sym:JSON.parse(JSON.stringify(SEED_SYM)),mood:JSON.parse(JSON.stringify(SEED_MOOD)),notes:JSON.parse(JSON.stringify(SEED_NOTES)),photos:{},excl:{11:true},ptests:[],meds:{}};
   if(!D.photos)D.photos={};if(!D.notes)D.notes={};if(!D.mood)D.mood={};if(!D.sym)D.sym={};
   if(!D.excl)D.excl={11:true};if(!D.ptests)D.ptests=[];if(!D.meds)D.meds={};if(!D.myOv)D.myOv={};
-  if(!D.appts)D.appts=[];if(!D.journal)D.journal={};if(!D.checks)D.checks={};if(!D.opks)D.opks={};if(!D.tqual)D.tqual={};
-  if(!D.wrist)D.wrist={};if(!D.sleep)D.sleep={};if(!D.darkMode)D.darkMode=false;if(!D.ttime)D.ttime={};
+  if(!D.appts)D.appts=[];if(!D.journal)D.journal={};if(!D.checks)D.checks={};if(!D.opks)D.opks={};if(!D.tqual)D.tqual={};if(!D.opkPhotos)D.opkPhotos={};
+  if(!D.wrist)D.wrist={};if(!D.sleep)D.sleep={};if(!D.darkMode)D.darkMode=false;if(!D.ttime)D.ttime={};if(!D.sleepHrs)D.sleepHrs={};if(!D.bedtime)D.bedtime='22:30';if(!D.waketime)D.waketime='06:30';if(!D.sleepTimes)D.sleepTimes={};
   var validSyms=["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting","CM: Egg white","CM: Watery","CM: Creamy","CM: Dry"];
   var validMoods=["Happy","Calm","Energetic","Tired","Irritable","Anxious","Sad","Emotional"];
   Object.keys(D.sym||{}).forEach(function(d){if(D.sym[d])D.sym[d]=D.sym[d].filter(function(s){return validSyms.indexOf(s)>-1})});
@@ -791,10 +791,11 @@ function rToday(info){
     if(todayWrist){h+='<div><div style="font-size:15px;font-weight:700;color:var(--txt3)">'+todayWrist.toFixed(2)+'°</div>';
     h+='<div style="font-size:9px;color:var(--txt4)">Wrist</div></div>'}
     if(todaySleep){var slCol=todaySleep==='Good'?'var(--forest)':todaySleep==='OK'?'var(--gold)':'var(--rose)';
+    var slHrs=D.sleepTimes&&D.sleepTimes[td()]?calcSleepHrs(D.sleepTimes[td()].asleep,D.sleepTimes[td()].woke):null;
     h+='<div><div style="font-size:13px;font-weight:700;color:'+slCol+'">'+todaySleep+'</div>';
-    h+='<div style="font-size:9px;color:var(--txt4)">Sleep</div></div>'}
+    h+='<div style="font-size:9px;color:var(--txt4)">'+(slHrs?slHrs+'h':'Sleep')+'</div></div>'}
     h+='</div>';
-    h+='<button style="font-size:11px;font-weight:600;color:var(--cobalt);background:none" onclick="editTodayTemp()">Edit</button></div>';
+    h+='</div>';
     // Time if not yet set
     if(!todayTime){
       h+='<div style="margin-top:6px;display:flex;align-items:center;gap:6px">';
@@ -811,6 +812,24 @@ function rToday(info){
       h+='<div style="margin-top:8px"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Sleep quality</div>';
       h+='<div class="qs-chips" style="gap:6px">'+["Good","OK","Poor","Broken"].map(function(s){return '<button class="qs-chip" style="padding:6px 12px" onclick="logSleep(\''+s+'\')">'+s+'</button>'}).join('')+'</div></div>';
     }
+    // Sleep times
+    var slTimes=D.sleepTimes&&D.sleepTimes[td()];
+    if(!slTimes){
+      h+='<div style="margin-top:10px"><div style="font-size:9px;color:var(--txt4);margin-bottom:5px">Sleep times</div>';
+      h+='<div style="display:flex;gap:12px;margin-bottom:8px">';
+      h+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:var(--txt3);margin-bottom:3px">Fell asleep</div>';
+      h+='<input type="time" id="slAsleep" value="'+D.bedtime+'" style="width:100%;padding:10px 10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:14px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+      h+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:var(--txt3);margin-bottom:3px">Woke up</div>';
+      h+='<input type="time" id="slWoke" value="'+D.waketime+'" style="width:100%;padding:10px 10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:14px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+      h+='</div>';
+      h+='<button onclick="logSleepTimes()" style="width:100%;padding:10px;border-radius:10px;font-size:12px;font-weight:700;background:var(--cobalt);color:#fff">Log sleep</button></div>';
+    } else {
+      var hrs=calcSleepHrs(slTimes.asleep,slTimes.woke);
+      h+='<div style="margin-top:6px;display:flex;gap:10px;align-items:center">';
+      h+='<div style="font-size:10px;color:var(--txt3)">🛏 '+slTimes.asleep+' → '+slTimes.woke+'</div>';
+      h+='<div style="font-size:12px;font-weight:700;color:var(--txt)">'+hrs+'h</div>';
+      h+='<button style="font-size:9px;color:var(--cobalt);background:none" onclick="clearSleepTimes()">Edit</button></div>';
+    }
   } else {
     // Not logged
     h+='<div class="fl">Temperature</div>';
@@ -822,6 +841,24 @@ function rToday(info){
     h+='<div class="ql" style="gap:4px"><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="qlW" placeholder="3610" oninput="autoDecimal(this)" style="font-size:14px;padding:8px"><button onclick="logWrist()" style="padding:8px 12px;font-size:10px">Log</button></div></div>';
     h+='<div style="margin-top:8px"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Sleep quality</div>';
     h+='<div class="qs-chips" style="gap:6px">'+["Good","OK","Poor","Broken"].map(function(s){return '<button class="qs-chip" style="padding:6px 12px" onclick="logSleep(\''+s+'\')">'+s+'</button>'}).join('')+'</div></div>';
+    // Sleep times
+    var slTimes2=D.sleepTimes&&D.sleepTimes[td()];
+    if(!slTimes2){
+      h+='<div style="margin-top:10px"><div style="font-size:9px;color:var(--txt4);margin-bottom:5px">Sleep times</div>';
+      h+='<div style="display:flex;gap:12px;margin-bottom:8px">';
+      h+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:var(--txt3);margin-bottom:3px">Fell asleep</div>';
+      h+='<input type="time" id="slAsleep2" value="'+D.bedtime+'" style="width:100%;padding:10px 10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:14px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+      h+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:var(--txt3);margin-bottom:3px">Woke up</div>';
+      h+='<input type="time" id="slWoke2" value="'+D.waketime+'" style="width:100%;padding:10px 10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:14px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+      h+='</div>';
+      h+='<button onclick="logSleepTimes2()" style="width:100%;padding:10px;border-radius:10px;font-size:12px;font-weight:700;background:var(--cobalt);color:#fff">Log sleep</button></div>';
+    } else {
+      var hrs2=calcSleepHrs(slTimes2.asleep,slTimes2.woke);
+      h+='<div style="margin-top:6px;display:flex;gap:10px;align-items:center">';
+      h+='<div style="font-size:10px;color:var(--txt3)">🛏 '+slTimes2.asleep+' → '+slTimes2.woke+'</div>';
+      h+='<div style="font-size:12px;font-weight:700;color:var(--txt)">'+hrs2+'h</div>';
+      h+='<button style="font-size:9px;color:var(--cobalt);background:none" onclick="clearSleepTimes()">Edit</button></div>';
+    }
   }
   h+='<div style="margin-top:10px"><div class="fl">Cervical mucus</div>';
   h+='<div class="qs-chips">';
@@ -851,7 +888,7 @@ function rToday(info){
   h+='</div>';
   h+='<div style="display:flex;gap:6px;margin-top:6px">';
   h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px" onclick="openPT()">Pregnancy test</button>';
-  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px" onclick="openAdd()">Full entry</button>';
+  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px" onclick="openAdd()">Edit past date</button>';
   h+='</div>';
   h+='</div></div>';
 
@@ -882,8 +919,32 @@ function rToday(info){
   else h+='<div style="font-size:11px;font-weight:700;color:var(--rose)">Due now</div>';
   h+='</div></div>';
   h+='<div><span class="phase-badge" style="background:'+ph.bg+';color:'+ph.c+'"><span class="phase-dot" style="background:'+ph.c+'"></span>'+ph.n+'</span>';
-  h+='<div class="phase-desc" style="margin-top:6px">'+ph.d+'</div></div>';
+  h+='<div class="phase-desc" style="margin-top:6px">'+ph.d+'</div>';
+  var tips=getPhaseTips(ph.n,info);
+  if(tips.length){h+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(0,0,0,.06)">';
+    h+='<div style="font-size:9px;font-weight:700;color:var(--txt4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Tips for today</div>';
+    tips.forEach(function(t){h+='<div style="display:flex;gap:7px;padding:3px 0;font-size:11px;color:var(--txt);line-height:1.4"><span style="flex-shrink:0">'+t.icon+'</span><span>'+t.text+'</span></div>'});
+  h+='</div>'}
+  h+='</div></div></div>';
+  // CIRCULAR CYCLE VIEW
+  h+='<div class="section"><div class="card" style="padding:14px 10px 10px;text-align:center">';
+  h+='<canvas id="circC" width="520" height="520" style="width:260px;height:260px;margin:0 auto;display:block"></canvas>';
+  // Phase legend
+  h+='<div style="display:flex;justify-content:center;gap:10px;margin-top:10px;font-size:9px;font-weight:600;color:var(--txt3)">';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#A84455"></span>Period</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#4A7D5E"></span>Follicular</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#9A7B1E"></span>Ovulatory</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#6B4E8B"></span>Luteal</span>';
+  h+='</div>';
+  // Dot legend
+  h+='<div style="display:flex;justify-content:center;gap:10px;margin-top:5px;font-size:8px;font-weight:600;color:var(--txt4)">';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:#C4652A"></span>Above CL</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:#2B5C8A"></span>Below CL</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:#9A7B1E"></span>LH+</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:5px;height:5px;transform:rotate(45deg);background:#2B5C8A"></span>Sex</span>';
+  h+='</div>';
   h+='</div></div>';
+  setTimeout(function(){drawCircle(info)},80);
 
   // Biology
   var bio=getBiology(info);
@@ -1044,6 +1105,34 @@ function autoDecimal(el){var raw=el.value.replace(/[^0-9]/g,'');if(raw.length>=4
 function editTodayTemp(){var last=D.cycles[D.cycles.length-1];var r=last.readings.find(function(x){return x.date===td()});if(r)openEdit(td(),D.cycles.length-1)}
 function logWrist(){saveUndo();var inp=document.getElementById('qlW');if(!inp)return;var raw=inp.value.replace(/[^0-9]/g,'');if(raw.length<4){flash("Type 4 digits");return}var t=parseFloat(raw.slice(0,2)+'.'+raw.slice(2,4));if(isNaN(t)||t<34||t>38){flash("Out of range");return}D.wrist[td()]=t;save();render();flash("Wrist "+t.toFixed(2)+"° logged",true)}
 function logSleep(q){saveUndo();D.sleep[td()]=q;save();render();flash("Sleep: "+q,true)}
+function logSleepHrs(){var el=document.getElementById('qlSH');if(!el||!el.value)return;var h=parseFloat(el.value);if(isNaN(h)||h<0||h>14){flash("Enter 0-14");return}if(!D.sleepHrs)D.sleepHrs={};D.sleepHrs[td()]=h;save();render();flash(h+"h logged",true)}
+function calcSleepHrs(asleep,woke){
+  var ap=asleep.split(':'),wp=woke.split(':');
+  var aM=parseInt(ap[0])*60+parseInt(ap[1]),wM=parseInt(wp[0])*60+parseInt(wp[1]);
+  var diff=wM-aM;if(diff<0)diff+=1440;
+  return(Math.round(diff/6)/10).toFixed(1);
+}
+function logSleepTimes(){
+  var a=document.getElementById('slAsleep'),w=document.getElementById('slWoke');
+  if(!a||!w||!a.value||!w.value){flash("Set both times");return}
+  saveUndo();if(!D.sleepTimes)D.sleepTimes={};
+  D.sleepTimes[td()]={asleep:a.value,woke:w.value};
+  D.bedtime=a.value;D.waketime=w.value;
+  var hrs=calcSleepHrs(a.value,w.value);
+  if(!D.sleepHrs)D.sleepHrs={};D.sleepHrs[td()]=parseFloat(hrs);
+  save();render();flash(hrs+"h sleep logged",true);
+}
+function logSleepTimes2(){
+  var a=document.getElementById('slAsleep2'),w=document.getElementById('slWoke2');
+  if(!a||!w||!a.value||!w.value){flash("Set both times");return}
+  saveUndo();if(!D.sleepTimes)D.sleepTimes={};
+  D.sleepTimes[td()]={asleep:a.value,woke:w.value};
+  D.bedtime=a.value;D.waketime=w.value;
+  var hrs=calcSleepHrs(a.value,w.value);
+  if(!D.sleepHrs)D.sleepHrs={};D.sleepHrs[td()]=parseFloat(hrs);
+  save();render();flash(hrs+"h sleep logged",true);
+}
+function clearSleepTimes(){saveUndo();if(D.sleepTimes)delete D.sleepTimes[td()];if(D.sleepHrs)delete D.sleepHrs[td()];save();render()}
 function saveTimePost(){var el=document.getElementById('qlTimePost');if(!el||!el.value)return;if(!D.ttime)D.ttime={};D.ttime[td()]=el.value;save();render();flash("Time saved")}
 
 /* Symptom knowledge base — keeping the full SKB from original */
@@ -1175,7 +1264,25 @@ function qSym(s){saveUndo();var date=td();var sy=D.sym[date]||[];var idx=sy.inde
 function qMood(m){saveUndo();var date=td();var mo=D.mood[date]||[];var idx=mo.indexOf(m);if(idx>-1)mo.splice(idx,1);else mo.push(m);if(mo.length)D.mood[date]=mo;else delete D.mood[date];save();render()}
 function qSex(){saveUndo();var date=td();if(D.sex[date])delete D.sex[date];else D.sex[date]=1;save();render()}
 function toggleCheck(idx){if(!D.checks)D.checks={};if(!D.checks[td()])D.checks[td()]={};D.checks[td()][idx]=!D.checks[td()][idx];save();render()}
-function cycleOPK(){if(!D.opks)D.opks={};var cur=D.opks[td()];if(!cur){D.opks[td()]='pos';flash("OPK: Positive ➕")}else if(cur==='pos'){D.opks[td()]='neg';flash("OPK: Negative ➖")}else{delete D.opks[td()];flash("OPK cleared")}save();render()}
+function cycleOPK(){openOPKModal()}
+function openOPKModal(){
+  var cur=D.opks&&D.opks[td()]||'';var curPh=D.opkPhotos&&D.opkPhotos[td()]||'';
+  var h='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl"><div class="mt">OPK Test \u2014 '+fd(td())+'</div>';
+  h+='<div class="fr"><div class="fl">Result</div><div class="chips">';
+  ['pos','neg'].forEach(function(r){var label=r==='pos'?'Positive \u2795':'Negative \u2796';
+    h+='<button class="chip chip-f'+(cur===r?' on':'')+'" data-f="'+r+'" onclick="pF(this)">'+label+'</button>'});
+  h+='</div></div>';
+  h+='<div class="fr"><div class="fl">Photo</div>';
+  if(curPh)h+='<div style="display:flex;gap:10px;align-items:center"><img src="'+curPh+'" class="pth" style="width:80px;height:80px"><button class="chip" onclick="delete D.opkPhotos[td()];save();closeM();openOPKModal()">Remove</button></div>';
+  else h+='<label class="pu"><input type="file" accept="image/*" style="display:none" id="opkPh" onchange="saveOPKPh(this)">\ud83d\udcf7 Add OPK photo</label>';
+  h+='</div>';
+  h+='<div class="br"><button class="cb" onclick="closeM()">Cancel</button><button class="sb" onclick="saveOPK()">Save</button></div>';
+  if(cur)h+='<button class="db" onclick="delete D.opks[td()];delete D.opkPhotos[td()];save();closeM();render();flash(\'OPK cleared\')">Clear OPK</button>';
+  h+='</div></div>';var div=document.createElement('div');div.id='mdl';div.innerHTML=h;document.body.appendChild(div);
+}
+function saveOPK(){var fe=document.querySelector('#mdl .chip-f.on');if(!fe){flash("Pick a result");return}
+  if(!D.opks)D.opks={};D.opks[td()]=fe.dataset.f;save();closeM();render();flash("OPK: "+(fe.dataset.f==='pos'?'Positive \u2795':'Negative \u2796'))}
+function saveOPKPh(inp){var f=inp.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(e){if(!D.opkPhotos)D.opkPhotos={};D.opkPhotos[td()]=e.target.result;save();closeM();openOPKModal()};rd.readAsDataURL(f)}
 
 /* OVERLAY — BIGGER chart */
 function rOverlay(){
@@ -1514,6 +1621,25 @@ function rCompare(){
   if(D.ptests.length){h+='<div class="card" style="padding:8px 14px">';D.ptests.slice().reverse().forEach(function(pt,i){var ri=D.ptests.length-1-i;var col=pt.result==='positive'?'var(--forest)':pt.result==='negative'?'var(--rose)':'var(--gold)';h+='<div class="pt-row"><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--txt)">'+fd(pt.date)+'</div><div style="font-size:11px;color:var(--txt3)">'+(pt.brand||'No brand')+(pt.dpo?' · '+pt.dpo+' DPO':'')+'</div></div><span class="pt-res" style="background:'+col+';color:#fff">'+pt.result+'</span><button onclick="delPT('+ri+')" style="background:none;color:var(--txt5);font-size:14px;padding:4px">✕</button></div>'});h+='</div>'}
   else h+='<div class="card" style="color:var(--txt4);font-size:12px">No tests logged yet</div>';
   h+='</div>';
+  // PHOTO GALLERY
+  var _gPh=[];
+  D.ptests.forEach(function(pt,i){if(pt.photo)_gPh.push({type:'test',date:pt.date,photo:pt.photo,label:pt.result+(pt.brand?' ('+pt.brand+')':''),dpo:pt.dpo})});
+  if(D.opkPhotos){Object.keys(D.opkPhotos).sort().reverse().forEach(function(d){if(D.opkPhotos[d])_gPh.push({type:'opk',date:d,photo:D.opkPhotos[d],label:'OPK '+(D.opks&&D.opks[d]==='pos'?'Positive':'Negative')})})}
+  if(_gPh.length){
+    window._gallery=_gPh;
+    h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Test Photo Gallery</span><span class="sec-title">'+_gPh.length+'</span></div>';
+    h+='<div class="card" style="padding:10px"><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">';
+    _gPh.forEach(function(p,idx){
+      var bdr=p.type==='test'?(p.label.indexOf('positive')>-1?'var(--forest)':p.label.indexOf('negative')>-1?'var(--rose)':'var(--gold)'):'var(--gold)';
+      h+='<div onclick="viewGPh('+idx+')" style="cursor:pointer;position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1;border:2px solid '+bdr+'">';
+      h+='<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover">';
+      h+='<div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.7));padding:4px 6px">';
+      h+='<div style="font-size:8px;font-weight:700;color:#fff">'+fd(p.date)+'</div>';
+      h+='<div style="font-size:7px;color:rgba(255,255,255,.7)">'+p.label+(p.dpo?' \u00b7 '+p.dpo+'DPO':'')+'</div>';
+      h+='</div></div>'});
+    h+='</div></div></div>';
+  }
+
   h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Data Management</span></div><div class="card"><div class="bk-row"><button class="bk-btn" style="background:var(--cob-bg);color:var(--cobalt)" onclick="backup()">⬇ Backup</button><button class="bk-btn" style="background:var(--burnt-bg);color:var(--burnt)" onclick="document.getElementById(\'restF\').click()">⬆ Restore</button></div><input type="file" id="restF" style="display:none" accept=".json" onchange="restore(this)"><div style="font-size:10px;color:var(--txt4);margin-top:8px;text-align:center">Backup saves all your data as a JSON file</div></div></div>';
   return h;
 }
@@ -1768,9 +1894,99 @@ function rInsights(){
   h+=colEnd()+'</div>';
   return h;
 }
+function getPhaseTips(pn,info){
+  var t=[];var dpo=info.ho?(info.cd-info.od):null;
+  if(pn.indexOf('Menstrual')>-1){t.push({icon:'\ud83e\udecb',text:'Warm drinks and iron-rich foods \u2014 your body is losing iron.'});t.push({icon:'\ud83d\udc8a',text:'Take your prenatal. Iron absorbs best with vitamin C.'});t.push({icon:'\ud83d\udecf\ufe0f',text:'Rest is productive. Your body is resetting.'});if(info.cd<=2)t.push({icon:'\ud83c\udf21\ufe0f',text:'Still log your temp \u2014 period temps build your baseline.'})}
+  else if(pn.indexOf('Follicular')>-1){t.push({icon:'\ud83d\udca7',text:'Hydrate well \u2014 water directly affects CM quality.'});t.push({icon:'\ud83c\udfc3\u200d\u2640\ufe0f',text:'Energy peaks now. Great time for exercise.'});if(info.cd>=info.ao-7)t.push({icon:'\ud83e\uddea',text:'Start OPK testing daily \u2014 your surge could come soon.'});t.push({icon:'\ud83e\udd57',text:'Leafy greens support follicle development.'})}
+  else if(pn.indexOf('Ovulatory')>-1){t.push({icon:'\ud83d\udd25',text:'Peak fertility! Prioritise intercourse today and tomorrow.'});t.push({icon:'\ud83e\uddea',text:'Take an OPK \u2014 watch for that strong positive.'});t.push({icon:'\ud83d\udc40',text:'Check CM \u2014 egg white means peak fertility.'});t.push({icon:'\ud83d\udc91',text:'Every other day is as effective as every day.'})}
+  else if(pn.indexOf('Luteal')>-1){if(dpo&&dpo<=5){t.push({icon:'\ud83e\uddd8',text:'Too early to know. Distract yourself.'});t.push({icon:'\ud83c\udf21\ufe0f',text:'Keep logging \u2014 sustained rise confirms OV.'})}else if(dpo&&dpo>=6&&dpo<=9){t.push({icon:'\u2728',text:'Implantation window \u2014 note anything unusual.'});t.push({icon:'\ud83d\udeab',text:"Don't test yet. hCG isn't high enough."});t.push({icon:'\ud83d\udc9c',text:'Be kind to yourself. The wait is hardest.'})}else if(dpo&&dpo>=10){t.push({icon:'\ud83e\uddea',text:'You can test now. FRER, first morning urine.'});t.push({icon:'\ud83e\udec2',text:'Negative today doesn\'t mean you\'re out.'})}else{t.push({icon:'\ud83d\ude34',text:'Progesterone makes you sleepy. Nap guilt-free.'});t.push({icon:'\ud83c\udf4c',text:'Magnesium helps with progesterone symptoms.'})}t.push({icon:'\ud83d\udc8a',text:'Keep taking your prenatal \u2014 folic acid is crucial.'})}
+  return t.slice(0,4)
+}
+function drawCircle(info){
+  var cv=document.getElementById('circC');if(!cv)return;
+  var dp=window.devicePixelRatio||1;var S=520;
+  cv.width=S*dp;cv.height=S*dp;
+  var ctx=cv.getContext('2d');ctx.scale(dp,dp);
+  var cx=S/2,cy=S/2,outerR=220,innerR=148,midR=(outerR+innerR)/2;
+  var total=info.av||30;var cd=info.cd;var ao=info.ho?info.od:info.ao;
+  var TAU=Math.PI*2;var OFF=-Math.PI/2;
+  function ang(d){return OFF+(d/total)*TAU}
+  // Phase bands — BOLD fills
+  var bands=[
+    {s:0,e:5,col:'#A84455'},
+    {s:5,e:Math.max(5,ao-2),col:'#4A7D5E'},
+    {s:Math.max(5,ao-2),e:ao+1,col:'#9A7B1E'},
+    {s:ao+1,e:total,col:'#6B4E8B'}
+  ];
+  bands.forEach(function(b){
+    var a1=ang(b.s),a2=ang(Math.min(b.e,total));
+    // Filled band
+    ctx.beginPath();ctx.arc(cx,cy,outerR,a1,a2);ctx.arc(cx,cy,innerR,a2,a1,true);ctx.closePath();
+    ctx.fillStyle=b.col;ctx.globalAlpha=0.22;ctx.fill();ctx.globalAlpha=1;
+    // Bold outer arc
+    ctx.beginPath();ctx.arc(cx,cy,outerR+2,a1,a2);ctx.strokeStyle=b.col;ctx.lineWidth=5;ctx.globalAlpha=0.7;ctx.stroke();ctx.globalAlpha=1;
+  });
+  // Day ticks
+  for(var d=1;d<=total;d++){
+    var a=ang(d);var cos=Math.cos(a),sin=Math.sin(a);
+    var isMajor=d%5===0||d===1;
+    ctx.strokeStyle=d<=cd?'rgba(61,44,44,.3)':'rgba(61,44,44,.1)';
+    ctx.lineWidth=isMajor?1.5:0.7;
+    var ti=outerR+5,to=outerR+(isMajor?12:7);
+    ctx.beginPath();ctx.moveTo(cx+cos*ti,cy+sin*ti);ctx.lineTo(cx+cos*to,cy+sin*to);ctx.stroke();
+    if(isMajor){ctx.fillStyle=d<=cd?'#6B5E56':'#B8ADA4';ctx.font='bold 13px -apple-system';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(d,cx+cos*(outerR+24),cy+sin*(outerR+24))}
+  }
+  // Temp dots
+  var c=info.c;var cl=avgCL2();var tMin=35.8,tMax=37.2,tRange=tMax-tMin;
+  var dotIn=innerR+12,dotOut=outerR-12,dotRng=dotOut-dotIn;
+  // Connect temp dots with thin line
+  var pts=[];
+  c.readings.forEach(function(r){
+    if(r.temp==null||r.day>total+5)return;
+    var a=ang(r.day);var tN=Math.max(0,Math.min(1,(r.temp-tMin)/tRange));
+    var dR=dotIn+tN*dotRng;
+    pts.push({x:cx+Math.cos(a)*dR,y:cy+Math.sin(a)*dR,r:r});
+  });
+  if(pts.length>1){ctx.strokeStyle='rgba(196,101,42,.25)';ctx.lineWidth=1.5;ctx.beginPath();pts.forEach(function(p,i){i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)});ctx.stroke()}
+  // Draw dots
+  pts.forEach(function(p){
+    var r=p.r;var aboveCL=cl&&r.temp>=cl;
+    // Outer glow
+    ctx.fillStyle=aboveCL?'rgba(196,101,42,.2)':'rgba(43,92,138,.2)';
+    ctx.beginPath();ctx.arc(p.x,p.y,7,0,TAU);ctx.fill();
+    // Solid dot
+    ctx.fillStyle=aboveCL?'#C4652A':'#2B5C8A';
+    ctx.beginPath();ctx.arc(p.x,p.y,4,0,TAU);ctx.fill();
+    // OV marker — bigger, gold with white +
+    if(r.ov){ctx.fillStyle='#9A7B1E';ctx.beginPath();ctx.arc(p.x,p.y,7,0,TAU);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('+',p.x,p.y+0.5)}
+    // Period — inner ring dot
+    if(r.flow&&r.flow!=='none'){var a2=ang(r.day);ctx.fillStyle='#A84455';ctx.beginPath();ctx.arc(cx+Math.cos(a2)*(innerR+4),cy+Math.sin(a2)*(innerR+4),3.5,0,TAU);ctx.fill()}
+    // Sex — diamond on outer edge
+    if(D.sex[r.date]){var a3=ang(r.day);ctx.fillStyle='#2B5C8A';ctx.globalAlpha=0.6;ctx.save();ctx.translate(cx+Math.cos(a3)*(outerR-4),cy+Math.sin(a3)*(outerR-4));ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore();ctx.globalAlpha=1}
+  });
+  // Coverline ring
+  if(cl){var clN=Math.max(0,Math.min(1,(cl-tMin)/tRange));var clR=dotIn+clN*dotRng;
+    ctx.setLineDash([4,4]);ctx.strokeStyle='rgba(43,92,138,.35)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,clR,0,TAU);ctx.stroke();ctx.setLineDash([])}
+  // Current day pointer — white circle with burnt orange border
+  var curA=ang(cd);var pCos=Math.cos(curA),pSin=Math.sin(curA);
+  ctx.fillStyle='#fff';ctx.strokeStyle='#C4652A';ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(cx+pCos*midR,cy+pSin*midR,8,0,TAU);ctx.fill();ctx.stroke();
+  // Small arrow tip
+  ctx.fillStyle='#C4652A';ctx.beginPath();
+  var tipR=outerR-2;ctx.moveTo(cx+pCos*tipR,cy+pSin*tipR);
+  var perpX=-pSin*5,perpY=pCos*5;
+  ctx.lineTo(cx+pCos*(tipR-12)+perpX,cy+pSin*(tipR-12)+perpY);
+  ctx.lineTo(cx+pCos*(tipR-12)-perpX,cy+pSin*(tipR-12)-perpY);
+  ctx.closePath();ctx.fill();
+  // Center text
+  ctx.fillStyle='#3D2C2C';ctx.font='800 32px -apple-system';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('Day',cx,cy-14);
+  ctx.font='800 44px -apple-system';ctx.fillText(cd,cx,cy+20);
+  ctx.font='600 13px -apple-system';ctx.fillStyle='#A0928A';ctx.fillText('of ~'+total,cx,cy+44);
+}
 function dTrend(){var cv=document.getElementById('tC');if(!cv)return;var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight,p={t:10,r:10,b:28,l:36},gW=W-p.l-p.r,gH=H-p.t-p.b;var ls=[];D.cycles.forEach(function(c,i){if(c.length)ls.push({i:i,l:c.length,ex:isExcl(i)})});if(ls.length<2)return;var mn2=Math.min.apply(null,ls.map(function(l){return l.l}))-2,mx2=Math.max.apply(null,ls.map(function(l){return l.l}))+2;function x(i){return p.l+i/(ls.length-1)*gW}function y(v){return p.t+(1-(v-mn2)/(mx2-mn2))*gH}ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;for(var v=Math.ceil(mn2/5)*5;v<=mx2;v+=5){ctx.beginPath();ctx.moveTo(p.l,y(v));ctx.lineTo(W-p.r,y(v));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="9px -apple-system";ctx.textAlign="right";ctx.fillText(v,p.l-4,y(v)+3)}ctx.strokeStyle="#2B5C8A";ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();ls.forEach(function(l,i){i===0?ctx.moveTo(x(i),y(l.l)):ctx.lineTo(x(i),y(l.l))});ctx.stroke();ls.forEach(function(l,i){ctx.globalAlpha=l.ex?.35:1;ctx.fillStyle=PAL[l.i%7];ctx.beginPath();ctx.arc(x(i),y(l.l),5,0,Math.PI*2);ctx.fill();ctx.fillStyle="var(--txt)";ctx.font="bold 11px -apple-system";ctx.textAlign="center";ctx.fillText(l.l+(l.ex?' ✕':''),x(i),y(l.l)-8);ctx.fillStyle="#A0928A";ctx.font="9px -apple-system";ctx.fillText(D.cycles[l.i].label,x(i),H-p.b+14);ctx.globalAlpha=1});var incl=ls.filter(function(l){return!l.ex});var avg=incl.length?incl.reduce(function(a,b){return a+b.l},0)/incl.length:0;if(avg){ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle="#C4652A";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.l,y(avg));ctx.lineTo(W-p.r,y(avg));ctx.stroke();ctx.restore();ctx.fillStyle="#C4652A";ctx.font="9px -apple-system";ctx.textAlign="left";ctx.fillText('avg '+Math.round(avg),W-p.r-40,y(avg)-4)}}
 
 /* MODALS */
+function fabAction(){if(curTab!=='today'){sw('today');setTimeout(function(){var el=document.getElementById('qlT')||document.getElementById('mornT');if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.focus()}},150)}else{var el=document.getElementById('qlT')||document.getElementById('mornT');if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.focus()}else{openAdd()}}}
 function openAdd(){editDate=null;showM(td(),null)}
 function openEdit(d,ci2){editDate=d;var c=D.cycles[ci2];var r=c.readings.find(function(x){return x.date===d});showM(d,r,ci2)}
 function showM(date,r,ci2){
@@ -1786,16 +2002,18 @@ function showM(date,r,ci2){
   h+='<div class="tr"><span class="tl">Intimacy</span><div class="tg'+(sx?' on':'')+'" id="mSx" onclick="this.classList.toggle(\'on\')"></div></div>';
   var tq=D.tqual&&D.tqual[date]?D.tqual[date]:'';
   h+='<div class="tr"><span class="tl">Temp unreliable?</span><div class="tg'+(tq?' on':'')+'" id="mTQ" onclick="this.classList.toggle(\'on\')"></div></div>';
-  if(tq||( document.getElementById&&false))h+='';
+  
   h+='<div class="chips" style="margin-top:4px" id="tqReasons">';
   ["Bad sleep","Alcohol","Illness","Different time","Mouth breathing"].forEach(function(q){h+='<button class="chip chip-s'+(tq===q?' on':'')+'" onclick="this.parentElement.querySelectorAll(\'.chip\').forEach(function(c){c.classList.remove(\'on\')});this.classList.add(\'on\')">'+q+'</button>'});
   h+='</div></div></div>';
   h+='<div class="fr"><div class="fl">Period Flow</div><div class="chips">';
   ["none","light","medium","heavy"].forEach(function(f){var on=(r&&r.flow===f)||(f==="none"&&(!r||!r.flow));h+='<button class="chip chip-f'+(on?' on':'')+'" data-f="'+f+'" onclick="pF(this)">'+f+'</button>'});h+='</div></div>';
-  h+='<div class="fr"><div class="fl">Mood</div><div class="chips">';
-  ["Happy","Calm","Energetic","Tired","Irritable","Anxious","Sad","Emotional"].forEach(function(m){h+='<button class="chip chip-m'+(mo.indexOf(m)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')">'+m+'</button>'});h+='</div></div>';
-  h+='<div class="fr"><div class="fl">Symptoms</div><div class="chips">';
-  ["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting","CM: Egg white","CM: Watery","CM: Creamy","CM: Dry"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')">'+s+'</button>'});h+='</div></div>';
+  h+='<div class="fr"><div class="fl">Mood</div><div class="chips" style="max-height:none">';
+  ["Happy","Calm","Energetic","Tired","Irritable","Anxious","Sad","Emotional"].forEach(function(m){h+='<button class="chip chip-m'+(mo.indexOf(m)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+m+'</button>'});h+='</div></div>';
+  h+='<div class="fr"><div class="fl">Symptoms</div><div class="chips" style="max-height:none">';
+  ["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+s+'</button>'});h+='</div></div>';
+  h+='<div class="fr"><div class="fl">CM</div><div class="chips" style="max-height:none">';
+  ["CM: Egg white","CM: Watery","CM: Creamy","CM: Dry"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+s.replace("CM: ","")+'</button>'});h+='</div></div>';
   h+='<div class="fr"><div class="fl">Medications</div><input class="fi" id="mMd" placeholder="e.g. Prenatal, Progesterone" value="'+md.join(', ')+'"></div>';
   h+='<div class="fr"><div class="fl">Notes</div><textarea class="fi" id="mN" placeholder="OPK result, how you feel...">'+nt+'</textarea></div>';
   h+='<div class="fr"><div class="fl">Test Photo</div>';
@@ -1816,7 +2034,7 @@ function saveR(){saveUndo();
   var ov=document.getElementById('mOv').classList.contains('on');var sx=document.getElementById('mSx').classList.contains('on');
   var fe=document.querySelector('.chip-f.on');var fl=fe?fe.dataset.f:'';if(fl==='none')fl='';
   var mo=[];document.querySelectorAll('.chip-m.on').forEach(function(c){mo.push(c.textContent)});
-  var sy=[];document.querySelectorAll('.chip-s.on').forEach(function(c){sy.push(c.textContent)});
+  var sy=[];document.querySelectorAll('.chip-s.on').forEach(function(c){if(!c.closest('#tqReasons')){var t=c.textContent;if(["Egg white","Watery","Creamy","Dry"].indexOf(t)>-1)t="CM: "+t;sy.push(t)}});
   var nt=document.getElementById('mN').value.trim();
   var mdStr=document.getElementById('mMd').value.trim();var md=mdStr?mdStr.split(',').map(function(s){return s.trim()}).filter(Boolean):[];
   var placed=false;
@@ -1865,6 +2083,18 @@ function savePT(){
   if(phIn&&phIn.files&&phIn.files[0]){var rd=new FileReader();rd.onload=function(e){pt.photo=e.target.result;D.ptests.push(pt);D.ptests.sort(function(a,b){return a.date.localeCompare(b.date)});save();closeM();render();flash("Test logged ✓")};rd.readAsDataURL(phIn.files[0])}
   else{D.ptests.push(pt);D.ptests.sort(function(a,b){return a.date.localeCompare(b.date)});save();closeM();render();flash("Test logged ✓")}
 }
+function viewGPh(idx){
+  var p=window._gallery&&window._gallery[idx];if(!p)return;
+  var h='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl" style="padding:12px">';
+  h+='<div style="text-align:center;margin-bottom:8px"><div style="font-size:14px;font-weight:800;color:var(--txt)">'+p.label+'</div>';
+  h+='<div style="font-size:11px;color:var(--txt3)">'+fdf(p.date)+(p.dpo?' \u00b7 '+p.dpo+' DPO':'')+'</div></div>';
+  h+='<img src="'+p.photo+'" style="width:100%;max-height:65vh;object-fit:contain;border-radius:12px">';
+  h+='<div style="display:flex;gap:8px;margin-top:10px">';
+  if(idx>0)h+='<button class="cb" style="flex:1" onclick="closeM();viewGPh('+(idx-1)+')">\u2190 Prev</button>';
+  h+='<button class="cb" style="flex:1" onclick="closeM()">Close</button>';
+  if(idx<window._gallery.length-1)h+='<button class="cb" style="flex:1" onclick="closeM();viewGPh('+(idx+1)+')">Next \u2192</button>';
+  h+='</div></div></div>';var div=document.createElement('div');div.id='mdl';div.innerHTML=h;document.body.appendChild(div);
+}
 function delPT(i){if(!confirm("Delete this test?"))return;D.ptests.splice(i,1);save();render();flash("Deleted")}
 
 function openMeds(){
@@ -1906,12 +2136,17 @@ function openAppt(){
 function saveAppt(){var d=document.getElementById('apD').value;var t=document.getElementById('apT').value.trim();var n=document.getElementById('apN').value.trim();if(!d||!t){flash("Need date & title");return}D.appts.push({date:d,title:t,notes:n});save();closeM();render();flash("Appointment logged ✓")}
 function delAppt(i){if(!confirm("Delete appointment?"))return;D.appts.splice(i,1);save();render();flash("Deleted")}
 
-function backup(){var b=JSON.stringify(D,null,2);var blob=new Blob([b],{type:"application/json"});var u=URL.createObjectURL(blob);var a=document.createElement("a");a.href=u;a.download="bbt_backup_"+td()+".json";a.click();URL.revokeObjectURL(u);flash("Backup saved ✓")}
+function backup(){var b=JSON.stringify(D,null,2);var blob=new Blob([b],{type:"application/json"});
+  if(navigator.canShare&&navigator.canShare({files:[new File([blob],"bbt_backup_"+td()+".json",{type:"application/json"})]})){
+    navigator.share({files:[new File([blob],"bbt_backup_"+td()+".json",{type:"application/json"})],title:"CyTrack Backup"}).then(function(){flash("Shared ✓")}).catch(function(){dlFB(blob,"bbt_backup_"+td()+".json")});
+  }else{dlFB(blob,"bbt_backup_"+td()+".json")}
+}
+function dlFB(blob,name){var u=URL.createObjectURL(blob);var a=document.createElement("a");a.href=u;a.download=name;a.style.display="none";document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u)},1000);flash("Saved ✓")}
 function restore(inp){var f=inp.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(e){try{var d=JSON.parse(e.target.result);if(d.cycles){D=d;save();render();flash("Restored ✓")}else flash("Invalid file")}catch(err){flash("Error: bad JSON")}};rd.readAsText(f)}
 function exp(){
   var csv="Cycle,Day,Date,Temp,Ovulation,Flow,Intimacy,Moods,Symptoms,Meds,Notes\n";
   D.cycles.forEach(function(c,i){c.readings.forEach(function(r){csv+=(i+1)+","+r.day+","+r.date+","+(r.temp!=null?r.temp.toFixed(2):'')+","+(r.ov?"Yes":"")+","+(r.flow||"")+","+(D.sex[r.date]?"Yes":"")+",\""+(D.mood[r.date]||[]).join("; ")+"\",\""+(D.sym[r.date]||[]).join("; ")+"\",\""+(D.meds[r.date]||[]).join("; ")+"\","+(D.notes[r.date]||"")+"\n"})});
-  var b=new Blob([csv],{type:"text/csv"});var u=URL.createObjectURL(b);var a=document.createElement("a");a.href=u;a.download="bbt_jess.csv";a.click();URL.revokeObjectURL(u);flash("Exported ✓")
+  var b=new Blob([csv],{type:"text/csv"});dlFB(b,"bbt_jess.csv");flash("Exported ✓")
 }
 
 function sw(t){curTab=t;render()}
