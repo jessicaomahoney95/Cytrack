@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -2061,7 +2064,7 @@ function showM(date,r,ci2){
   var modalTime=D.ttime&&D.ttime[date]||'';
   h+='<div class="fr"><div class="fl">Time taken</div><input class="fi" type="time" id="mTime" value="'+modalTime+'"></div>';
   var wt=D.wrist&&D.wrist[date]?D.wrist[date]:'';
-  h+='<div class="fr"><div class="fl">Wrist temp (optional)</div><input class="fi" type="number" step="0.01" id="mWT" value="'+(wt?wt.toFixed(2):'')+'"></div>';
+  h+='<div class="fr"><div class="fl">Wrist temp (+/- from '+WRIST_BASELINE.toFixed(2)+'° or absolute)</div><input class="fi" type="text" inputmode="decimal" id="mWT" placeholder="+0.50 or 36.91" value="'+(wt?wt.toFixed(2):'')+'"></div>';
   h+='<div class="fr"><div class="tr"><span class="tl">Ovulation (LH+)</span><div class="tg'+(r&&r.ov?' on':'')+'" id="mOv" onclick="this.classList.toggle(\'on\')"></div></div>';
   h+='<div class="tr"><span class="tl">Intimacy</span><div class="tg'+(sx?' on':'')+'" id="mSx" onclick="this.classList.toggle(\'on\')"></div></div>';
   var tq=D.tqual&&D.tqual[date]?D.tqual[date]:'';
@@ -2116,8 +2119,12 @@ function saveR(){saveUndo();
   else delete D.tqual[date];
   // Wrist temp
   if(!D.wrist)D.wrist={};
-  var wt=parseFloat(document.getElementById('mWT').value);
-  if(!isNaN(wt)&&wt>34&&wt<38)D.wrist[date]=wt;else delete D.wrist[date];
+  var wtRaw=document.getElementById('mWT').value.trim();
+  if(wtRaw){var wtVal;
+    if(wtRaw.match(/^[+-]/)||(!isNaN(parseFloat(wtRaw))&&Math.abs(parseFloat(wtRaw))<2)){wtVal=Math.round((WRIST_BASELINE+parseFloat(wtRaw))*100)/100}
+    else{wtVal=parseFloat(wtRaw)}
+    if(!isNaN(wtVal)&&wtVal>34&&wtVal<38)D.wrist[date]=wtVal;else delete D.wrist[date];
+  }else delete D.wrist[date];
   // Time
   if(!D.ttime)D.ttime={};var mTimeEl=document.getElementById('mTime');
   if(mTimeEl&&mTimeEl.value)D.ttime[date]=mTimeEl.value;else delete D.ttime[date];
