@@ -863,13 +863,15 @@ function rToday(info){
     var slTimes=D.sleepTimes&&D.sleepTimes[td()];
     if(!slTimes){
       h+='<div style="margin-top:10px"><div style="font-size:9px;color:var(--txt4);margin-bottom:5px">Sleep times</div>';
-      h+='<div style="display:flex;gap:12px;margin-bottom:8px">';
-      h+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:var(--txt3);margin-bottom:3px">Fell asleep</div>';
-      h+='<input type="time" id="slAsleep" value="'+D.bedtime+'" style="width:100%;padding:10px 10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:14px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
-      h+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:var(--txt3);margin-bottom:3px">Woke up</div>';
-      h+='<input type="time" id="slWoke" value="'+D.waketime+'" style="width:100%;padding:10px 10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:14px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+      h+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">';
+      h+='<div style="display:flex;align-items:center;gap:10px">';
+      h+='<div style="font-size:11px;font-weight:600;color:var(--txt3);width:80px">Fell asleep</div>';
+      h+='<input type="time" id="slAsleep" value="'+D.bedtime+'" style="flex:1;padding:12px 14px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+      h+='<div style="display:flex;align-items:center;gap:10px">';
+      h+='<div style="font-size:11px;font-weight:600;color:var(--txt3);width:80px">Woke up</div>';
+      h+='<input type="time" id="slWoke" value="'+D.waketime+'" style="flex:1;padding:12px 14px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
       h+='</div>';
-      h+='<button onclick="logSleepTimes()" style="width:100%;padding:10px;border-radius:10px;font-size:12px;font-weight:700;background:var(--cobalt);color:#fff">Log sleep</button></div>';
+      h+='<button onclick="logSleepTimes()" style="width:100%;padding:11px;border-radius:12px;font-size:13px;font-weight:700;background:var(--cobalt);color:#fff">Log sleep</button></div>';
     } else {
       var hrs=calcSleepHrs(slTimes.asleep,slTimes.woke);
       h+='<div style="margin-top:6px;display:flex;gap:10px;align-items:center">';
@@ -892,13 +894,15 @@ function rToday(info){
     var slTimes2=D.sleepTimes&&D.sleepTimes[td()];
     if(!slTimes2){
       h+='<div style="margin-top:10px"><div style="font-size:9px;color:var(--txt4);margin-bottom:5px">Sleep times</div>';
-      h+='<div style="display:flex;gap:12px;margin-bottom:8px">';
-      h+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:var(--txt3);margin-bottom:3px">Fell asleep</div>';
-      h+='<input type="time" id="slAsleep2" value="'+D.bedtime+'" style="width:100%;padding:10px 10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:14px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
-      h+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:var(--txt3);margin-bottom:3px">Woke up</div>';
-      h+='<input type="time" id="slWoke2" value="'+D.waketime+'" style="width:100%;padding:10px 10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:14px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+      h+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">';
+      h+='<div style="display:flex;align-items:center;gap:10px">';
+      h+='<div style="font-size:11px;font-weight:600;color:var(--txt3);width:80px">Fell asleep</div>';
+      h+='<input type="time" id="slAsleep2" value="'+D.bedtime+'" style="flex:1;padding:12px 14px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+      h+='<div style="display:flex;align-items:center;gap:10px">';
+      h+='<div style="font-size:11px;font-weight:600;color:var(--txt3);width:80px">Woke up</div>';
+      h+='<input type="time" id="slWoke2" value="'+D.waketime+'" style="flex:1;padding:12px 14px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
       h+='</div>';
-      h+='<button onclick="logSleepTimes2()" style="width:100%;padding:10px;border-radius:10px;font-size:12px;font-weight:700;background:var(--cobalt);color:#fff">Log sleep</button></div>';
+      h+='<button onclick="logSleepTimes2()" style="width:100%;padding:11px;border-radius:12px;font-size:13px;font-weight:700;background:var(--cobalt);color:#fff">Log sleep</button></div>';
     } else {
       var hrs2=calcSleepHrs(slTimes2.asleep,slTimes2.woke);
       h+='<div style="margin-top:6px;display:flex;gap:10px;align-items:center">';
