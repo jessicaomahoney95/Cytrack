@@ -356,6 +356,7 @@ var sOv=true,sPer=true,sSex=true,sCM=true;
 var cVis=[],zm={s:1,ox:0,oy:0,drag:false,lx:0,ly:0,pinch:0};
 var cmpA=-1,cmpB=-1;
 var smooth=false;
+var sWrist=false;
 /* Collapsed section state — persisted in localStorage */
 var collapsed={};
 try{var _cs=localStorage.getItem('bbt-collapsed');if(_cs)collapsed=JSON.parse(_cs);else{
@@ -841,7 +842,9 @@ function rToday(info){
     h+='<div><div style="font-size:20px;font-weight:800;color:var(--txt)">'+todayR2.temp.toFixed(2)+'°</div>';
     h+='<div style="font-size:9px;color:var(--txt4)">BBT'+(todayTime?' · '+todayTime:'')+'</div></div>';
     if(todayWrist){var wDev=todayWrist-WRIST_BASELINE;h+='<div><div style="font-size:15px;font-weight:700;color:var(--txt3)">'+(wDev>=0?'+':'')+wDev.toFixed(2)+'°</div>';
-    h+='<div style="font-size:9px;color:var(--txt4)">Wrist ('+todayWrist.toFixed(2)+'°)</div></div>'}
+    var wYest=D.wrist[ad(td(),-1)];
+    var wTrend=wYest?(todayWrist-wYest):null;
+    h+='<div style="font-size:9px;color:var(--txt4)">Wrist'+(wTrend!=null?' <span style=color:'+(wTrend>=0?'var(--burnt)':'var(--cobalt)')+'>'+(wTrend>=0?'↑':'↓')+Math.abs(wTrend).toFixed(2)+'°</span>':'')+'</div></div>'}
     if(todaySleep){var slCol=todaySleep==='Good'?'var(--forest)':todaySleep==='OK'?'var(--gold)':'var(--rose)';
     var slHrs=D.sleepTimes&&D.sleepTimes[td()]?calcSleepHrs(D.sleepTimes[td()].asleep,D.sleepTimes[td()].woke):null;
     h+='<div><div style="font-size:13px;font-weight:700;color:'+slCol+'">'+todaySleep+'</div>';
@@ -1360,6 +1363,7 @@ function rOverlay(){
   h+='<button class="flt flt-sex'+(sSex?' on':'')+'" onclick="sSex=!sSex;render()">Intimacy</button>';
   h+='<button class="flt flt-cm'+(sCM?' on':'')+'" onclick="sCM=!sCM;render()">CM</button></div>';
   h+='<div class="sm-tg"><span>Smoothing</span><div class="tg'+(smooth?' on':'')+'" onclick="smooth=!smooth;render()" style="width:36px;height:20px"></div></div>';
+  h+='<div class="sm-tg"><span>Wrist temp</span><div class="tg'+(sWrist?' on':'')+'" onclick="sWrist=!sWrist;render()" style="width:36px;height:20px"></div></div>';
   /* BIGGER overlay canvas: 320px instead of 220px */
   h+='<div class="section"><div class="cw" style="position:relative"><canvas id="oC" style="height:320px;touch-action:none"></canvas>';
   if(zm.s>1)h+='<button onclick="zmR()" style="position:absolute;top:8px;right:8px;background:var(--card);border-radius:8px;padding:4px 10px;font-size:10px;font-weight:700;color:var(--cobalt);box-shadow:var(--sh)">Reset</button>';
@@ -1372,6 +1376,7 @@ function rOverlay(){
   h+='<span class="legend-item"><span class="legend-dot" style="background:var(--rose)"></span>Period</span>';
   h+='<span class="legend-item"><span class="legend-sq" style="background:var(--cobalt)"></span>Intimacy</span>';
   h+='<span class="legend-item" style="border-top:2px dashed var(--cobalt);padding-top:0;height:10px;width:16px"></span><span style="font-size:10px;font-weight:600;color:var(--txt3)">Coverline</span>';
+  if(sWrist)h+='<span class="legend-item" style="border-top:2px dashed var(--plum);padding-top:0;height:10px;width:16px;opacity:.5"></span><span style="font-size:10px;font-weight:600;color:var(--txt3)">Wrist</span>';
   h+='</div>';
   return h;
 }
@@ -1405,6 +1410,8 @@ function dOv(){
       if(r.flow&&sPer){ctx.globalAlpha=1;ctx.fillStyle="#A84455";ctx.beginPath();ctx.arc(px,py+10,3,0,Math.PI*2);ctx.fill()}if(D.sex[r.date]&&sSex){ctx.globalAlpha=.7;ctx.fillStyle="#2B5C8A";ctx.save();ctx.translate(px,H-p.b-8);ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore()}if(sCM){(D.sym[r.date]||[]).forEach(function(s){if(s.indexOf("CM:")===0){ctx.globalAlpha=.6;ctx.fillStyle=s.indexOf("Egg")>-1?"#9A7B1E":s.indexOf("Wat")>-1?"#2B5C8A":"#8A7D74";ctx.beginPath();ctx.arc(px,p.t+6,3,0,Math.PI*2);ctx.fill()}})}
     var myD=D.myOv&&D.myOv[ci];if(myD&&r.day==myD&&!r.ov&&sOv){ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}
     });ctx.globalAlpha=1});
+  // Wrist temp lines on overlay
+  if(sWrist){D.cycles.forEach(function(c,ci){if(!cVis[ci])return;var col=PAL[ci%7];var wPts=[];c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){var wt=D.wrist[r.date];if(wt>=mn&&wt<=mx)wPts.push({day:r.day,temp:wt})}});if(wPts.length>1){ctx.save();ctx.setLineDash([3,3]);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.globalAlpha=.4;ctx.beginPath();wPts.forEach(function(w,i){var px=x(w.day),py=y(w.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();ctx.restore()}})}
   var acl3=avgCL2();if(acl3){ctx.save();ctx.setLineDash([6,4]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1.5;ctx.globalAlpha=.55;ctx.beginPath();ctx.moveTo(p.l,y(acl3));ctx.lineTo(W-p.r,y(acl3));ctx.stroke();ctx.restore();ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.font="bold 9px -apple-system";ctx.textAlign="right";ctx.fillText("CL "+acl3.toFixed(2),W-p.r-4,y(acl3)-4)}
   ctx.restore();attZm();ovHits=_hits;
 }
@@ -1496,7 +1503,8 @@ function rCompare(){
     var flow=r?r.flow:null;
     var wasOv=r?!!r.ov:false;
     if(r){
-      thisDayData.push({i:i,temp:r.temp,date:r.date,phase:ph3,phCol:phCol,dpo:dpo3,syms:syms,moods:moods,sex:sex,opk:opk,note:note,flow:flow,wasOv:wasOv,excl:isExcl(i),len:c.length});
+      var wristR=D.wrist&&D.wrist[r.date]?D.wrist[r.date]:null;
+      thisDayData.push({i:i,temp:r.temp,date:r.date,phase:ph3,phCol:phCol,dpo:dpo3,syms:syms,moods:moods,sex:sex,opk:opk,note:note,flow:flow,wasOv:wasOv,excl:isExcl(i),len:c.length,wrist:wristR});
       if(r.temp!=null)allTemps.push(r.temp);
     }
   });
@@ -1551,6 +1559,8 @@ function rCompare(){
       h+='<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:'+d.phCol+';color:#fff;font-weight:700">'+d.phase+'</span>';
       h+='</div>';
       h+='<span style="font-size:16px;font-weight:800;color:var(--txt)">'+(d.temp!=null?d.temp.toFixed(2)+'°':'—')+'</span></div>';
+      // Wrist temp if available
+      if(d.wrist!=null){h+='<div style="font-size:10px;color:var(--plum);margin-top:2px">Wrist: '+d.wrist.toFixed(2)+'° ('+(d.wrist-WRIST_BASELINE>=0?'+':'')+(d.wrist-WRIST_BASELINE).toFixed(2)+')</div>'}
 
       // Temp vs average + DPO
       var details=[];
@@ -1725,6 +1735,8 @@ function dCmp(){var cv=document.getElementById('cmpC');if(!cv||cmpA<0||cmpB<0)re
     // Label at end of line
     ctx.fillStyle=col;ctx.font="bold 9px -apple-system";ctx.textAlign="left";ctx.fillText("C"+(ci2+1),lastPx+4,lastPy+3);
     c.readings.forEach(function(r){var px=x(r.day),py=y(r.temp);if(r.ov){ctx.fillStyle="#9A7B1E";ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}})});
+  // Wrist temp lines on overlay
+  if(sWrist){D.cycles.forEach(function(c,ci){if(!cVis[ci])return;var col=PAL[ci%7];var wPts=[];c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){var wt=D.wrist[r.date];if(wt>=mn&&wt<=mx)wPts.push({day:r.day,temp:wt})}});if(wPts.length>1){ctx.save();ctx.setLineDash([3,3]);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.globalAlpha=.4;ctx.beginPath();wPts.forEach(function(w,i){var px=x(w.day),py=y(w.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();ctx.restore()}})}
   var acl3=avgCL2();if(acl3){ctx.save();ctx.setLineDash([6,4]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1;ctx.globalAlpha=.4;ctx.beginPath();ctx.moveTo(pad.l,y(acl3));ctx.lineTo(W-pad.r,y(acl3));ctx.stroke();ctx.restore()}}
 
 /* INSIGHTS — with collapsible sections */
@@ -1844,6 +1856,53 @@ function rInsights(){
   lk.forEach(function(k){h+='<div class="pr"><span class="pn">'+k.replace('CM: ','')+'</span><div class="pt"><div class="pb" style="width:'+(pt.l[k]/mxL*100)+'%;background:var(--plum)"></div></div><span style="font-size:10px;color:var(--txt3);width:20px">'+pt.l[k]+'</span></div>'});
   if(!lk.length)h+='<div style="font-size:12px;color:var(--txt4)">No data</div>';h+='</div>';
   h+=colEnd()+'</div>';
+
+  // Wrist temp analysis
+  var wristData=[];
+  D.cycles.forEach(function(c,i){
+    if(isExcl(i))return;
+    var bbt=[],wrs=[];var od=effOv(i);
+    c.readings.forEach(function(r){
+      if(r.temp!=null&&D.wrist&&D.wrist[r.date]){bbt.push(r.temp);wrs.push(D.wrist[r.date])}
+    });
+    if(bbt.length>=5){
+      var bbtAvg=bbt.reduce(function(a,b){return a+b},0)/bbt.length;
+      var wrsAvg=wrs.reduce(function(a,b){return a+b},0)/wrs.length;
+      var diff=Math.round((bbtAvg-wrsAvg)*100)/100;
+      // Pre vs post OV wrist
+      var preW=[],postW=[];
+      if(od){c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){if(r.day<=od)preW.push(D.wrist[r.date]);else postW.push(D.wrist[r.date])}})}
+      var preAvg=preW.length?preW.reduce(function(a,b){return a+b},0)/preW.length:null;
+      var postAvg=postW.length?postW.reduce(function(a,b){return a+b},0)/postW.length:null;
+      var wShift=preAvg&&postAvg?Math.round((postAvg-preAvg)*100)/100:null;
+      wristData.push({i:i,label:c.label,bbtAvg:bbtAvg,wrsAvg:wrsAvg,diff:diff,days:bbt.length,wShift:wShift,preAvg:preAvg,postAvg:postAvg});
+    }
+  });
+  if(wristData.length>=2){
+    h+='<div class="section">'+colHdr('i-wrist','Wrist Temp Analysis',wristData.length+' cycles');
+    h+=colBody('i-wrist');
+    h+='<div class="card" style="padding:14px 16px">';
+    h+='<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">BBT vs Apple Watch wrist temperature</div>';
+    wristData.forEach(function(d){
+      var shiftTxt=d.wShift!==null?(' · shift '+(d.wShift>=0?'+':'')+d.wShift.toFixed(2)+'°'):'';
+      h+='<div style="padding:5px 0;border-bottom:1px solid rgba(0,0,0,.04);display:flex;justify-content:space-between;align-items:center">';
+      h+='<div><span style="font-size:11px;font-weight:600;color:'+PAL[d.i%7]+'">C'+(d.i+1)+'</span>';
+      h+='<span style="font-size:10px;color:var(--txt4);margin-left:6px">'+d.days+' days</span></div>';
+      h+='<div style="text-align:right"><span style="font-size:10px;color:var(--burnt)">BBT '+d.bbtAvg.toFixed(2)+'°</span>';
+      h+='<span style="font-size:10px;color:var(--plum);margin-left:8px">Wrist '+d.wrsAvg.toFixed(2)+'°</span></div></div>';
+      if(d.wShift!==null){
+        var shCol=d.wShift>=0.15?'var(--forest)':d.wShift>=0.05?'var(--gold)':'var(--txt4)';
+        h+='<div style="font-size:9px;color:'+shCol+';padding:2px 0">Wrist shift: '+(d.wShift>=0?'+':'')+d.wShift.toFixed(2)+'° post-OV'+(d.wShift>=0.15?' ✓ clear rise':'')+'</div>';
+      }
+    });
+    // Overall BBT-wrist offset
+    var allDiffs=wristData.map(function(d){return d.diff});
+    var avgDiff=allDiffs.reduce(function(a,b){return a+b},0)/allDiffs.length;
+    h+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(0,0,0,.06)">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--txt)">BBT runs '+(avgDiff>=0?'+':'')+avgDiff.toFixed(2)+'° vs wrist on average</div>';
+    h+='<div style="font-size:10px;color:var(--txt3);margin-top:2px">Your Watch baseline: '+WRIST_BASELINE.toFixed(2)+'°C</div></div>';
+    h+='</div>'+colEnd()+'</div>';
+  }
 
   // TTC report
   var rpt=ttcReport(info.ci);
