@@ -613,7 +613,7 @@ function load(){
   if(!D.excl)D.excl={11:true};if(!D.ptests)D.ptests=[];if(!D.meds)D.meds={};if(!D.myOv)D.myOv={};
   if(!D.appts)D.appts=[];if(!D.journal)D.journal={};if(!D.checks)D.checks={};if(!D.opks)D.opks={};if(!D.tqual)D.tqual={};if(!D.opkPhotos)D.opkPhotos={};
   if(!D.wrist)D.wrist={};if(typeof SEED_WRIST!=='undefined'&&Object.keys(D.wrist).length<10){Object.keys(SEED_WRIST).forEach(function(d){if(!D.wrist[d])D.wrist[d]=SEED_WRIST[d]})}if(!D.sleep)D.sleep={};if(!D.darkMode)D.darkMode=false;if(!D.ttime)D.ttime={};if(!D.sleepHrs)D.sleepHrs={};if(!D.bedtime)D.bedtime='22:30';if(!D.waketime)D.waketime='06:30';if(!D.sleepTimes)D.sleepTimes={};
-  var validSyms=["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting","CM: Egg white","CM: Watery","CM: Creamy","CM: Dry"];
+  var validSyms=["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting","CM: Egg white","CM: Watery","CM: Creamy","CM: Sticky","CM: Dry"];
   var validMoods=["Happy","Calm","Energetic","Tired","Irritable","Anxious","Sad","Emotional"];
   Object.keys(D.sym||{}).forEach(function(d){if(D.sym[d])D.sym[d]=D.sym[d].filter(function(s){return validSyms.indexOf(s)>-1})});
   Object.keys(D.mood||{}).forEach(function(d){if(D.mood[d])D.mood[d]=D.mood[d].filter(function(m){return validMoods.indexOf(m)>-1})});
@@ -1011,7 +1011,7 @@ function rToday(info){  var h='';
   }
   h+='<div style="margin-top:10px"><div class="fl">Cervical mucus</div>';
   h+='<div class="qs-chips">';
-  ["CM: Egg white","CM: Watery","CM: Creamy","CM: Dry"].forEach(function(s){
+  ["CM: Egg white","CM: Watery","CM: Creamy","CM: Sticky","CM: Dry"].forEach(function(s){
     var on=todaySy.indexOf(s)>-1;
     h+='<button class="qs-chip'+(on?' on on-c':'')+'" onclick="qSym(\''+s+'\')">'+s.replace("CM: ","")+'</button>';
   });
@@ -2289,7 +2289,7 @@ function showM(date,r,ci2){
   h+='<div class="fr"><div class="fl">Symptoms</div><div class="chips" style="max-height:none">';
   ["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+s+'</button>'});h+='</div></div>';
   h+='<div class="fr"><div class="fl">CM</div><div class="chips" style="max-height:none">';
-  ["CM: Egg white","CM: Watery","CM: Creamy","CM: Dry"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+s.replace("CM: ","")+'</button>'});h+='</div></div>';
+  ["CM: Egg white","CM: Watery","CM: Creamy","CM: Sticky","CM: Dry"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+s.replace("CM: ","")+'</button>'});h+='</div></div>';
   h+='<div class="fr"><div class="fl">Medications</div><input class="fi" id="mMd" placeholder="e.g. Prenatal, Progesterone" value="'+md.join(', ')+'"></div>';
   h+='<div class="fr"><div class="fl">Notes</div><textarea class="fi" id="mN" placeholder="OPK result, how you feel...">'+nt+'</textarea></div>';
   h+='<div class="fr"><div class="fl">Test Photo</div>';
@@ -2310,7 +2310,7 @@ function saveR(){saveUndo();
   var ov=document.getElementById('mOv').classList.contains('on');var sx=document.getElementById('mSx').classList.contains('on');
   var fe=document.querySelector('.chip-f.on');var fl=fe?fe.dataset.f:'';if(fl==='none')fl='';
   var mo=[];document.querySelectorAll('.chip-m.on').forEach(function(c){mo.push(c.textContent)});
-  var sy=[];document.querySelectorAll('.chip-s.on').forEach(function(c){if(!c.closest('#tqReasons')){var t=c.textContent;if(["Egg white","Watery","Creamy","Dry"].indexOf(t)>-1)t="CM: "+t;sy.push(t)}});
+  var sy=[];document.querySelectorAll('.chip-s.on').forEach(function(c){if(!c.closest('#tqReasons')){var t=c.textContent;if(["Egg white","Watery","Creamy","Sticky","Dry"].indexOf(t)>-1)t="CM: "+t;sy.push(t)}});
   var nt=document.getElementById('mN').value.trim();
   var mdStr=document.getElementById('mMd').value.trim();var md=mdStr?mdStr.split(',').map(function(s){return s.trim()}).filter(Boolean):[];
   var placed=false;
