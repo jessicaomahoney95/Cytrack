@@ -1152,6 +1152,74 @@ function rToday(info){  var h='';
       h+=colEnd()+'</div>';
     }}
 
+  // PREGNANCY VS PERIOD SIGNALS
+  if(info.ho){var dpo3=info.cd-info.od;
+  if(dpo3>=6){
+    h+='<div class="section">'+colHdr('t-pregsig','Pregnancy vs Period Signals');
+    h+=colBody('t-pregsig');
+    h+='<div class="card" style="padding:14px 16px">';
+    var forP=[],forN=[];
+    // Temperature signals
+    var cl3=avgCL2();var todayT=info.c.readings.find(function(x){return x.date===td()});
+    if(todayT&&todayT.temp&&cl3){
+      if(todayT.temp>=cl3+0.1)forP.push({w:2,t:'Temp well above coverline ('+todayT.temp.toFixed(2)+'° vs CL '+cl3.toFixed(2)+'°)'});
+      else if(todayT.temp>=cl3)forP.push({w:1,t:'Temp holding above coverline'});
+      else forN.push({w:2,t:'Temp dropped below coverline — period likely'});
+    }
+    // Sustained high temps
+    if(dpo3>=10){var postTemps=info.c.readings.filter(function(r){return r.day>info.od&&r.temp!=null});var aboveCL=postTemps.filter(function(r){return cl3&&r.temp>=cl3}).length;
+      if(aboveCL>=dpo3-1)forP.push({w:2,t:'Temps sustained above coverline for '+aboveCL+' days'});
+      else if(aboveCL<dpo3-3)forN.push({w:1,t:'Several dips below coverline post-OV'});
+    }
+    // Triphasic
+    var tri2=detectTriphasic(info.c,info.ci);
+    if(tri2&&tri2.found)forP.push({w:2,t:'Triphasic pattern detected — second rise of +'+tri2.shift+'°'});
+    // Late luteal
+    var ail2=amILate(info);
+    if(ail2&&ail2.veryLate)forP.push({w:3,t:'Luteal phase longer than any previous cycle ('+ail2.curLut+'d vs max '+ail2.maxLut+'d)'});
+    else if(ail2&&ail2.late)forP.push({w:1,t:'Slightly longer luteal than average'});
+    // Symptoms
+    var todaySy2=D.sym[td()]||[];var todayMo2=D.mood[td()]||[];
+    if(todaySy2.indexOf('Spotting')>-1&&dpo3>=6&&dpo3<=10)forP.push({w:1,t:'Spotting in implantation window ('+dpo3+' DPO)'});
+    if(todaySy2.indexOf('Breast tenderness')>-1)forP.push({w:1,t:'Breast tenderness — could be progesterone OR hCG'});
+    if(todaySy2.indexOf('Nausea')>-1&&dpo3>=10)forP.push({w:2,t:'Nausea at '+dpo3+' DPO — unusual for just progesterone'});
+    if(todaySy2.indexOf('Fatigue')>-1&&dpo3>=8)forP.push({w:1,t:'Fatigue — common in both but hCG intensifies it'});
+    if(todaySy2.indexOf('Cramps')>-1&&dpo3>=12)forN.push({w:1,t:'Cramps at '+dpo3+' DPO — could be period approaching'});
+    // CM
+    var ewcm=todaySy2.some(function(s){return s==='CM: Egg white'||s==='CM: Watery'});
+    if(ewcm&&dpo3>=8)forP.push({w:1,t:'Return of fertile-type CM — some report this before positive'});
+    // Pregnancy tests
+    var recentTests=D.ptests.filter(function(p){var td3=db(ad(info.c.key,info.od-1),p.date);return td3>=0&&td3<=20});
+    recentTests.forEach(function(pt){
+      if(pt.result==='positive')forP.push({w:5,t:'Positive pregnancy test on '+fd(pt.date)+'!'});
+      else if(pt.result==='faint positive')forP.push({w:4,t:'Faint positive on '+fd(pt.date)+' — test again in 48h'});
+      else if(pt.result==='negative'&&dpo3>=12)forN.push({w:2,t:'Negative test at '+dpo3+' DPO'});
+    });
+    // Score
+    var pScore=forP.reduce(function(a,b){return a+b.w},0);
+    var nScore=forN.reduce(function(a,b){return a+b.w},0);
+    var total=pScore+nScore||1;
+    var pPct=Math.round(pScore/total*100);
+    var verdict=pPct>=70?{t:'Looking promising',c:'var(--forest)'}:pPct>=45?{t:'Could go either way',c:'var(--gold)'}:pPct>=20?{t:'Leaning towards period',c:'var(--burnt)'}:{t:'Period likely',c:'var(--rose)'};
+    if(forP.some(function(f){return f.w>=4}))verdict={t:'Strong positive signal!',c:'var(--forest)'};
+    h+='<div style="text-align:center;margin-bottom:12px"><div style="font-size:18px;font-weight:800;color:'+verdict.c+'">'+verdict.t+'</div>';
+    h+='<div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:8px;background:var(--cream3)">';
+    if(pPct>0)h+='<div style="width:'+pPct+'%;background:var(--forest);border-radius:4px 0 0 4px"></div>';
+    if(100-pPct>0)h+='<div style="width:'+(100-pPct)+'%;background:var(--rose);border-radius:0 4px 4px 0"></div>';
+    h+='</div>';
+    h+='<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--txt4);margin-top:3px"><span>Pregnancy signals</span><span>Period signals</span></div></div>';
+    if(forP.length){h+='<div style="margin-bottom:8px">';
+      forP.sort(function(a,b){return b.w-a.w});
+      forP.forEach(function(f){h+='<div style="display:flex;gap:6px;padding:3px 0;font-size:11px;color:var(--txt);line-height:1.4"><span style="color:var(--forest);flex-shrink:0">'+('●'.repeat(Math.min(f.w,3)))+'</span><span>'+f.t+'</span></div>'});
+    h+='</div>'}
+    if(forN.length){h+='<div>';
+      forN.sort(function(a,b){return b.w-a.w});
+      forN.forEach(function(f){h+='<div style="display:flex;gap:6px;padding:3px 0;font-size:11px;color:var(--txt);line-height:1.4"><span style="color:var(--rose);flex-shrink:0">'+('●'.repeat(Math.min(f.w,3)))+'</span><span>'+f.t+'</span></div>'});
+    h+='</div>'}
+    h+='<div class="ai-disclaimer">Pattern analysis only — not a medical diagnosis.</div>';
+    h+='</div>'+colEnd()+'</div>';
+  }}
+
   // Journal & meds — collapsible
   h+='<div class="section">'+colHdr('t-journal','Journal & Meds');
   h+=colBody('t-journal');
@@ -2066,6 +2134,12 @@ function rInsights(){
     h+='</div>'+colEnd()+'</div>';
   }
 
+  // Doctor Summary Export
+  h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Doctor Report</span></div>';
+  h+='<div class="card" style="padding:14px 16px"><div style="font-size:12px;color:var(--txt2);line-height:1.5;margin-bottom:10px">Generate a comprehensive summary of your cycle data for your GP or fertility clinic.</div>';
+  h+='<button onclick="exportDoctorReport()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--cobalt);color:#fff">Generate Doctor Report</button>';
+  h+='</div></div>';
+
   // Notes
   var nl=timeline();
   h+='<div class="section">'+colHdr('i-notes','Notes Timeline',nl.length);
@@ -2416,6 +2490,100 @@ function openAppt(){
 function saveAppt(){var d=document.getElementById('apD').value;var t=document.getElementById('apT').value.trim();var n=document.getElementById('apN').value.trim();if(!d||!t){flash("Need date & title");return}D.appts.push({date:d,title:t,notes:n});save();closeM();render();flash("Appointment logged ✓")}
 function delAppt(i){if(!confirm("Delete appointment?"))return;D.appts.splice(i,1);save();render();flash("Deleted")}
 
+function exportDoctorReport(){
+  var info=cInfo();var st=cycleStats();var cl=avgCL2();
+  var r='';
+  r+='CYCLE TRACKING REPORT\n';
+  r+='Generated: '+fdf(td())+'\n';
+  r+='Patient: Jess\n';
+  r+='Tracking period: '+fd(D.cycles[0].key)+' '+new Date(D.cycles[0].key+'T12:00:00').getFullYear()+' — present\n';
+  r+='App: CyTrack (BBT + Apple Watch wrist temperature)\n';
+  r+='\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  r+='SUMMARY STATISTICS\n';
+  r+='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  r+='Total cycles tracked: '+st.numCycles+'\n';
+  r+='Cycle length range: '+(st.shortest||'?')+'–'+(st.longest||'?')+' days\n';
+  r+='Average cycle length: '+(st.avgLen||'?')+' days\n';
+  r+='Ovulation day range: '+(st.earlyOv||'?')+'–'+(st.lateOv||'?')+'\n';
+  r+='Average ovulation day: '+(st.avgOv?'Day '+st.avgOv:'?')+'\n';
+  r+='Luteal phase range: '+(st.shortLut||'?')+'–'+(st.longLut||'?')+' days\n';
+  r+='Average luteal phase: '+(st.avgLut||'?')+' days\n';
+  r+='Coverline (avg): '+(cl?cl.toFixed(2)+'°C':'N/A')+'\n';
+  r+='Total BBT readings: '+st.totalReadings+'\n';
+  var reg=regularityScore();
+  if(reg)r+='Cycle regularity: '+reg.score+'% ('+reg.lbl+', SD ±'+reg.sd+' days)\n';
+  r+='\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  r+='CYCLE-BY-CYCLE DETAIL\n';
+  r+='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  D.cycles.forEach(function(c,i){
+    var od=ovDay(c);var eod=effOv(i);var lp=od&&c.length?(c.length-od):null;
+    var ex=isExcl(i);var cp=conceptionProb(i);
+    r+='\nCycle '+(i+1)+': '+fd(c.key)+' '+new Date(c.key+'T12:00:00').getFullYear();
+    if(ex)r+=' [EXCLUDED — pregnancy/loss]';
+    r+='\n';
+    r+='  Length: '+(c.length||'ongoing')+' days\n';
+    r+='  Ovulation: '+(eod?'Day '+eod+(od?' (LH+ Day '+od+')':''):'Not detected')+'\n';
+    if(lp)r+='  Luteal phase: '+lp+' days\n';
+    var sexCount=0;c.readings.forEach(function(x){if(D.sex[x.date])sexCount++});
+    r+='  Intimacy: '+sexCount+' days\n';
+    if(cp)r+='  Conception timing: '+cp.pct+'% ('+cp.lbl+')\n';
+    var cm=cmScore(i);if(cm)r+='  CM quality: '+cm.pct+'% — '+cm.lbl+'\n';
+    // Temp stats
+    var temps=c.readings.filter(function(x){return x.temp!=null}).map(function(x){return x.temp});
+    if(temps.length){var avg=temps.reduce(function(a,b){return a+b},0)/temps.length;
+      r+='  Temp range: '+Math.min.apply(null,temps).toFixed(2)+'–'+Math.max.apply(null,temps).toFixed(2)+'°C (avg '+avg.toFixed(2)+'°C)\n';
+      r+='  Readings: '+temps.length+'\n';
+    }
+    // Period intensity
+    var flows={};c.readings.forEach(function(x){if(x.flow&&x.flow!=='none'&&x.flow!=='unspecified'){flows[x.flow]=(flows[x.flow]||0)+1}});
+    var fk=Object.keys(flows);if(fk.length)r+='  Period: '+fk.map(function(k){return flows[k]+'d '+k}).join(', ')+'\n';
+    // Pregnancy
+    if(ex){
+      var cyc12=D.cycles[i];
+      r+='  NOTE: This was a pregnancy cycle.\n';
+      var posTests=D.ptests.filter(function(p){return p.result==='positive'&&p.date>=c.key});
+      if(posTests.length)r+='  Positive test: '+fd(posTests[0].date)+'\n';
+    }
+  });
+  r+='\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  r+='CURRENT CYCLE STATUS\n';
+  r+='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  r+='Cycle day: '+info.cd+'\n';
+  r+='Phase: '+phase(info.cd,info.av,info.ao,info.ho,info.od).n+'\n';
+  if(info.ho)r+='DPO: '+(info.cd-info.od)+'\n';
+  r+='Period expected: ~'+fd(ad(info.c.key,info.av-1))+'\n';
+  var op=ovProb(info.c,info.ci);if(op)r+='Ovulation confirmation: '+op.pct+'% — '+op.lbl+'\n';
+  r+='\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  r+='PREGNANCY TESTS\n';
+  r+='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  if(D.ptests.length){D.ptests.forEach(function(p){r+=fd(p.date)+' '+new Date(p.date+'T12:00:00').getFullYear()+': '+p.result+(p.brand?' ('+p.brand+')':'')+(p.dpo?' — '+p.dpo+' DPO':'')+'\n'})}
+  else r+='None logged\n';
+  r+='\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  r+='SYMPTOM FREQUENCY (across all non-excluded cycles)\n';
+  r+='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  var allSym={};Object.keys(D.sym).forEach(function(d){(D.sym[d]||[]).forEach(function(s){allSym[s]=(allSym[s]||0)+1})});
+  Object.keys(allSym).sort(function(a,b){return allSym[b]-allSym[a]}).forEach(function(s){r+='  '+s+': '+allSym[s]+' days\n'});
+  r+='\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  r+='OPK HISTORY\n';
+  r+='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  var opkDates=Object.keys(D.opks||{}).sort();
+  var posOPK=opkDates.filter(function(d){return D.opks[d]==='pos'});
+  var negOPK=opkDates.filter(function(d){return D.opks[d]==='neg'});
+  r+='Total tests: '+opkDates.length+' ('+posOPK.length+' positive, '+negOPK.length+' negative)\n';
+  posOPK.forEach(function(d){r+='  Positive: '+fdf(d)+'\n'});
+  r+='\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  r+='NOTES FOR CLINICIAN\n';
+  r+='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  r+='• BBT measured orally each morning\n';
+  r+='• Apple Watch wrist temperature also tracked (baseline '+WRIST_BASELINE.toFixed(2)+'°C)\n';
+  r+='• Cycle 12 (Oct–Dec 2025) was a pregnancy ending in early loss\n';
+  r+='• Currently trying to conceive\n';
+  r+='• Data sourced from Flo app + manual BBT logging\n';
+  r+='\nGenerated by CyTrack — jessicaomahoney95.github.io/Cytrack\n';
+  // Share/download
+  var blob=new Blob([r],{type:'text/plain'});
+  dlFB(blob,'cytrack_doctor_report_'+td()+'.txt');
+}
 function backup(){var b=JSON.stringify(D,null,2);var blob=new Blob([b],{type:"application/json"});
   if(navigator.canShare&&navigator.canShare({files:[new File([blob],"bbt_backup_"+td()+".json",{type:"application/json"})]})){
     navigator.share({files:[new File([blob],"bbt_backup_"+td()+".json",{type:"application/json"})],title:"CyTrack Backup"}).then(function(){flash("Shared ✓")}).catch(function(){dlFB(blob,"bbt_backup_"+td()+".json")});
