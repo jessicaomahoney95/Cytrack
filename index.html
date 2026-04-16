@@ -2073,6 +2073,132 @@ function rDoctor(info){
   h+=renderInsights(goodS,'Going well','var(--forest)');
   h+='</div></div>';
   
+  // ===== PERSONAL TEMP NARRATIVE =====
+  if(temps.length>=3){
+    h+='<div class="section"><div class="sec-hdr"><span class="sec-title" style="font-size:11px;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;font-weight:700">What your temperatures are telling you</div></div>';
+    h+='<div class="card" style="padding:14px 16px">';
+    
+    // Sort readings by day for narrative
+    var sortedR=c.readings.filter(function(r){return r.temp!=null}).sort(function(a,b){return a.day-b.day});
+    var todayR=sortedR[sortedR.length-1];
+    var yestR=sortedR.length>=2?sortedR[sortedR.length-2]:null;
+    var prevR=sortedR.length>=3?sortedR[sortedR.length-3]:null;
+    
+    var stories=[];
+    
+    // === STORY 1: What today's temp means ===
+    if(todayR){
+      var t=todayR.temp;
+      var preOvT=eod?sortedR.filter(function(r){return r.day<eod}).map(function(r){return r.temp}):[];
+      var postOvT=eod?sortedR.filter(function(r){return r.day>eod}).map(function(r){return r.temp}):[];
+      var preAvg=preOvT.length?(preOvT.reduce(function(a,b){return a+b},0)/preOvT.length):null;
+      var postAvg=postOvT.length?(postOvT.reduce(function(a,b){return a+b},0)/postOvT.length):null;
+      
+      var todayMsg='<strong>Today\'s reading: '+t.toFixed(2)+'°C.</strong> ';
+      if(cl){
+        var diffCL=t-cl;
+        if(diffCL>=0.15)todayMsg+='That\'s '+diffCL.toFixed(2)+'° above your coverline ('+cl.toFixed(2)+'°) — strong post-ovulation thermal shift, telling us progesterone is doing its job. ';
+        else if(diffCL>=0.05)todayMsg+='That\'s '+diffCL.toFixed(2)+'° above coverline ('+cl.toFixed(2)+'°) — solid luteal-phase reading. ';
+        else if(diffCL>=-0.05)todayMsg+='That\'s right around your coverline ('+cl.toFixed(2)+'°) — borderline. Watch tomorrow\'s reading closely. ';
+        else if(diffCL>=-0.15)todayMsg+='That\'s '+Math.abs(diffCL).toFixed(2)+'° below coverline ('+cl.toFixed(2)+'°). One dip isn\'t alarming, but if temps stay low for 2+ days, period may be coming. ';
+        else todayMsg+='That\'s '+Math.abs(diffCL).toFixed(2)+'° below coverline ('+cl.toFixed(2)+'°) — a clear drop. If you\'re post-OV and TTC, this often means progesterone is falling and period is imminent. ';
+      }
+      stories.push({icon:'🌡',title:'Today',body:todayMsg});
+    }
+    
+    // === STORY 2: Day-to-day movement ===
+    if(yestR){
+      var swing=todayR.temp-yestR.temp;
+      var swingMsg='';
+      if(Math.abs(swing)<0.05)swingMsg='<strong>Steady from yesterday.</strong> Less than 0.05° change — your hormones are settled. Stable readings are a good sign of a healthy luteal phase.';
+      else if(swing>=0.2)swingMsg='<strong>Big jump up: +'+swing.toFixed(2)+'° from yesterday.</strong> A swing this big often means: (a) you ovulated and progesterone has just kicked in, (b) measurement timing was different, or (c) you slept differently. If you\'re mid-cycle and saw fertile CM recently, this is likely your thermal shift confirming OV.';
+      else if(swing>=0.1)swingMsg='<strong>Up '+swing.toFixed(2)+'° from yesterday.</strong> Modest rise. In luteal phase this is reassuring — progesterone is keeping you elevated.';
+      else if(swing>=-0.1)swingMsg='<strong>Down slightly: '+swing.toFixed(2)+'° from yesterday.</strong> Small daily fluctuations are completely normal — temps wobble within a 0.1° range without meaning much.';
+      else if(swing>=-0.2)swingMsg='<strong>Drop of '+Math.abs(swing).toFixed(2)+'° from yesterday.</strong> '+(dpo&&dpo>=8?'In your TWW, a single dip can be the famous "implantation dip" (around 7-10 DPO), or just normal variation. Don\'t read too much into one day.':'A modest dip — could be sleep, late night, or normal variation.');
+      else swingMsg='<strong>Big drop: '+swing.toFixed(2)+'° from yesterday.</strong> '+(dpo&&dpo>=10?'Late-luteal drops often signal period is 1-2 days away.':'Could be measurement timing, broken sleep, alcohol, or illness. Worth noting.');
+      stories.push({icon:'📉',title:'Day-to-day',body:swingMsg});
+    }
+    
+    // === STORY 3: Pattern over last 3 days ===
+    if(prevR&&yestR&&todayR){
+      var d3=todayR.temp,d2=yestR.temp,d1=prevR.temp;
+      var trend='';
+      if(d3>d2&&d2>d1)trend='<strong>Climbing for 3 days straight ('+d1.toFixed(2)+'° → '+d2.toFixed(2)+'° → '+d3.toFixed(2)+'°).</strong> '+(eod&&dpo>=3&&dpo<=5?'This is the classic post-OV thermal shift confirming ovulation happened.':dpo>=8?'Sustained rise in TWW is encouraging — could indicate strong progesterone or even early hCG support.':'Building rise — keep watching for confirmation pattern.');
+      else if(d3<d2&&d2<d1)trend='<strong>Falling for 3 days ('+d1.toFixed(2)+'° → '+d2.toFixed(2)+'° → '+d3.toFixed(2)+'°).</strong> '+(dpo&&dpo>=10?'Sustained drop in late luteal usually means period within 24-48 hours.':'Three days down — if pre-OV this is normal estrogen-dominant follicular phase. If post-OV, watch for period.');
+      else trend='<strong>Last 3 days: '+d1.toFixed(2)+'° → '+d2.toFixed(2)+'° → '+d3.toFixed(2)+'°.</strong> Mixed pattern. Day-to-day wobbles within 0.1-0.2° are completely normal — focus on the overall trend, not individual readings.';
+      stories.push({icon:'📊',title:'3-day pattern',body:trend});
+    }
+    
+    // === STORY 4: Triphasic check ===
+    var tri=detectTriphasic(c,ci);
+    if(tri&&tri.found){
+      stories.push({icon:'✨',title:'Triphasic pattern detected',body:'<strong>Your temps show a SECOND rise of '+tri.shift+'° around Day '+tri.day+'.</strong> A triphasic pattern (a third level above your normal post-OV temps) is a classic — though not definitive — early pregnancy sign. About 12% of pregnancies show this. Doesn\'t mean pregnant, but worth noting.'});
+    }
+    
+    // === STORY 5: Wrist temp story ===
+    if(D.wrist&&todayR&&D.wrist[todayR.date]){
+      var wt2=D.wrist[todayR.date];var wd2=wt2-WRIST_BASELINE;
+      var wMsg='<strong>Apple Watch saw '+wt2.toFixed(2)+'°C ('+(wd2>=0?'+':'')+wd2.toFixed(2)+' from baseline).</strong> ';
+      if(Math.abs(wd2)>=0.3)wMsg+='That\'s a notable shift from your normal wrist baseline ('+WRIST_BASELINE.toFixed(2)+'°). The Watch measures overnight skin temp — a +0.3° shift often correlates with ovulation or early luteal warming.';
+      else if(Math.abs(wd2)>=0.1)wMsg+='Mild deviation from baseline. The Watch tracks overnight skin temp which lags BBT by a day or so.';
+      else wMsg+='Right around your normal baseline. Watch readings within 0.1° of baseline are typical for follicular phase or stable luteal.';
+      // Compare BBT to wrist
+      var bbtDev=todayR.temp-(preAvg||cl||36.4);
+      if(wd2>0.15&&bbtDev>0.15)wMsg+=' <em>Both BBT and wrist are elevated — strong cross-confirmation of the post-OV state.</em>';
+      else if(wd2<-0.15&&bbtDev<-0.05)wMsg+=' <em>Both metrics dropping — suggests progesterone falling.</em>';
+      stories.push({icon:'⌚',title:'Apple Watch confirmation',body:wMsg});
+    }
+    
+    // === STORY 6: Sustained luteal pattern ===
+    if(eod&&dpo&&dpo>=8){
+      var lutTemps=sortedR.filter(function(r){return r.day>eod});
+      var aboveCL=cl?lutTemps.filter(function(r){return r.temp>=cl}).length:0;
+      var totalLut=lutTemps.length;
+      if(totalLut>=5){
+        var pcAbove=Math.round(aboveCL/totalLut*100);
+        var lMsg='<strong>'+aboveCL+'/'+totalLut+' luteal readings above coverline ('+pcAbove+'%).</strong> ';
+        if(pcAbove>=85)lMsg+='Excellent thermal hold — progesterone is strong. This is what we want to see post-OV. If period doesn\'t arrive on time, this consistent elevation is a strong pregnancy candidate.';
+        else if(pcAbove>=65)lMsg+='Good thermal hold — most readings above coverline. Some dips are normal. Look for sustained pattern.';
+        else lMsg+='More dips than ideal — could mean lower progesterone, but also could be measurement variability. Worth tracking next cycle for comparison.';
+        stories.push({icon:'🔥',title:'Luteal phase strength',body:lMsg});
+      }
+    }
+    
+    // === STORY 7: Average vs typical ===
+    if(temps.length>=10){
+      var cAvg=temps.reduce(function(a,b){return a+b},0)/temps.length;
+      // Compare to all other non-excluded cycles
+      var allOtherTemps=[];
+      D.cycles.forEach(function(otherC,otherI){
+        if(otherI===ci||isExcl(otherI))return;
+        otherC.readings.forEach(function(r){if(r.temp!=null)allOtherTemps.push(r.temp)});
+      });
+      if(allOtherTemps.length>=20){
+        var historical=allOtherTemps.reduce(function(a,b){return a+b},0)/allOtherTemps.length;
+        var diff=cAvg-historical;
+        if(Math.abs(diff)>=0.1){
+          var aMsg='<strong>This cycle is averaging '+cAvg.toFixed(2)+'°, '+(diff>0?'higher':'lower')+' than your historical average of '+historical.toFixed(2)+'°.</strong> ';
+          if(diff>=0.15)aMsg+='A '+diff.toFixed(2)+'° elevation could mean: stronger luteal phase this cycle, illness/inflammation, or — if late luteal — possibly pregnancy. Worth watching.';
+          else if(diff>=0.1)aMsg+='Slightly warmer than usual. Could be seasonal, sleep changes, or simply your body running a bit hotter this month.';
+          else if(diff<=-0.15)aMsg+='Cooler than usual by '+Math.abs(diff).toFixed(2)+'°. Could be thyroid function, illness, or just normal cycle-to-cycle variation. If it persists across cycles, mention to GP.';
+          else aMsg+='Slightly cooler than typical. Watch the trend.';
+          stories.push({icon:'📊',title:'Compared to your normal',body:aMsg});
+        }
+      }
+    }
+    
+    // Render all stories
+    stories.forEach(function(s,i){
+      h+='<div style="display:flex;gap:10px;padding:10px 0'+(i<stories.length-1?';border-bottom:1px solid rgba(0,0,0,.05)':'')+'">';
+      h+='<span style="font-size:18px;flex-shrink:0">'+s.icon+'</span>';
+      h+='<div><div style="font-size:11px;font-weight:700;color:var(--cobalt);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">'+s.title+'</div>';
+      h+='<div style="font-size:12px;color:var(--txt2);line-height:1.5">'+s.body+'</div></div></div>';
+    });
+    
+    h+='<div class="ai-disclaimer" style="margin-top:10px">Pattern interpretation only. Temperature can be affected by sleep, alcohol, illness, and measurement timing.</div>';
+    h+='</div></div>';
+  }
+
   // ===== COMPARE TO ANOTHER CYCLE =====
   h+='<div class="section"><div class="sec-hdr"><span class="sec-title" style="font-size:11px;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;font-weight:700">Compare to Another Cycle</div></div>';
   h+='<div class="card" style="padding:12px 14px"><div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Pick a previous cycle to compare side-by-side with this one.</div>';
