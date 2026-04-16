@@ -361,6 +361,7 @@ var sCmpWrist=false;
 var sWrist=false;
 var sBBTcyc=true;
 var sBBTov=true;
+var docCmpA=-1,docCmpB=-1;
 /* Collapsed section state — persisted in localStorage */
 var collapsed={};
 try{var _cs=localStorage.getItem('bbt-collapsed');if(_cs)collapsed=JSON.parse(_cs);else{
@@ -796,7 +797,7 @@ function render(){
   }
   // Tabs at top
   h+='<div class="tabs">';
-  ["today","overlay","cycle","compare","insights"].forEach(function(t){
+  ["today","overlay","cycle","compare","doctor","insights"].forEach(function(t){
     h+='<button class="tab'+(curTab===t?' on':'')+'" onclick="sw(\''+t+'\')">'+t[0].toUpperCase()+t.slice(1)+'</button>';
   });
   h+='</div></div>';
@@ -805,6 +806,7 @@ function render(){
   else if(curTab==="overlay")h+=rOverlay();
   else if(curTab==="cycle")h+=rCycle();
   else if(curTab==="compare")h+=rCompare();
+  else if(curTab==="doctor")h+=rDoctor(info);
   else h+=rInsights();
   h+='</div>';app.innerHTML=h;
   setTimeout(function(){
@@ -1802,14 +1804,129 @@ function rCompare(){
     var shAvgB=shB.length?(shB.reduce(function(a,b){return a+b},0)/shB.length):null;
     h+=cmpRow('Avg sleep',shAvgA?shAvgA.toFixed(1)+'h':null,shAvgB?shAvgB.toFixed(1)+'h':null,'high');
     h+='</tbody></table></div></div>';
-    var diffs=[];
-    if(lpA&&lpB&&Math.abs(lpA-lpB)>=3)diffs.push('Luteal phase differs by '+(Math.abs(lpA-lpB))+' days');
-    if(odA&&odB&&Math.abs(odA-odB)>=3)diffs.push('Ovulation '+(Math.abs(odA-odB))+' days apart (Day '+odA+' vs '+odB+')');
-    if(cpA&&cpB&&Math.abs(cpA.pct-cpB.pct)>=25)diffs.push('Conception timing '+(cpA.pct>cpB.pct?'better':'worse')+' in C'+(cpA.pct>cpB.pct?(cmpA+1):(cmpB+1)));
-    if(avgA&&avgB&&Math.abs(avgA-avgB)>=0.15)diffs.push('Average temp '+(Math.abs(avgA-avgB)).toFixed(2)+'° '+(avgA>avgB?'higher':'lower')+' in C'+(avgA>avgB?(cmpA+1):(cmpB+1)));
-    if(diffs.length){h+='<div class="section"><div class="card" style="border-left:3px solid var(--cobalt);padding:12px 16px"><div style="font-size:10px;font-weight:700;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Key Differences</div>';
-      diffs.forEach(function(d){h+='<div style="font-size:12px;color:var(--txt);padding:3px 0">• '+d+'</div>'});
-      h+='</div></div>'}
+    // ===== DOCTOR-BOT ANALYSIS =====
+    var lA='C'+(cmpA+1),lB='C'+(cmpB+1);
+    var insights=[];
+    var stronger=[],weaker=[],neutral=[];
+    
+    // Cycle length analysis
+    if(ca.length&&cb.length){
+      var ldiff=ca.length-cb.length;
+      if(Math.abs(ldiff)<=2)neutral.push({icon:'✓',k:'Cycle length',v:'Both '+ca.length+'/'+cb.length+'d — very consistent'});
+      else if(Math.abs(ldiff)<=5)insights.push({icon:'📏',c:'var(--cobalt)',k:'Cycle length differs',v:lA+' was '+ca.length+'d, '+lB+' was '+cb.length+'d — '+Math.abs(ldiff)+'d difference is within normal variation'});
+      else insights.push({icon:'⚠️',c:'var(--gold)',k:'Notable cycle length variation',v:lA+' '+ca.length+'d vs '+lB+' '+cb.length+'d — a difference of '+Math.abs(ldiff)+' days. If this becomes a pattern, worth mentioning to GP.'});
+    }
+    
+    // Ovulation day analysis
+    if(odA&&odB){
+      var odiff=odA-odB;
+      if(Math.abs(odiff)<=1)neutral.push({icon:'✓',k:'Ovulation timing',v:'Day '+odA+'/'+odB+' — very consistent'});
+      else if(Math.abs(odiff)<=3)insights.push({icon:'🥚',c:'var(--cobalt)',k:'OV timing slightly differs',v:lA+' ovulated Day '+odA+', '+lB+' Day '+odB+' — '+Math.abs(odiff)+'d apart, within normal range'});
+      else insights.push({icon:'⏰',c:'var(--gold)',k:'Ovulation timing varies notably',v:lA+' Day '+odA+' vs '+lB+' Day '+odB+' — '+Math.abs(odiff)+'d gap. This affects fertile window timing'});
+    }
+    else if(odA&&!odB)insights.push({icon:'❓',c:'var(--rose)',k:'OV not detected in '+lB,v:'Either OV happened but wasn\'t captured (LH+ test missed) or this was anovulatory'});
+    else if(!odA&&odB)insights.push({icon:'❓',c:'var(--rose)',k:'OV not detected in '+lA,v:'Either OV happened but wasn\'t captured (LH+ test missed) or this was anovulatory'});
+    
+    // Luteal phase — very important for fertility
+    if(lpA&&lpB){
+      var ldp=lpA-lpB;
+      if(lpA<10||lpB<10){
+        var shortC=lpA<10?lA:lB;var shortLP=lpA<10?lpA:lpB;
+        insights.push({icon:'🚨',c:'var(--rose)',k:'Short luteal phase in '+shortC,v:shortLP+'d luteal phase. Below 10 days can indicate luteal phase defect — worth asking GP about progesterone testing'});
+      }
+      else if(Math.abs(ldp)<=2)neutral.push({icon:'✓',k:'Luteal phase',v:lpA+'/'+lpB+'d — both healthy and consistent'});
+      else if(Math.abs(ldp)<=4)insights.push({icon:'📊',c:'var(--cobalt)',k:'Luteal phase variation',v:lpA+'d vs '+lpB+'d — '+Math.abs(ldp)+'d difference. Both still in healthy range (10+)'});
+      else insights.push({icon:'⚠️',c:'var(--gold)',k:'Luteal phase varies significantly',v:lA+' '+lpA+'d vs '+lB+' '+lpB+'d. Inconsistency could affect implantation window'});
+    }
+    
+    // Conception timing
+    if(cpA&&cpB){
+      var cpdiff=cpA.pct-cpB.pct;
+      var betterC=cpA.pct>cpB.pct?lA:lB;var betterPct=Math.max(cpA.pct,cpB.pct);
+      if(Math.abs(cpdiff)<=10)neutral.push({icon:'✓',k:'Conception timing',v:'Both ~'+Math.round((cpA.pct+cpB.pct)/2)+'% — well-timed'});
+      else if(Math.abs(cpdiff)<=25)stronger.push({icon:'💪',c:'var(--forest)',k:'Better-timed sex in '+betterC,v:betterC+' '+betterPct+'% vs '+(betterC===lA?cpB.pct:cpA.pct)+'% — gives a stronger conception chance'});
+      else stronger.push({icon:'🎯',c:'var(--forest)',k:'Significantly better timing in '+betterC,v:betterC+' was '+betterPct+'% — sex landed close to ovulation. Other cycle was '+(betterC===lA?cpB.pct:cpA.pct)+'%, which means timing missed the window'});
+    }
+    
+    // CM quality
+    if(cmA&&cmB){
+      var cmdiff=cmA.pct-cmB.pct;
+      var bCM=cmA.pct>cmB.pct?lA:lB;
+      if(Math.abs(cmdiff)<=15)neutral.push({icon:'✓',k:'Cervical mucus quality',v:'Similar — '+cmA.pct+'%/'+cmB.pct+'%'});
+      else stronger.push({icon:'💧',c:'var(--forest)',k:'Better fertile CM in '+bCM,v:bCM+' '+Math.max(cmA.pct,cmB.pct)+'% vs '+Math.min(cmA.pct,cmB.pct)+'%. Egg-white/watery CM helps sperm survive'});
+    }
+    
+    // Average temp
+    if(avgA&&avgB){
+      var tdiff=avgA-avgB;
+      if(Math.abs(tdiff)<0.1)neutral.push({icon:'✓',k:'Average temperature',v:'Both '+avgA.toFixed(2)+'°/'+avgB.toFixed(2)+'° — stable baseline'});
+      else if(Math.abs(tdiff)<0.2)insights.push({icon:'🌡',c:'var(--cobalt)',k:'Slight temp difference',v:lA+' '+avgA.toFixed(2)+'° vs '+lB+' '+avgB.toFixed(2)+'°. Could be measurement timing or sleep variation'});
+      else insights.push({icon:'🌡',c:'var(--gold)',k:'Notable temp baseline shift',v:lA+' '+avgA.toFixed(2)+'° vs '+lB+' '+avgB.toFixed(2)+'°. A '+Math.abs(tdiff).toFixed(2)+'° shift is worth noting — could be thyroid, illness, or measurement inconsistency'});
+    }
+    
+    // Wrist temp comparison
+    if(wAvgA&&wAvgB){
+      var wdiff=wAvgA-wAvgB;
+      if(Math.abs(wdiff)>0.1)insights.push({icon:'⌚',c:'var(--plum)',k:'Wrist temp baseline differs',v:lA+' '+wAvgA.toFixed(2)+'° vs '+lB+' '+wAvgB.toFixed(2)+'° — Watch detected a '+Math.abs(wdiff).toFixed(2)+'° shift'});
+    }
+    
+    // Sex frequency
+    var sexDiff=sexA-sexB;
+    if(Math.abs(sexDiff)>=3){
+      var moreSex=sexA>sexB?lA:lB;
+      insights.push({icon:'💞',c:'var(--cobalt)',k:'Intimacy frequency differs',v:moreSex+' had '+Math.max(sexA,sexB)+' days vs '+Math.min(sexA,sexB)+' in the other. More frequent sex = more chances if timed in fertile window'});
+    }
+    
+    // Sleep quality
+    if(slA.total>=3&&slB.total>=3){
+      var pcA=Math.round(slA.Good/slA.total*100);var pcB=Math.round(slB.Good/slB.total*100);
+      if(Math.abs(pcA-pcB)>=25){var bSleep=pcA>pcB?lA:lB;
+        stronger.push({icon:'😴',c:'var(--forest)',k:'Better sleep in '+bSleep,v:bSleep+' had '+Math.max(pcA,pcB)+'% good nights vs '+Math.min(pcA,pcB)+'%. Sleep affects BBT accuracy + hormone balance'});
+      }
+    }
+    
+    // Avg sleep hours
+    if(shAvgA&&shAvgB){
+      var hdiff=shAvgA-shAvgB;
+      if(Math.abs(hdiff)>=1){var moreSleep=shAvgA>shAvgB?lA:lB;
+        insights.push({icon:'🛏',c:'var(--cobalt)',k:'Sleep duration differs',v:moreSleep+' avg '+Math.max(shAvgA,shAvgB).toFixed(1)+'h vs '+Math.min(shAvgA,shAvgB).toFixed(1)+'h. Aim for 7-9h for optimal hormones'});
+      }
+    }
+    
+    // Pregnancy outcome
+    var preg_a=isExcl(cmpA),preg_b=isExcl(cmpB);
+    if(preg_a&&!preg_b)stronger.push({icon:'🤰',c:'var(--forest)',k:lA+' resulted in pregnancy',v:'This is your benchmark cycle — what worked then. Compare timing, CM, and sex frequency closely'});
+    if(preg_b&&!preg_a)stronger.push({icon:'🤰',c:'var(--forest)',k:lB+' resulted in pregnancy',v:'This is your benchmark cycle — what worked then. Compare timing, CM, and sex frequency closely'});
+    
+    // OVERALL VERDICT
+    var verdict='',vCol='var(--cobalt)';
+    if(stronger.length>=2&&insights.length<=1){verdict='These cycles look strong overall';vCol='var(--forest)'}
+    else if(insights.filter(function(i){return i.c==='var(--rose)'}).length>0){verdict='Notable differences worth discussing with a doctor';vCol='var(--rose)'}
+    else if(insights.filter(function(i){return i.c==='var(--gold)'}).length>=2){verdict='Some inconsistency between cycles — keep tracking';vCol='var(--gold)'}
+    else if(neutral.length>=3){verdict='Your cycles are remarkably consistent';vCol='var(--forest)'}
+    else verdict='Cycles are broadly similar with some variation';
+    
+    h+='<div class="section"><div class="card" style="padding:14px 16px;border-left:3px solid '+vCol+'">';
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:18px">🩺</span><div><div style="font-size:10px;font-weight:700;color:'+vCol+';text-transform:uppercase;letter-spacing:.8px">Cycle Doctor</div><div style="font-size:13px;font-weight:700;color:var(--txt);margin-top:2px">'+verdict+'</div></div></div>';
+    
+    // Stronger signals first
+    if(stronger.length){h+='<div style="margin-top:10px"><div style="font-size:9px;font-weight:700;color:var(--forest);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">What\'s working</div>';
+      stronger.forEach(function(s){h+='<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.04)"><span style="font-size:14px;flex-shrink:0">'+s.icon+'</span><div><div style="font-size:11px;font-weight:700;color:var(--txt)">'+s.k+'</div><div style="font-size:11px;color:var(--txt2);line-height:1.4">'+s.v+'</div></div></div>'});
+    h+='</div>'}
+    
+    // Insights / worth noting
+    if(insights.length){h+='<div style="margin-top:10px"><div style="font-size:9px;font-weight:700;color:var(--cobalt);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Worth noting</div>';
+      insights.sort(function(a,b){var p={'var(--rose)':3,'var(--gold)':2,'var(--cobalt)':1,'var(--plum)':1};return (p[b.c]||0)-(p[a.c]||0)});
+      insights.forEach(function(s){h+='<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.04)"><span style="font-size:14px;flex-shrink:0">'+s.icon+'</span><div><div style="font-size:11px;font-weight:700;color:'+s.c+'">'+s.k+'</div><div style="font-size:11px;color:var(--txt2);line-height:1.4">'+s.v+'</div></div></div>'});
+    h+='</div>'}
+    
+    // Consistent signals
+    if(neutral.length){h+='<div style="margin-top:10px"><div style="font-size:9px;font-weight:700;color:var(--txt4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Consistent</div>';
+      neutral.forEach(function(s){h+='<div style="display:flex;gap:8px;padding:3px 0;font-size:11px;color:var(--txt3)"><span style="color:var(--forest);flex-shrink:0">'+s.icon+'</span><span><strong style="color:var(--txt2)">'+s.k+':</strong> '+s.v+'</span></div>'});
+    h+='</div>'}
+    
+    h+='<div class="ai-disclaimer" style="margin-top:10px">Pattern analysis only — not medical advice. Discuss anything concerning with your GP.</div>';
+    h+='</div></div>';
   }
   else if(cmpA>=0&&cmpB>=0)h+='<div class="section"><div class="card" style="color:var(--txt3);font-size:12px">Pick two different cycles</div></div>';
 
@@ -1862,6 +1979,228 @@ function dCmp(){var cv=document.getElementById('cmpC');if(!cv||cmpA<0||cmpB<0)re
   var acl3=avgCL2();if(acl3){ctx.save();ctx.setLineDash([6,4]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1;ctx.globalAlpha=.4;ctx.beginPath();ctx.moveTo(pad.l,y(acl3));ctx.lineTo(W-pad.r,y(acl3));ctx.stroke();ctx.restore()}}
 
 /* INSIGHTS — with collapsible sections */
+function rDoctor(info){
+  var h='';
+  var c=info.c;var ci=info.ci;
+  
+  // Header card
+  h+='<div class="section"><div class="card" style="padding:14px 16px;background:linear-gradient(135deg,var(--cob-bg),var(--cream))">';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="font-size:24px">🩺</span>';
+  h+='<div><div style="font-size:16px;font-weight:800;color:var(--txt)">Cycle Doctor</div>';
+  h+='<div style="font-size:11px;color:var(--txt3)">Pattern analysis & comparison</div></div></div>';
+  h+='<div style="font-size:11px;color:var(--txt2);line-height:1.5;padding-top:8px;border-top:1px solid rgba(0,0,0,.06)">Tracks your hormonal patterns and explains what your data means. <strong>Not medical advice</strong> — always discuss concerns with your GP.</div>';
+  h+='</div></div>';
+  
+  // ===== THIS CYCLE ANALYSIS =====
+  h+='<div class="section"><div class="sec-hdr"><span class="sec-title" style="font-size:11px;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;font-weight:700">This Cycle ('+c.label+')</div></div>';
+  
+  // Build current cycle insights
+  var od=ovDay(c);var eod=effOv(ci);var cl=avgCL2();
+  var lp=eod&&c.length?(c.length-eod):(eod&&info.cd>eod?(info.cd-eod):null);
+  var dpo=eod&&info.cd>eod?(info.cd-eod):null;
+  var temps=c.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
+  var sexCount=0;c.readings.forEach(function(r){if(D.sex[r.date])sexCount++});
+  for(var d2=1;d2<=info.cd;d2++){if(D.sex[ad(c.key,d2-1)]&&!c.readings.find(function(r){return r.date===ad(c.key,d2-1)}))sexCount++}
+  var cp=conceptionProb(ci);var cm=cmScore(ci);
+  
+  var goodS=[],noteS=[],warnS=[];
+  
+  // Phase
+  var phN=phase(info.cd,info.av,info.ao,info.ho,eod).n;
+  goodS.push({icon:'📍',k:'Currently in '+phN+' phase',v:'Day '+info.cd+(dpo?' / '+dpo+' DPO':'')+(info.av?' of ~'+info.av:'')});
+  
+  // Ovulation
+  if(eod&&od)goodS.push({icon:'🥚',k:'Ovulation confirmed',v:'LH+ on Day '+od+(eod!==od?', estimated OV Day '+eod:'')+'. Triphasic temp shift detected'});
+  else if(eod)goodS.push({icon:'🥚',k:'Ovulation likely Day '+eod,v:'Estimated from temp shift. No LH+ test logged this cycle'});
+  else if(info.cd>=18)warnS.push({icon:'❓',k:'Ovulation not yet detected',v:'Day '+info.cd+' with no clear shift. May still ovulate later, or this could be anovulatory. If your luteal phase is consistently <10d or no OV, mention to GP'});
+  
+  // Luteal phase quality
+  if(lp){
+    if(lp<10)warnS.push({icon:'🚨',k:'Short luteal phase',v:lp+'d so far. Below 10 days can suggest luteal phase defect — worth asking GP about progesterone testing'});
+    else if(lp<12)noteS.push({icon:'📊',k:'Slightly short luteal phase',v:lp+'d. Borderline — track for a few cycles. Most successful pregnancies need 11+ day luteal phase'});
+    else goodS.push({icon:'✓',k:'Healthy luteal phase',v:lp+'d post-OV. Good progesterone signal — supports implantation'});
+  }
+  
+  // Conception timing
+  if(cp){
+    if(cp.pct>=70)goodS.push({icon:'🎯',k:'Excellent conception timing',v:cp.pct+'% — '+cp.lbl+'. Sex landed in your peak fertile window'});
+    else if(cp.pct>=40)goodS.push({icon:'💪',k:'Good conception timing',v:cp.pct+'% — '+cp.lbl+'. Decent overlap with fertile days'});
+    else if(cp.pct>0)noteS.push({icon:'📅',k:'Conception timing was off',v:'Only '+cp.pct+'%. Sex didn\'t align well with your fertile window. Aim for OV-2 to OV+1 for best chances'});
+    else if(eod)noteS.push({icon:'📅',k:'No intimacy in fertile window',v:'No sex logged in your fertile days. The egg only lives 12-24 hours, so timing is critical'});
+  }
+  
+  // Sex frequency
+  if(sexCount>=8)goodS.push({icon:'💞',k:'Strong intimacy frequency',v:sexCount+' days this cycle. Frequent sex catches the fertile window'});
+  else if(sexCount<=2&&info.cd>=14)noteS.push({icon:'💞',k:'Low intimacy this cycle',v:'Only '+sexCount+' days. ACOG recommends sex every 1-2 days through fertile window for TTC'});
+  
+  // CM
+  if(cm){
+    if(cm.pct>=50)goodS.push({icon:'💧',k:'Good fertile mucus',v:cm.pct+'% — '+cm.lbl+'. Egg-white CM lets sperm survive 3-5 days'});
+    else if(cm.pct>0)noteS.push({icon:'💧',k:'Lower fertile mucus this cycle',v:cm.pct+'% — '+cm.lbl+'. Try staying hydrated. Some women find CoQ10 or evening primrose oil helpful'});
+  }
+  
+  // Temp consistency
+  if(temps.length>=10){
+    var avg=temps.reduce(function(a,b){return a+b},0)/temps.length;
+    var variance=temps.reduce(function(a,b){return a+Math.pow(b-avg,2)},0)/temps.length;
+    var sd=Math.sqrt(variance);
+    if(sd>0.25)noteS.push({icon:'🌡',k:'Variable temperatures',v:'SD '+sd.toFixed(2)+'° — readings are quite variable. Could be sleep timing, late nights, or alcohol. Aim to take temp at the same time daily'});
+    else goodS.push({icon:'🌡',k:'Consistent temp readings',v:'SD '+sd.toFixed(2)+'° — your readings are reliable'});
+  }
+  
+  // Symptoms pattern
+  var cycSym={};c.readings.forEach(function(r){(D.sym[r.date]||[]).forEach(function(s){cycSym[s]=(cycSym[s]||0)+1})});
+  for(var d3=1;d3<=info.cd;d3++){var dt3=ad(c.key,d3-1);(D.sym[dt3]||[]).forEach(function(s){if(!c.readings.find(function(r){return r.date===dt3})){cycSym[s]=(cycSym[s]||0)+1}})}
+  var topSym=Object.keys(cycSym).sort(function(a,b){return cycSym[b]-cycSym[a]}).slice(0,3);
+  if(topSym.length)noteS.push({icon:'📋',k:'Top symptoms this cycle',v:topSym.map(function(s){return s+' ('+cycSym[s]+'d)'}).join(', ')});
+  
+  // Pregnancy in TWW?
+  if(dpo&&dpo>=6){
+    noteS.push({icon:'🔍',k:'In implantation window',v:dpo+' DPO. Most implantation happens 8-10 DPO. Don\'t test before 11 DPO for accurate result'});
+  }
+  
+  // Render this-cycle analysis
+  function renderInsights(items,label,color){
+    if(!items.length)return '';
+    var hh='<div style="margin-bottom:10px"><div style="font-size:9px;font-weight:700;color:'+color+';text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">'+label+'</div>';
+    items.forEach(function(s){hh+='<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.04)"><span style="font-size:14px;flex-shrink:0;margin-top:1px">'+s.icon+'</span><div><div style="font-size:11px;font-weight:700;color:var(--txt)">'+s.k+'</div><div style="font-size:11px;color:var(--txt2);line-height:1.45;margin-top:1px">'+s.v+'</div></div></div>'});
+    return hh+'</div>';
+  }
+  
+  h+='<div class="card" style="padding:14px 16px;border-left:3px solid '+(warnS.length?'var(--rose)':noteS.length>=3?'var(--gold)':'var(--forest)')+'">';
+  h+=renderInsights(warnS,'Worth discussing with GP','var(--rose)');
+  h+=renderInsights(noteS,'Worth noting','var(--cobalt)');
+  h+=renderInsights(goodS,'Going well','var(--forest)');
+  h+='</div></div>';
+  
+  // ===== COMPARE TO ANOTHER CYCLE =====
+  h+='<div class="section"><div class="sec-hdr"><span class="sec-title" style="font-size:11px;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;font-weight:700">Compare to Another Cycle</div></div>';
+  h+='<div class="card" style="padding:12px 14px"><div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Pick a previous cycle to compare side-by-side with this one.</div>';
+  h+='<select onchange="docCmpA='+ci+';docCmpB=parseInt(this.value);render()" style="width:100%;padding:12px;border-radius:10px;border:1.5px solid var(--cream3);font-size:13px;font-weight:600;background:var(--card);color:var(--txt);outline:none">';
+  h+='<option value="-1">— Select a cycle —</option>';
+  D.cycles.forEach(function(cc,i){
+    if(i===ci)return;
+    var ex=isExcl(i)?' [excluded]':'';
+    h+='<option value="'+i+'"'+(docCmpB===i?' selected':'')+'>C'+(i+1)+' · '+cc.label+ex+'</option>';
+  });
+  h+='</select></div></div>';
+  
+  // Show comparison if selected
+  if(docCmpB>=0&&docCmpB!==ci&&D.cycles[docCmpB]){
+    var ca=c;var cb=D.cycles[docCmpB];
+    var lA='C'+(ci+1),lB='C'+(docCmpB+1);
+    var odA=ovDay(ca),odB=ovDay(cb);
+    var lpA=odA&&ca.length?(ca.length-odA):(odA&&info.cd>odA?(info.cd-odA):null);
+    var lpB=odB&&cb.length?(cb.length-odB):null;
+    var cpA=conceptionProb(ci),cpB=conceptionProb(docCmpB);
+    var cmA=cmScore(ci),cmB=cmScore(docCmpB);
+    var sexA=0,sexB=0;
+    ca.readings.forEach(function(r){if(D.sex[r.date])sexA++});
+    cb.readings.forEach(function(r){if(D.sex[r.date])sexB++});
+    var tsA=ca.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
+    var tsB=cb.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
+    var avgA=tsA.length?(tsA.reduce(function(a,b){return a+b},0)/tsA.length):null;
+    var avgB=tsB.length?(tsB.reduce(function(a,b){return a+b},0)/tsB.length):null;
+    
+    var insights=[],stronger=[],neutral=[];
+    
+    // Length
+    if(ca.length&&cb.length){
+      var ldiff=ca.length-cb.length;
+      if(Math.abs(ldiff)<=2)neutral.push({icon:'✓',k:'Cycle length',v:'Both '+ca.length+'/'+cb.length+'d — consistent'});
+      else if(Math.abs(ldiff)<=5)insights.push({icon:'📏',c:'var(--cobalt)',k:'Cycle length differs',v:lA+' '+ca.length+'d vs '+lB+' '+cb.length+'d. '+Math.abs(ldiff)+'d difference is within normal variation'});
+      else insights.push({icon:'⚠️',c:'var(--gold)',k:'Notable cycle length variation',v:lA+' '+ca.length+'d vs '+lB+' '+cb.length+'d — '+Math.abs(ldiff)+'d difference. If this becomes a pattern, mention to GP'});
+    }
+    
+    // OV
+    if(odA&&odB){
+      var odiff=odA-odB;
+      if(Math.abs(odiff)<=1)neutral.push({icon:'✓',k:'Ovulation timing',v:'Day '+odA+'/'+odB+' — very consistent'});
+      else if(Math.abs(odiff)<=3)insights.push({icon:'🥚',c:'var(--cobalt)',k:'OV timing slightly differs',v:lA+' Day '+odA+', '+lB+' Day '+odB+' — within normal range'});
+      else insights.push({icon:'⏰',c:'var(--gold)',k:'Ovulation timing varies',v:lA+' Day '+odA+' vs '+lB+' Day '+odB+' — '+Math.abs(odiff)+'d gap affects fertile window timing'});
+    }
+    
+    // Luteal
+    if(lpA&&lpB){
+      if(lpA<10||lpB<10){var sC=lpA<10?lA:lB;var sLP=Math.min(lpA,lpB);
+        insights.push({icon:'🚨',c:'var(--rose)',k:'Short luteal phase in '+sC,v:sLP+'d. Below 10 days can indicate luteal phase defect'});
+      }else if(Math.abs(lpA-lpB)<=2)neutral.push({icon:'✓',k:'Luteal phase',v:lpA+'/'+lpB+'d — both healthy'});
+      else insights.push({icon:'📊',c:'var(--cobalt)',k:'Luteal phase variation',v:lpA+'d vs '+lpB+'d. Both still healthy (10+)'});
+    }
+    
+    // Conception
+    if(cpA&&cpB){
+      var cpdiff=cpA.pct-cpB.pct;
+      var bC=cpA.pct>cpB.pct?lA:lB;var bP=Math.max(cpA.pct,cpB.pct);
+      if(Math.abs(cpdiff)<=10)neutral.push({icon:'✓',k:'Conception timing',v:'Both ~'+Math.round((cpA.pct+cpB.pct)/2)+'%'});
+      else stronger.push({icon:'🎯',c:'var(--forest)',k:'Better timing in '+bC,v:bC+' '+bP+'% vs '+(bC===lA?cpB.pct:cpA.pct)+'%. '+(cpdiff>0&&bC===lA?'This cycle':'The other cycle')+' caught the fertile window better'});
+    }
+    
+    // CM
+    if(cmA&&cmB){
+      if(Math.abs(cmA.pct-cmB.pct)<=15)neutral.push({icon:'✓',k:'CM quality',v:'Similar — '+cmA.pct+'%/'+cmB.pct+'%'});
+      else{var bCM=cmA.pct>cmB.pct?lA:lB;
+        stronger.push({icon:'💧',c:'var(--forest)',k:'Better fertile CM in '+bCM,v:Math.max(cmA.pct,cmB.pct)+'% vs '+Math.min(cmA.pct,cmB.pct)+'%'});
+      }
+    }
+    
+    // Temp baseline
+    if(avgA&&avgB){
+      var tdiff=avgA-avgB;
+      if(Math.abs(tdiff)<0.1)neutral.push({icon:'✓',k:'Temperature baseline',v:'Stable — '+avgA.toFixed(2)+'°/'+avgB.toFixed(2)+'°'});
+      else if(Math.abs(tdiff)>=0.2)insights.push({icon:'🌡',c:'var(--gold)',k:'Notable temp shift',v:lA+' '+avgA.toFixed(2)+'° vs '+lB+' '+avgB.toFixed(2)+'°. '+Math.abs(tdiff).toFixed(2)+'° shift could be thyroid, illness, or measurement timing'});
+    }
+    
+    // Sex
+    if(Math.abs(sexA-sexB)>=3){
+      var moreSex=sexA>sexB?lA:lB;
+      insights.push({icon:'💞',c:'var(--cobalt)',k:'Intimacy frequency differs',v:moreSex+' had '+Math.max(sexA,sexB)+'d vs '+Math.min(sexA,sexB)+'d. More frequent = more chances'});
+    }
+    
+    // Pregnancy benchmark
+    if(isExcl(ci)&&!isExcl(docCmpB))stronger.push({icon:'🤰',c:'var(--forest)',k:'This cycle was a pregnancy',v:'Benchmark — what worked then'});
+    if(isExcl(docCmpB)&&!isExcl(ci))stronger.push({icon:'🤰',c:'var(--forest)',k:lB+' was a pregnancy',v:'That\'s your benchmark cycle. Compare timing, CM, and sex frequency closely to see what differed'});
+    
+    // Verdict
+    var verdict='',vCol='var(--cobalt)';
+    if(stronger.length>=2&&insights.length<=1){verdict='Cycles look strong overall';vCol='var(--forest)'}
+    else if(insights.filter(function(i){return i.c==='var(--rose)'}).length>0){verdict='Notable differences worth discussing';vCol='var(--rose)'}
+    else if(insights.filter(function(i){return i.c==='var(--gold)'}).length>=2){verdict='Some inconsistency between cycles';vCol='var(--gold)'}
+    else if(neutral.length>=3){verdict='Your cycles are remarkably consistent';vCol='var(--forest)'}
+    else verdict='Broadly similar with some variation';
+    
+    h+='<div class="section"><div class="card" style="padding:14px 16px;border-left:3px solid '+vCol+'">';
+    h+='<div style="font-size:10px;font-weight:700;color:'+vCol+';text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Comparison Verdict</div>';
+    h+='<div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:10px">'+verdict+'</div>';
+    h+=renderInsights(stronger,'What\'s working','var(--forest)');
+    h+=renderInsights(insights.sort(function(a,b){var p={'var(--rose)':3,'var(--gold)':2,'var(--cobalt)':1};return (p[b.c]||0)-(p[a.c]||0)}),'Worth noting','var(--cobalt)');
+    h+=renderInsights(neutral,'Consistent','var(--txt4)');
+    h+='</div></div>';
+    
+    // Quick stats table
+    h+='<div class="section"><div class="card" style="padding:0;overflow:hidden">';
+    h+='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--cream)"><th style="padding:8px;text-align:left"></th><th style="padding:8px;color:'+PAL[ci%7]+'">'+lA+'</th><th style="padding:8px;color:'+PAL[docCmpB%7]+'">'+lB+'</th></tr></thead><tbody>';
+    function dRow(l,a,b){if(a==null&&b==null)return '';return '<tr style="border-top:1px solid rgba(0,0,0,.05)"><td style="padding:6px 8px;color:var(--txt3)">'+l+'</td><td style="padding:6px 8px;font-weight:700">'+(a==null?'—':a)+'</td><td style="padding:6px 8px;font-weight:700">'+(b==null?'—':b)+'</td></tr>'}
+    h+=dRow('Length',ca.length?ca.length+'d':'ongoing',cb.length?cb.length+'d':null);
+    h+=dRow('Ovulation',odA?'Day '+odA:null,odB?'Day '+odB:null);
+    h+=dRow('Luteal',lpA?lpA+'d':null,lpB?lpB+'d':null);
+    h+=dRow('Conception',cpA?cpA.pct+'%':null,cpB?cpB.pct+'%':null);
+    h+=dRow('CM quality',cmA?cmA.pct+'%':null,cmB?cmB.pct+'%':null);
+    h+=dRow('Intimacy',sexA+'d',sexB+'d');
+    h+=dRow('Avg temp',avgA?avgA.toFixed(2)+'°':null,avgB?avgB.toFixed(2)+'°':null);
+    h+='</tbody></table></div></div>';
+  }
+  
+  // Doctor report buttons at bottom
+  h+='<div class="section"><div class="sec-hdr"><span class="sec-title" style="font-size:11px;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;font-weight:700">Export</div></div>';
+  h+='<div class="card" style="padding:12px 14px">';
+  h+='<button onclick="exportDoctorReport()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--cobalt);color:#fff;margin-bottom:6px">📄 Full Doctor Report</button>';
+  h+='<button onclick="exportDayByDay()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--burnt);color:#fff">📅 Current Cycle Day-by-Day</button>';
+  h+='</div></div>';
+  
+  return h;
+}
+
 function rInsights(){
   var h='';
   var st=cycleStats();
