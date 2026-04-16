@@ -362,11 +362,17 @@ var sWrist=false;
 var sBBTcyc=true;
 var sBBTov=true;
 var docCmpA=-1,docCmpB=-1;
+/* Overlay view options */
+var ovAlign='cycle';  // 'cycle' = align by cycle day (default), 'dpo' = align by DPO (OV=0)
+var ovPerCL=false;    // show per-cycle coverlines vs single avg
+var ovSDband=false;   // show ±1 SD envelope around historical average
+/* Cycle tab: compare-this-cycle-with dropdown */
+var cycCmp=-1;
 /* Collapsed section state — persisted in localStorage */
 var collapsed={};
 try{var _cs=localStorage.getItem('bbt-collapsed');if(_cs)collapsed=JSON.parse(_cs);else{
   // Smart defaults: collapse verbose sections, keep actionable ones open
-  collapsed={'t-bio':true,'t-ovest':true,'t-conception':true,'t-journal':true};
+  collapsed={'t-bio':true,'t-ovest':true,'t-conception':true,'t-journal':true,'doc-narrative':true,'i-ptests':true,'i-photos':true,'i-backup':true};
   localStorage.setItem('bbt-collapsed',JSON.stringify(collapsed));
 }}catch(e){}
 function isCollapsed(id){return !!collapsed[id]}
@@ -398,16 +404,37 @@ function conceptionProb(ci){
     if(D.sex[ds]&&!fw['_'+d2]){fw['_'+d2]=true;if(!c.readings.find(function(r){return r.day===d2})){total++;hits++}}
   }
   if(total===0)return{pct:0,hits:0,total:6,lbl:"No fertile window data"};
+  // Weight each fertile window day: OV-1 is peak, OV day is lower (egg may be gone),
+  // OV-2 is high, OV-3 is moderate, OV-4/5 depend on sperm survival (so CM matters most here)
   var score=0,maxScore=0;
+  var cmBoosts=0;  // how many sex-days had fertile CM
+  var cmPenalties=0;  // how many sex-days had only non-fertile CM logged
   for(var d3=od-5;d3<=od;d3++){
-    var w=d3===od?0.1:d3===od-1?0.3:d3===od-2?0.27:d3===od-3?0.16:d3===od-4?0.1:0.07;
-    maxScore+=w;
+    var baseW=d3===od?0.1:d3===od-1?0.3:d3===od-2?0.27:d3===od-3?0.16:d3===od-4?0.1:0.07;
+    maxScore+=baseW;
     var dt2=new Date(cStart);dt2.setDate(dt2.getDate()+d3-1);var ds2=dt2.toISOString().slice(0,10);
-    if(D.sex[ds2])score+=w;
+    if(D.sex[ds2]){
+      // Check CM on this day to adjust contribution
+      var dayCM=(D.sym[ds2]||[]).filter(function(s){return s.indexOf('CM:')===0});
+      var hasFertile=dayCM.some(function(s){return s==='CM: Egg white'||s==='CM: Watery'});
+      var hasCreamy=dayCM.some(function(s){return s==='CM: Creamy'});
+      var hasDry=dayCM.some(function(s){return s==='CM: Dry'});
+      var multiplier=1;
+      if(hasFertile){multiplier=1.25;cmBoosts++}
+      else if(hasCreamy){multiplier=1.0}
+      else if(hasDry&&d3>=od-3){multiplier=0.6;cmPenalties++}  // dry on peak days is a real penalty
+      // No CM logged — neutral
+      score+=baseW*multiplier;
+    }
   }
-  var pct=Math.round(score/maxScore*100);
+  // Cap at the maxScore (so boosts don't push past 100%)
+  var cappedScore=Math.min(score,maxScore);
+  var pct=Math.round(cappedScore/maxScore*100);
   var lbl=pct>=70?"Excellent timing":pct>=40?"Good timing":pct>=15?"Some chance":"Low — missed fertile window";
-  return{pct:pct,hits:hits,total:6,lbl:lbl}
+  // Add CM context if significant
+  if(cmBoosts>=2&&pct>=40)lbl+=" (fertile CM boosted this)";
+  else if(cmPenalties>=2)lbl+=" (dry CM on peak days held this back)";
+  return{pct:pct,hits:hits,total:6,lbl:lbl,cmBoosts:cmBoosts,cmPenalties:cmPenalties}
 }
 
 function ixScore(ci){
@@ -528,15 +555,96 @@ function detectTriphasic(c,ci){
   var cl=avgCL2();if(!cl)return null;
   var post=c.readings.filter(function(r){return r.day>od&&r.temp!=null});
   if(post.length<8)return null;
-  var early=[],late=[];
-  post.forEach(function(r){var dpo=r.day-od;if(dpo>=1&&dpo<=6)early.push(r.temp);if(dpo>=7&&dpo<=10)late.push(r.temp)});
+  var early=[],late=[],lateReadings=[];
+  post.forEach(function(r){var dpo=r.day-od;if(dpo>=1&&dpo<=6)early.push(r.temp);if(dpo>=7&&dpo<=10){late.push(r.temp);lateReadings.push(r)}});
   if(early.length<3||late.length<2)return null;
   var earlyAvg=early.reduce(function(a,b){return a+b},0)/early.length;
   var lateAvg=late.reduce(function(a,b){return a+b},0)/late.length;
   var shift=lateAvg-earlyAvg;
-  if(shift>=0.1)return{found:true,shift:shift.toFixed(2),earlyAvg:earlyAvg.toFixed(2),lateAvg:lateAvg.toFixed(2)};
-  return{found:false,shift:shift.toFixed(2)}
+  // Find the first late reading that is clearly above the earlyAvg (the "second rise" point)
+  var riseR=null;
+  for(var i=0;i<lateReadings.length;i++){if(lateReadings[i].temp-earlyAvg>=0.1){riseR=lateReadings[i];break}}
+  if(!riseR)riseR=lateReadings[0];
+  var riseDay=riseR?riseR.day:null;
+  var riseDpo=riseDay?(riseDay-od):null;
+  if(shift>=0.1)return{found:true,shift:shift.toFixed(2),earlyAvg:earlyAvg.toFixed(2),lateAvg:lateAvg.toFixed(2),day:riseDay,dpo:riseDpo};
+  return{found:false,shift:shift.toFixed(2),day:riseDay,dpo:riseDpo}
 }
+
+/* Check triphasic history across past completed cycles to contextualize a current triphasic detection */
+function triphasicHistory(excludeCi){
+  var evaluable=0,found=0,foundInPreg=0,pregCycles=0,totalCompleted=0;
+  D.cycles.forEach(function(oc,oi){
+    if(oi===excludeCi||!oc.length)return;
+    totalCompleted++;
+    var oTri=detectTriphasic(oc,oi);
+    if(!oTri)return;
+    evaluable++;
+    var wasPreg=isExcl(oi);
+    if(wasPreg)pregCycles++;
+    if(oTri.found){found++;if(wasPreg)foundInPreg++}
+  });
+  return{evaluable:evaluable,found:found,foundInPreg:foundInPreg,pregCycles:pregCycles,totalCompleted:totalCompleted};
+}
+
+function triphasicHistoryNote(hist){
+  if(hist.evaluable===0&&hist.totalCompleted>0)return ' <em>Personal history check: none of your '+hist.totalCompleted+' past cycles had enough post-OV data to compare (need ≥8 post-OV readings).</em>';
+  if(hist.evaluable>=1){
+    if(hist.found===0)return ' <em>Personal history: no triphasic patterns in your '+hist.evaluable+' past cycle'+(hist.evaluable>1?'s':'')+' with enough data — a stronger signal for you personally.</em>';
+    if(hist.pregCycles===0)return ' <em>Personal history: '+hist.found+' of your '+hist.evaluable+' past cycles showed triphasic-like patterns (no pregnancy outcomes) — so this pattern alone isn\'t a strong pregnancy predictor for you.</em>';
+    if(hist.foundInPreg>0&&hist.foundInPreg===hist.found)return ' <em>Notable: the only other time you showed this pattern was in your pregnancy cycle.</em>';
+    if(hist.foundInPreg>0)return ' <em>Personal history: '+hist.found+' of your '+hist.evaluable+' past cycles showed this pattern, including '+hist.foundInPreg+' pregnancy cycle'+(hist.foundInPreg>1?'s':'')+'.</em>';
+  }
+  return '';
+}
+
+/* Generate a 2-3 sentence narrative for a cycle — used in Cycle tab story card */
+function cycleStory(ci){
+  var c=D.cycles[ci];if(!c)return '';
+  var od=ovDay(c);var eod=effOv(ci);var cl=coverline(c);var len=c.length;
+  var excl=isExcl(ci);
+  var parts=[];
+  // Opener
+  parts.push('Cycle '+(ci+1)+' started '+fd(c.key)+'.');
+  // Ovulation
+  if(eod&&od)parts.push('OV detected Day '+od+' (LH+).');
+  else if(eod)parts.push('OV estimated Day '+eod+' from temp shift.');
+  else if(len&&len>=20)parts.push('No OV confirmed this cycle.');
+  else if(!len)parts.push('Still in progress — OV not yet detected.');
+  // Temp story
+  if(eod){
+    var postT=c.readings.filter(function(r){return r.day>eod&&r.temp!=null}).map(function(r){return r.temp});
+    var preT=c.readings.filter(function(r){return r.day<=eod&&r.day>eod-6&&r.temp!=null}).map(function(r){return r.temp});
+    if(postT.length>=3&&preT.length>=2){
+      var postAvg=postT.reduce(function(a,b){return a+b},0)/postT.length;
+      var preAvg=preT.reduce(function(a,b){return a+b},0)/preT.length;
+      var shift=(postAvg-preAvg).toFixed(2);
+      parts.push('Temp shift +'+shift+'° post-OV.');
+    }
+    // Triphasic status for THIS cycle
+    var cTri=detectTriphasic(c,ci);
+    if(cTri===null)parts.push('Not enough post-OV data for triphasic check.');
+    else if(cTri.found)parts.push('Triphasic pattern (+'+cTri.shift+'° second rise' + (cTri.dpo?' around '+cTri.dpo+' DPO':'') + ').');
+    else parts.push('No triphasic pattern (second rise was only +'+cTri.shift+'°).');
+  }
+  // Outcome
+  if(excl)parts.push('★ Pregnancy cycle.');
+  else if(len&&eod){
+    var lp=len-eod;
+    if(lp<10)parts.push(lp+'d luteal — short.');
+    else if(lp<12)parts.push(lp+'d luteal — borderline.');
+    else parts.push(lp+'d luteal — healthy.');
+  }else if(!len&&eod){
+    var info=cInfo();
+    if(ci===info.ci){
+      var dpo=info.cd-eod;
+      parts.push(dpo+' DPO so far.');
+    }
+  }
+  return parts.join(' ');
+}
+
+
 
 function cmScore(ci){
   var c=D.cycles[ci];var od=effOv(ci)||aod();
@@ -570,8 +678,35 @@ function amILate(info){
   var avgLut=Math.round(luts.reduce(function(a,b){return a+b},0)/luts.length);
   var maxLut=Math.max.apply(null,luts);
   var curLut=info.cd-info.od;
-  var late=curLut>avgLut;var veryLate=curLut>maxLut;
+  // A 2-day buffer — one day past average is noise
+  var late=curLut>avgLut+1;
+  var veryLate=curLut>maxLut;
   return{curLut:curLut,avgLut:avgLut,maxLut:maxLut,late:late,veryLate:veryLate}
+}
+
+/* Returns a map of {symptom: {lutealFreq: 0-1, usualForYou: bool}} based on historical luteal phases.
+   A symptom is "usual for you" if it appeared in >=40% of past luteal phases. */
+function personalSymptomBaseline(excludeCi){
+  var lutalCycles=0;
+  var symLutalCounts={};  // symptom -> count of cycles it appeared in
+  D.cycles.forEach(function(c,i){
+    if(i===excludeCi||isExcl(i))return;
+    var od=ovDay(c);if(!od||!c.length)return;
+    lutalCycles++;
+    var seen={};
+    c.readings.forEach(function(r){
+      if(r.day<=od)return;
+      (D.sym[r.date]||[]).forEach(function(s){if(!seen[s]){seen[s]=true;symLutalCounts[s]=(symLutalCounts[s]||0)+1}});
+      (D.mood[r.date]||[]).forEach(function(m){if(!seen[m]){seen[m]=true;symLutalCounts[m]=(symLutalCounts[m]||0)+1}});
+    });
+  });
+  if(lutalCycles<2)return null;  // need at least 2 prior cycles to establish a baseline
+  var result={};
+  Object.keys(symLutalCounts).forEach(function(s){
+    var freq=symLutalCounts[s]/lutalCycles;
+    result[s]={lutealFreq:freq,usualForYou:freq>=0.4,cycles:symLutalCounts[s],total:lutalCycles};
+  });
+  return result;
 }
 
 function ttcReport(ci){
@@ -709,40 +844,65 @@ function regularityScore(){
   return{score:score,sd:sd.toFixed(1),lbl:lbl,count:lens.length};
 }
 
-/* FIXED: OV probability — count TOTAL post-OV temps above coverline, not just consecutive */
+/* OV probability — combines LH+, triphasic, total-above-coverline, and shift magnitude.
+   Old version treated `consec` as fragile; a single dip below CL broke confirmation.
+   This version weights the overall evidence instead. */
 function ovProb(c,ci){
   var od=effOv(ci);if(!od)return null;
-  // Get pre-OV and post-OV temps for this cycle
   var pre=c.readings.filter(function(r){return r.day<=od&&r.day>=od-6&&r.temp!=null});
   var post=c.readings.filter(function(r){return r.day>od&&r.temp!=null});
   if(!post.length)return{pct:10,lbl:"No post-OV data yet"};
   if(pre.length<2)return{pct:15,lbl:"Not enough pre-OV data to assess shift"};
-  // Calculate pre-OV average (baseline)
+
+  // Signal 1: Was there an LH+ test on or near the ovulation day?
+  var ovR=c.readings.find(function(r){return r.day===od});
+  var hasLHpos=!!(ovR&&ovR.ov);
+  // Also check nearby days for LH+
+  if(!hasLHpos){
+    c.readings.forEach(function(r){if(r.ov&&Math.abs(r.day-od)<=2)hasLHpos=true});
+  }
+
+  // Signal 2: Temp shift magnitude (post-OV avg vs pre-OV avg)
   var preAvg=pre.reduce(function(a,b){return a+b.temp},0)/pre.length;
-  // This cycle's coverline (median of pre-OV + 0.05)
+  var postAvg=post.reduce(function(a,b){return a+b.temp},0)/post.length;
+  var shift=postAvg-preAvg;
+
+  // Signal 3: Coverline and how many post-OV readings are above
   var preSorted=pre.map(function(r){return r.temp}).sort(function(a,b){return a-b});
   var med=preSorted.length%2===0?(preSorted[preSorted.length/2-1]+preSorted[preSorted.length/2])/2:preSorted[Math.floor(preSorted.length/2)];
   var cl=med+0.05;
-  // Count post-OV temps above the shift threshold
-  var above=0,total=post.length,consec=0,brokeConsec=false;
-  var postAvg=post.reduce(function(a,b){return a+b.temp},0)/post.length;
-  var shift=postAvg-preAvg;
+  var above=0,consec=0,brokeConsec=false;
   for(var i=0;i<post.length;i++){
     if(post[i].temp>cl){above++;if(!brokeConsec)consec++}
     else{brokeConsec=true}
   }
+  var total=post.length;
   var abovePct=total>0?Math.round(above/total*100):0;
-  // Scoring: combine shift magnitude + consistency
+
+  // Signal 4: Triphasic (a strong post-OV pattern confirming progesterone is holding)
+  var tri=detectTriphasic(c,ci);
+  var hasTri=!!(tri&&tri.found);
+
   var shiftStr=shift>=0?"+"+shift.toFixed(2):shift.toFixed(2);
-  if(total<2)return{pct:25,lbl:"Only "+total+" reading — need 2-3 more days to confirm (shift "+shiftStr+"°)"};
-  if(shift>=0.2&&consec>=3&&abovePct>=70)return{pct:95,lbl:"Confirmed — clear "+shiftStr+"° shift, "+consec+" consecutive above baseline"};
-  if(shift>=0.15&&consec>=3)return{pct:90,lbl:"Confirmed — "+shiftStr+"° shift sustained over "+consec+" days"};
-  if(shift>=0.2&&consec>=2)return{pct:85,lbl:"Very likely — "+shiftStr+"° shift, "+above+"/"+total+" above baseline"};
-  if(shift>=0.15&&consec>=2)return{pct:80,lbl:"Likely — "+shiftStr+"° shift, building confirmation"};
-  if(shift>=0.1&&above>=2)return{pct:70,lbl:"Probable — "+shiftStr+"° shift, "+above+"/"+total+" readings up"};
-  if(shift>=0.1&&consec>=1)return{pct:55,lbl:"Emerging — "+shiftStr+"° shift starting, need more data"};
-  if(shift>=0.05)return{pct:40,lbl:"Possible — small "+shiftStr+"° shift, watching pattern"};
-  if(shift>0)return{pct:25,lbl:"Minimal shift ("+shiftStr+"°) — may be too early or no clear rise yet"};
+
+  // Very early — not enough data to judge
+  if(total<2)return{pct:hasLHpos?50:25,lbl:hasLHpos?"LH+ detected — waiting for temp shift to confirm ("+total+" post-OV reading)":"Only "+total+" reading — need 2-3 more days (shift "+shiftStr+"°)"};
+
+  // STRONG CONFIRMATION: LH+ AND solid temp evidence
+  if(hasLHpos&&shift>=0.2&&abovePct>=70)return{pct:99,lbl:"Fully confirmed — LH+, "+shiftStr+"° shift, "+above+"/"+total+" above coverline"+(hasTri?", triphasic":"")};
+  if(hasLHpos&&shift>=0.15&&abovePct>=65)return{pct:97,lbl:"Confirmed — LH+ plus "+shiftStr+"° shift, "+abovePct+"% above coverline"+(hasTri?", triphasic":"")};
+  if(hasLHpos&&shift>=0.1&&abovePct>=50)return{pct:92,lbl:"Confirmed — LH+ and temp shift ("+shiftStr+"°, "+abovePct+"% above CL)"};
+  if(hasLHpos&&abovePct>=50)return{pct:85,lbl:"Likely confirmed — LH+ detected, temps holding ("+abovePct+"% above CL)"};
+  if(hasLHpos)return{pct:70,lbl:"LH+ detected but temp shift unclear ("+shiftStr+"°)"};
+
+  // No LH+ logged — rely on temp evidence alone
+  if(shift>=0.2&&abovePct>=75)return{pct:90,lbl:"Confirmed by temps — "+shiftStr+"° shift, "+above+"/"+total+" above coverline"+(hasTri?", triphasic":"")};
+  if(shift>=0.15&&abovePct>=65)return{pct:82,lbl:"Likely — "+shiftStr+"° shift, "+abovePct+"% above coverline"};
+  if(shift>=0.15&&consec>=3)return{pct:78,lbl:"Likely — "+shiftStr+"° shift sustained over "+consec+" days"};
+  if(shift>=0.1&&abovePct>=60)return{pct:65,lbl:"Probable — "+shiftStr+"° shift, "+above+"/"+total+" readings up"};
+  if(shift>=0.1&&consec>=2)return{pct:55,lbl:"Emerging — "+shiftStr+"° shift building"};
+  if(shift>=0.05)return{pct:35,lbl:"Possible — small "+shiftStr+"° shift, watching pattern"};
+  if(shift>0)return{pct:20,lbl:"Minimal shift ("+shiftStr+"°) — may be too early or no clear rise yet"};
   return{pct:10,lbl:"No temp shift detected — temps flat or dropping"};
 }
 
@@ -1129,7 +1289,9 @@ function rToday(info){  var h='';
 
   // Triphasic detection
   if(info.ho){var tri=detectTriphasic(info.c,info.ci);
-    if(tri&&tri.found)h+='<div class="section"><div class="notif" style="background:var(--plum-bg);color:var(--plum)"><span class="notif-icon">📈</span>Possible triphasic pattern detected — second temp rise of +'+tri.shift+'° around 7-10 DPO. This *can* be an early pregnancy sign (but isn\'t always).</div></div>'}
+    if(tri&&tri.found){var triWh=tri.dpo?'around '+tri.dpo+' DPO':'around 7–10 DPO';
+      var triH=triphasicHistory(info.ci);var triHNote=triphasicHistoryNote(triH);
+      h+='<div class="section"><div class="notif" style="background:var(--plum-bg);color:var(--plum);display:block;padding:12px 14px"><div><span class="notif-icon">📈</span>Possible triphasic pattern detected — second temp rise of +'+tri.shift+'° '+triWh+'. This *can* be an early pregnancy sign (but isn\'t always).</div>'+(triHNote?'<div style="font-size:11px;margin-top:6px;color:var(--plum);opacity:.85">'+triHNote.replace(/<\/?em>/g,'')+'</div>':'')+'</div></div>'}}
   // Am I late?
   if(info.ho){var ail=amILate(info);
     if(ail&&ail.late){var ailCol=ail.veryLate?"var(--plum)":"var(--gold)";
@@ -1173,38 +1335,75 @@ function rToday(info){  var h='';
       if(aboveCL>=dpo3-1)forP.push({w:2,t:'Temps sustained above coverline for '+aboveCL+' days'});
       else if(aboveCL<dpo3-3)forN.push({w:1,t:'Several dips below coverline post-OV'});
     }
-    // Triphasic
+    // Triphasic — use actual detected DPO rather than hardcoded range
     var tri2=detectTriphasic(info.c,info.ci);
-    if(tri2&&tri2.found)forP.push({w:2,t:'Triphasic pattern detected — second rise of +'+tri2.shift+'°'});
+    if(tri2&&tri2.found){
+      var triLabel=tri2.dpo?'Triphasic pattern detected — second rise of +'+tri2.shift+'° around '+tri2.dpo+' DPO':'Triphasic pattern detected — second rise of +'+tri2.shift+'°';
+      forP.push({w:2,t:triLabel});
+    }
     // Late luteal
     var ail2=amILate(info);
     if(ail2&&ail2.veryLate)forP.push({w:3,t:'Luteal phase longer than any previous cycle ('+ail2.curLut+'d vs max '+ail2.maxLut+'d)'});
-    else if(ail2&&ail2.late)forP.push({w:1,t:'Slightly longer luteal than average'});
-    // Symptoms
+    else if(ail2&&ail2.late)forP.push({w:1,t:'Running longer than average luteal ('+ail2.curLut+'d vs avg '+ail2.avgLut+'d)'});
+    // Symptoms — weighted by personal baseline. If a symptom shows up in most of her past luteal
+    // phases, it's expected and shouldn't be taken as a pregnancy signal. If it's unusual for her,
+    // it's more meaningful.
     var todaySy2=D.sym[td()]||[];var todayMo2=D.mood[td()]||[];
-    if(todaySy2.indexOf('Spotting')>-1&&dpo3>=6&&dpo3<=10)forP.push({w:1,t:'Spotting in implantation window ('+dpo3+' DPO)'});
-    if(todaySy2.indexOf('Breast tenderness')>-1)forP.push({w:1,t:'Breast tenderness — could be progesterone OR hCG'});
-    if(todaySy2.indexOf('Nausea')>-1&&dpo3>=10)forP.push({w:2,t:'Nausea at '+dpo3+' DPO — unusual for just progesterone'});
-    if(todaySy2.indexOf('Fatigue')>-1&&dpo3>=8)forP.push({w:1,t:'Fatigue — common in both but hCG intensifies it'});
+    var symBase=personalSymptomBaseline(info.ci);
+    function symWeight(s,baseW){
+      if(!symBase||!symBase[s])return baseW;  // no baseline data — use default
+      if(symBase[s].usualForYou)return 0;  // usual for her — exclude entirely
+      if(symBase[s].lutealFreq<=0.2)return baseW+1;  // rare for her — boost
+      return baseW;
+    }
+    function symNote(s){
+      if(!symBase||!symBase[s])return '';
+      if(symBase[s].usualForYou)return ' (usual for you — '+symBase[s].cycles+'/'+symBase[s].total+' cycles)';
+      if(symBase[s].lutealFreq<=0.2)return ' (unusual for you — only '+symBase[s].cycles+'/'+symBase[s].total+' cycles)';
+      return '';
+    }
+    if(todaySy2.indexOf('Spotting')>-1&&dpo3>=6&&dpo3<=10){var w=symWeight('Spotting',1);if(w>0)forP.push({w:w,t:'Spotting in implantation window ('+dpo3+' DPO)'+symNote('Spotting')})}
+    if(todaySy2.indexOf('Breast tenderness')>-1){var w=symWeight('Breast tenderness',1);if(w>0)forP.push({w:w,t:'Breast tenderness — could be progesterone OR hCG'+symNote('Breast tenderness')})}
+    if(todaySy2.indexOf('Nausea')>-1&&dpo3>=10){var w=symWeight('Nausea',2);if(w>0)forP.push({w:w,t:'Nausea at '+dpo3+' DPO — unusual for just progesterone'+symNote('Nausea')})}
+    if(todaySy2.indexOf('Fatigue')>-1&&dpo3>=8){var w=symWeight('Fatigue',1);if(w>0)forP.push({w:w,t:'Fatigue — common in both but hCG intensifies it'+symNote('Fatigue')})}
     if(todaySy2.indexOf('Cramps')>-1&&dpo3>=12)forN.push({w:1,t:'Cramps at '+dpo3+' DPO — could be period approaching'});
     // CM
     var ewcm=todaySy2.some(function(s){return s==='CM: Egg white'||s==='CM: Watery'});
     if(ewcm&&dpo3>=8)forP.push({w:1,t:'Return of fertile-type CM — some report this before positive'});
-    // Pregnancy tests
+    // Pregnancy tests — scale negative-test weight by DPO (negative at 14 DPO is stronger than at 12)
     var recentTests=D.ptests.filter(function(p){var td3=db(ad(info.c.key,info.od-1),p.date);return td3>=0&&td3<=20});
     recentTests.forEach(function(pt){
       if(pt.result==='positive')forP.push({w:5,t:'Positive pregnancy test on '+fd(pt.date)+'!'});
       else if(pt.result==='faint positive')forP.push({w:4,t:'Faint positive on '+fd(pt.date)+' — test again in 48h'});
-      else if(pt.result==='negative'&&dpo3>=12)forN.push({w:2,t:'Negative test at '+dpo3+' DPO'});
+      else if(pt.result==='negative'){
+        var testDpo=pt.dpo||dpo3;
+        if(testDpo>=14)forN.push({w:3,t:'Negative test at '+testDpo+' DPO — hCG should be detectable by now'});
+        else if(testDpo>=12)forN.push({w:2,t:'Negative test at '+testDpo+' DPO'});
+        else if(testDpo>=10)forN.push({w:1,t:'Negative test at '+testDpo+' DPO — could be too early, retest in 2 days'});
+      }
     });
     // Score
     var pScore=forP.reduce(function(a,b){return a+b.w},0);
     var nScore=forN.reduce(function(a,b){return a+b.w},0);
     var total=pScore+nScore||1;
     var pPct=Math.round(pScore/total*100);
-    var verdict=pPct>=70?{t:'Looking promising',c:'var(--forest)'}:pPct>=45?{t:'Could go either way',c:'var(--gold)'}:pPct>=20?{t:'Leaning towards period',c:'var(--burnt)'}:{t:'Period likely',c:'var(--rose)'};
+    // Cap confidence by DPO — hCG is barely detectable before 8 DPO even if pregnant
+    var maxConfidence=100;
+    if(dpo3<=7)maxConfidence=55;  // too early for meaningful symptoms
+    else if(dpo3<=9)maxConfidence=70;  // symptoms can start but still ambiguous
+    else if(dpo3<=11)maxConfidence=85;  // implantation done for most
+    // Positive test overrides — actual hCG trumps pattern ceiling
+    if(forP.some(function(f){return f.w>=4}))maxConfidence=100;
+    pPct=Math.min(pPct,maxConfidence);
+    var verdict;
     if(forP.some(function(f){return f.w>=4}))verdict={t:'Strong positive signal!',c:'var(--forest)'};
+    else if(dpo3<=8&&pPct>=50)verdict={t:'Early signs — too soon to know',c:'var(--gold)'};
+    else if(pPct>=70)verdict={t:'Looking promising',c:'var(--forest)'};
+    else if(pPct>=45)verdict={t:'Could go either way',c:'var(--gold)'};
+    else if(pPct>=20)verdict={t:'Leaning towards period',c:'var(--burnt)'};
+    else verdict={t:'Period likely',c:'var(--rose)'};
     h+='<div style="text-align:center;margin-bottom:12px"><div style="font-size:18px;font-weight:800;color:'+verdict.c+'">'+verdict.t+'</div>';
+    h+='<div style="font-size:10px;color:var(--txt4);margin-top:2px">'+dpo3+' DPO'+(dpo3<=8?' · symptoms are unreliable this early':'')+'</div>';
     h+='<div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:8px;background:var(--cream3)">';
     if(pPct>0)h+='<div style="width:'+pPct+'%;background:var(--forest);border-radius:4px 0 0 4px"></div>';
     if(100-pPct>0)h+='<div style="width:'+(100-pPct)+'%;background:var(--rose);border-radius:0 4px 4px 0"></div>';
@@ -1445,16 +1644,36 @@ function saveOPKPh(inp){var f=inp.files[0];if(!f)return;var rd=new FileReader();
 
 /* OVERLAY — BIGGER chart */
 function rOverlay(){
-  var h='<div class="pills"><button class="pill'+(cVis.every(function(v){return v})?' on':'')+'" onclick="tAll()">All</button>';
-  D.cycles.forEach(function(c,i){h+='<button class="pill'+(cVis[i]?' clr':' dim')+'" style="'+(cVis[i]?'background:'+PAL[i%7]+';color:#fff':'')+'" onclick="tCyc('+i+')">'+c.label+'</button>'});
-  h+='</div><div class="filters"><button class="flt flt-ov'+(sOv?' on':'')+'" onclick="sOv=!sOv;render()">Ovulation</button>';
+  var h='';
+  // Row 1: cycle pills
+  h+='<div class="pills"><button class="pill'+(cVis.every(function(v){return v})?' on':'')+'" onclick="tAll()">All</button>';
+  D.cycles.forEach(function(c,i){
+    var ex=isExcl(i);
+    var star=ex?' ★':'';
+    h+='<button class="pill'+(cVis[i]?' clr':' dim')+'" style="'+(cVis[i]?'background:'+(ex?'#D4A24A':PAL[i%7])+';color:#fff;'+(ex?'box-shadow:0 0 0 2px rgba(212,162,74,.35)':''):'')+'" onclick="tCyc('+i+')">'+c.label+star+'</button>';
+  });
+  h+='</div>';
+  // Row 2: alignment toggle (NEW) — segmented control
+  h+='<div style="display:flex;align-items:center;gap:10px;padding:2px 16px 6px;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px">';
+  h+='<span>Align by:</span>';
+  h+='<div style="display:inline-flex;background:var(--cream);border-radius:10px;padding:2px">';
+  h+='<button onclick="ovAlign=\'cycle\';render()" style="padding:4px 10px;border-radius:8px;font-size:10px;font-weight:700;background:'+(ovAlign==='cycle'?'var(--cobalt);color:#fff':'transparent;color:var(--txt3)')+';border:none;cursor:pointer">Cycle day</button>';
+  h+='<button onclick="ovAlign=\'dpo\';render()" style="padding:4px 10px;border-radius:8px;font-size:10px;font-weight:700;background:'+(ovAlign==='dpo'?'var(--cobalt);color:#fff':'transparent;color:var(--txt3)')+';border:none;cursor:pointer">DPO (OV=0)</button>';
+  h+='</div></div>';
+  // Row 3: event filter chips
+  h+='<div class="filters"><button class="flt flt-ov'+(sOv?' on':'')+'" onclick="sOv=!sOv;render()">Ovulation</button>';
   h+='<button class="flt flt-per'+(sPer?' on':'')+'" onclick="sPer=!sPer;render()">Period</button>';
   h+='<button class="flt flt-sex'+(sSex?' on':'')+'" onclick="sSex=!sSex;render()">Intimacy</button>';
   h+='<button class="flt flt-cm'+(sCM?' on':'')+'" onclick="sCM=!sCM;render()">CM</button></div>';
-  h+='<div class="sm-tg"><span>BBT</span><div class="tg'+(sBBTov!==false?' on':'')+'" onclick="sBBTov=sBBTov===false?true:false;render()" style="width:36px;height:20px"></div></div>';
-  h+='<div class="sm-tg"><span>Smoothing</span><div class="tg'+(smooth?' on':'')+'" onclick="smooth=!smooth;render()" style="width:36px;height:20px"></div></div>';
-  h+='<div class="sm-tg"><span>Wrist temp</span><div class="tg'+(sWrist?' on':'')+'" onclick="sWrist=!sWrist;render()" style="width:36px;height:20px"></div></div>';
-  /* BIGGER overlay canvas: 320px instead of 220px */
+  // Row 4: view option toggles grouped
+  h+='<div style="display:flex;flex-wrap:wrap;gap:10px;padding:4px 16px 8px">';
+  h+='<div class="sm-tg" style="margin:0;padding:0"><span>BBT</span><div class="tg'+(sBBTov!==false?' on':'')+'" onclick="sBBTov=sBBTov===false?true:false;render()" style="width:36px;height:20px"></div></div>';
+  h+='<div class="sm-tg" style="margin:0;padding:0"><span>Smoothing</span><div class="tg'+(smooth?' on':'')+'" onclick="smooth=!smooth;render()" style="width:36px;height:20px"></div></div>';
+  h+='<div class="sm-tg" style="margin:0;padding:0"><span>Wrist</span><div class="tg'+(sWrist?' on':'')+'" onclick="sWrist=!sWrist;render()" style="width:36px;height:20px"></div></div>';
+  h+='<div class="sm-tg" style="margin:0;padding:0"><span>Per-cycle CL</span><div class="tg'+(ovPerCL?' on':'')+'" onclick="ovPerCL=!ovPerCL;render()" style="width:36px;height:20px"></div></div>';
+  h+='<div class="sm-tg" style="margin:0;padding:0"><span>±1 SD band</span><div class="tg'+(ovSDband?' on':'')+'" onclick="ovSDband=!ovSDband;render()" style="width:36px;height:20px"></div></div>';
+  h+='</div>';
+  /* Chart canvas */
   h+='<div class="section"><div class="cw" style="position:relative"><canvas id="oC" style="height:320px;touch-action:none"></canvas>';
   if(zm.s>1)h+='<button onclick="zmR()" style="position:absolute;top:8px;right:8px;background:var(--card);border-radius:8px;padding:4px 10px;font-size:10px;font-weight:700;color:var(--cobalt);box-shadow:var(--sh)">Reset</button>';
   h+='</div>';if(zm.s<=1)h+='<div style="text-align:center;padding:4px 0;font-size:10px;color:var(--txt4)">Pinch to zoom · drag to pan</div>';
@@ -1466,6 +1685,7 @@ function rOverlay(){
   h+='<span class="legend-item"><span class="legend-dot" style="background:var(--rose)"></span>Period</span>';
   h+='<span class="legend-item"><span class="legend-sq" style="background:var(--cobalt)"></span>Intimacy</span>';
   h+='<span class="legend-item" style="border-top:2px dashed var(--cobalt);padding-top:0;height:10px;width:16px"></span><span style="font-size:10px;font-weight:600;color:var(--txt3)">Coverline</span>';
+  h+='<span class="legend-item"><span style="width:9px;height:9px;border-radius:2px;background:#D4A24A"></span><span style="font-size:10px;font-weight:600;color:var(--txt3)">★ Preg cycle</span></span>';
   if(sWrist)h+='<span class="legend-item" style="border-top:2px dashed var(--plum);padding-top:0;height:10px;width:16px;opacity:.5"></span><span style="font-size:10px;font-weight:600;color:var(--txt3)">Wrist</span>';
   h+='</div>';
   return h;
@@ -1479,30 +1699,186 @@ function attZm(){var cv=document.getElementById('oC');if(!cv)return;
 
 function dOv(){
   var cv=document.getElementById('oC');if(!cv)return;var _hits=[];var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight;ctx.save();ctx.translate(zm.ox,zm.oy);ctx.scale(zm.s,zm.s);
-  var p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b,mn=35.8,mx=37.1;
-  var mxD=1;D.cycles.forEach(function(c,ci){if(!cVis[ci])return;c.readings.forEach(function(r){if(r.day>mxD)mxD=r.day})});if(mxD<10)mxD=10;
-  function x(d){return p.l+(d-1)/(mxD-1)*gW}function y(t){return p.t+(1-(t-mn)/(mx-mn))*gH}
+  var p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b;
+
+  // Gather all visible temps to auto-range Y-axis
+  var allTemps=[];
+  D.cycles.forEach(function(c,ci){if(!cVis[ci])return;c.readings.forEach(function(r){if(r.temp!=null)allTemps.push(r.temp);if(sWrist&&D.wrist&&D.wrist[r.date])allTemps.push(D.wrist[r.date])})});
+  var mn=35.8,mx=37.1;
+  if(allTemps.length){
+    var tMin=Math.min.apply(null,allTemps),tMax=Math.max.apply(null,allTemps);
+    mn=Math.floor((tMin-0.1)*10)/10;
+    mx=Math.ceil((tMax+0.1)*10)/10;
+    if(mx-mn<0.6){var mid=(mx+mn)/2;mn=mid-0.35;mx=mid+0.35}
+  }
+
+  // Figure out X-axis domain — differs by alignment
+  var xMin,xMax;
+  if(ovAlign==='dpo'){
+    xMin=-14;xMax=16;
+    D.cycles.forEach(function(c,ci){
+      if(!cVis[ci])return;
+      var eov=effOv(ci);if(!eov)return;
+      c.readings.forEach(function(r){if(r.temp==null)return;var d=r.day-eov;if(d<xMin)xMin=d;if(d>xMax)xMax=d});
+    });
+  }else{
+    xMin=1;xMax=10;
+    D.cycles.forEach(function(c,ci){if(!cVis[ci])return;c.readings.forEach(function(r){if(r.day>xMax)xMax=r.day})});
+  }
+  var xRange=xMax-xMin;if(xRange<1)xRange=1;
+
+  function x(cycleDay,cycleIdx){
+    if(ovAlign==='dpo'){
+      var eov=effOv(cycleIdx);
+      if(!eov)return null;  // can't place on DPO axis without OV
+      var d=cycleDay-eov;
+      return p.l+(d-xMin)/xRange*gW;
+    }
+    return p.l+(cycleDay-xMin)/xRange*gW;
+  }
+  function y(t){return p.t+(1-(t-mn)/(mx-mn))*gH}
+
+  // Gridlines + Y labels
   ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;
-  for(var t=35.8;t<=37.1;t=Math.round((t+.1)*10)/10){ctx.beginPath();ctx.moveTo(p.l,y(t));ctx.lineTo(W-p.r,y(t));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t.toFixed(1),p.l-4,y(t)+3)}
-  for(var d=5;d<=mxD;d+=5){ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="center";ctx.fillText(d,x(d),H-p.b+14)}
+  var tStart=Math.ceil(mn*10)/10;
+  for(var t=tStart;t<=mx;t=Math.round((t+.1)*10)/10){
+    ctx.beginPath();ctx.moveTo(p.l,y(t));ctx.lineTo(W-p.r,y(t));ctx.stroke();
+    ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t.toFixed(1),p.l-4,y(t)+3);
+  }
+  // X labels
+  ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="center";
+  if(ovAlign==='dpo'){
+    // show -10, -5, 0 (OV), 5, 10, 15
+    var marks=[-10,-5,0,5,10,15];
+    marks.forEach(function(m){
+      if(m<xMin||m>xMax)return;
+      var px=p.l+(m-xMin)/xRange*gW;
+      if(m===0){
+        // OV vertical marker
+        ctx.save();ctx.strokeStyle="#9A7B1E";ctx.setLineDash([2,3]);ctx.lineWidth=1;ctx.globalAlpha=.5;
+        ctx.beginPath();ctx.moveTo(px,p.t);ctx.lineTo(px,H-p.b);ctx.stroke();ctx.restore();
+        ctx.fillStyle="#9A7B1E";ctx.font="bold 9px -apple-system";ctx.fillText("OV",px,H-p.b+14);
+      }else{
+        ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";
+        ctx.fillText((m>0?'+'+m:m)+' DPO',px,H-p.b+14);
+      }
+    });
+  }else{
+    for(var d=5;d<=xMax;d+=5){
+      var px2=p.l+(d-xMin)/xRange*gW;
+      ctx.fillText(d,px2,H-p.b+14);
+    }
+  }
+
+  // Historical average line (aligned to current mode)
   var at=ats();var ak=Object.keys(at).map(Number).sort(function(a,b){return a-b});
-  if(ak.length>1){ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle="#B8ADA4";ctx.lineWidth=1.5;ctx.beginPath();ak.forEach(function(d,i){i===0?ctx.moveTo(x(d),y(at[d])):ctx.lineTo(x(d),y(at[d]))});ctx.stroke();ctx.restore()}
-  if(sBBTov!==false){D.cycles.forEach(function(c,ci){if(!cVis[ci])return;var col=PAL[ci%7];ctx.strokeStyle=col;ctx.lineWidth=2;ctx.globalAlpha=.85;ctx.setLineDash([]);ctx.beginPath();var st=false;c.readings.forEach(function(r){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);st?ctx.lineTo(px,py):ctx.moveTo(px,py);st=true});ctx.stroke();
-    if(smooth&&c.readings.length>2){var sm=smooth3(c.readings);ctx.strokeStyle=col;ctx.lineWidth=3;ctx.globalAlpha=.5;ctx.setLineDash([]);ctx.beginPath();sm.forEach(function(r,i){var px=x(r.day),py=y(r.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();ctx.globalAlpha=.85}
-    var eov=effOv(ci);
-    c.readings.forEach(function(r){var px=x(r.day),py=y(r.temp);
-      // Store hit region for tap
-      _hits.push({x:px*zm.s+zm.ox,y:py*zm.s+zm.oy,day:r.day,date:r.date,temp:r.temp,cycle:'C'+(ci+1)+' · '+c.label,ov:eov&&r.day===eov,lh:!!r.ov,flow:r.flow,sex:!!D.sex[r.date],dpo:eov&&r.day>eov?(r.day-eov):null});
-      // LH+ marker (positive OPK test)
-      if(r.ov&&sOv){ctx.globalAlpha=1;ctx.fillStyle="#9A7B1E";ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 6px sans-serif";ctx.textAlign="center";ctx.fillText("+",px,py+2)}
-      // Estimated actual OV day (from effOv)
-      if(eov&&r.day===eov&&!r.ov&&sOv){ctx.globalAlpha=1;ctx.fillStyle="#9A7B1E";ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}
-      if(r.flow&&sPer){ctx.globalAlpha=1;ctx.fillStyle="#A84455";ctx.beginPath();ctx.arc(px,py+10,3,0,Math.PI*2);ctx.fill()}if(D.sex[r.date]&&sSex){ctx.globalAlpha=.7;ctx.fillStyle="#2B5C8A";ctx.save();ctx.translate(px,H-p.b-8);ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore()}if(sCM){(D.sym[r.date]||[]).forEach(function(s){if(s.indexOf("CM:")===0){ctx.globalAlpha=.6;ctx.fillStyle=s.indexOf("Egg")>-1?"#9A7B1E":s.indexOf("Wat")>-1?"#2B5C8A":"#8A7D74";ctx.beginPath();ctx.arc(px,p.t+6,3,0,Math.PI*2);ctx.fill()}})}
-    var myD=D.myOv&&D.myOv[ci];if(myD&&r.day==myD&&!r.ov&&sOv){ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}
-    });ctx.globalAlpha=1})};
+  if(ak.length>1&&ovAlign==='cycle'){
+    ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle="#B8ADA4";ctx.lineWidth=1.5;
+    ctx.beginPath();
+    var started=false;
+    ak.forEach(function(d){
+      var px=p.l+(d-xMin)/xRange*gW;
+      if(!started){ctx.moveTo(px,y(at[d]));started=true}else ctx.lineTo(px,y(at[d]))
+    });
+    ctx.stroke();
+    // SD band (new)
+    if(ovSDband){
+      var vr=atVar();
+      ctx.setLineDash([]);ctx.fillStyle="rgba(184,173,164,.18)";
+      ctx.beginPath();
+      var first=true;
+      ak.forEach(function(d){var px=p.l+(d-xMin)/xRange*gW;var sd=vr[d]||0.1;var py=y(at[d]+sd);if(first){ctx.moveTo(px,py);first=false}else ctx.lineTo(px,py)});
+      for(var i=ak.length-1;i>=0;i--){var d=ak[i];var px=p.l+(d-xMin)/xRange*gW;var sd=vr[d]||0.1;ctx.lineTo(px,y(at[d]-sd))}
+      ctx.closePath();ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Per-cycle BBT lines
+  if(sBBTov!==false){
+    D.cycles.forEach(function(c,ci){
+      if(!cVis[ci])return;
+      var ex=isExcl(ci);
+      var col=ex?'#D4A24A':PAL[ci%7];
+      var lineW=ex?3:2;
+      ctx.strokeStyle=col;ctx.lineWidth=lineW;ctx.globalAlpha=ex?1:.85;ctx.setLineDash([]);
+      ctx.beginPath();
+      var st=false;
+      c.readings.forEach(function(r){
+        if(r.temp==null)return;
+        var px=x(r.day,ci);if(px==null)return;
+        var py=y(r.temp);
+        if(!st){ctx.moveTo(px,py);st=true}else ctx.lineTo(px,py);
+      });
+      ctx.stroke();
+      if(smooth&&c.readings.length>2){
+        var sm=smooth3(c.readings);
+        ctx.strokeStyle=col;ctx.lineWidth=lineW+1;ctx.globalAlpha=.5;ctx.setLineDash([]);
+        ctx.beginPath();
+        var st2=false;
+        sm.forEach(function(r){
+          var px=x(r.day,ci);if(px==null)return;
+          var py=y(r.temp);
+          if(!st2){ctx.moveTo(px,py);st2=true}else ctx.lineTo(px,py);
+        });
+        ctx.stroke();
+        ctx.globalAlpha=ex?1:.85;
+      }
+      var eov=effOv(ci);
+      c.readings.forEach(function(r){
+        var px=x(r.day,ci);if(px==null)return;
+        var py=y(r.temp!=null?r.temp:(mn+mx)/2);
+        // Store hit region for tap
+        if(r.temp!=null)_hits.push({x:px*zm.s+zm.ox,y:py*zm.s+zm.oy,day:r.day,date:r.date,temp:r.temp,cycle:'C'+(ci+1)+' · '+c.label+(ex?' ★':''),ov:eov&&r.day===eov,lh:!!r.ov,flow:r.flow,sex:!!D.sex[r.date],dpo:eov&&r.day>eov?(r.day-eov):null});
+        if(r.temp==null)return;
+        // LH+ marker
+        if(r.ov&&sOv){ctx.globalAlpha=1;ctx.fillStyle="#9A7B1E";ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 6px sans-serif";ctx.textAlign="center";ctx.fillText("+",px,py+2)}
+        // Estimated OV day
+        if(eov&&r.day===eov&&!r.ov&&sOv){ctx.globalAlpha=1;ctx.fillStyle="#9A7B1E";ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}
+        if(r.flow&&sPer){ctx.globalAlpha=1;ctx.fillStyle="#A84455";ctx.beginPath();ctx.arc(px,py+10,3,0,Math.PI*2);ctx.fill()}
+        if(D.sex[r.date]&&sSex){ctx.globalAlpha=.7;ctx.fillStyle="#2B5C8A";ctx.save();ctx.translate(px,H-p.b-8);ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore()}
+        if(sCM){(D.sym[r.date]||[]).forEach(function(s){if(s.indexOf("CM:")===0){ctx.globalAlpha=.6;ctx.fillStyle=s.indexOf("Egg")>-1?"#9A7B1E":s.indexOf("Wat")>-1?"#2B5C8A":"#8A7D74";ctx.beginPath();ctx.arc(px,p.t+6,3,0,Math.PI*2);ctx.fill()}})}
+        var myD=D.myOv&&D.myOv[ci];if(myD&&r.day==myD&&!r.ov&&sOv){ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}
+      });
+      ctx.globalAlpha=1;
+    });
+  }
+
   // Wrist temp lines on overlay
-  if(sWrist){D.cycles.forEach(function(c,ci){if(!cVis[ci])return;var col=PAL[ci%7];var wPts=[];c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){var wt=D.wrist[r.date];if(wt>=mn&&wt<=mx)wPts.push({day:r.day,temp:wt})}});if(wPts.length>1){ctx.save();ctx.setLineDash([3,3]);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.globalAlpha=.4;ctx.beginPath();wPts.forEach(function(w,i){var px=x(w.day),py=y(w.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();ctx.restore()}})}
-  var acl3=avgCL2();if(acl3){ctx.save();ctx.setLineDash([6,4]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1.5;ctx.globalAlpha=.55;ctx.beginPath();ctx.moveTo(p.l,y(acl3));ctx.lineTo(W-p.r,y(acl3));ctx.stroke();ctx.restore();ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.font="bold 9px -apple-system";ctx.textAlign="right";ctx.fillText("CL "+acl3.toFixed(2),W-p.r-4,y(acl3)-4)}
+  if(sWrist){
+    D.cycles.forEach(function(c,ci){
+      if(!cVis[ci])return;
+      var ex=isExcl(ci);var col=ex?'#D4A24A':PAL[ci%7];
+      var wPts=[];
+      c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){var wt=D.wrist[r.date];if(wt>=mn&&wt<=mx){var px=x(r.day,ci);if(px!=null)wPts.push({px:px,temp:wt})}}});
+      if(wPts.length>1){
+        ctx.save();ctx.setLineDash([3,3]);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.globalAlpha=.4;
+        ctx.beginPath();
+        wPts.forEach(function(w,i){var py=y(w.temp);i===0?ctx.moveTo(w.px,py):ctx.lineTo(w.px,py)});
+        ctx.stroke();ctx.restore();
+      }
+    });
+  }
+
+  // Coverlines — either per-cycle or single avg
+  if(ovPerCL){
+    D.cycles.forEach(function(c,ci){
+      if(!cVis[ci])return;
+      var cl=coverline(c);if(!cl||cl<mn||cl>mx)return;
+      var ex=isExcl(ci);var col=ex?'#D4A24A':PAL[ci%7];
+      ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle=col;ctx.lineWidth=1.2;ctx.globalAlpha=.5;
+      ctx.beginPath();ctx.moveTo(p.l,y(cl));ctx.lineTo(W-p.r,y(cl));ctx.stroke();ctx.restore();
+    });
+  }else{
+    var acl3=avgCL2();
+    if(acl3&&acl3>=mn&&acl3<=mx){
+      ctx.save();ctx.setLineDash([6,4]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1.5;ctx.globalAlpha=.55;
+      ctx.beginPath();ctx.moveTo(p.l,y(acl3));ctx.lineTo(W-p.r,y(acl3));ctx.stroke();ctx.restore();
+      ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.font="bold 9px -apple-system";ctx.textAlign="right";
+      ctx.fillText("CL "+acl3.toFixed(2),W-p.r-4,y(acl3)-4);
+    }
+  }
+
   ctx.restore();attZm();ovHits=_hits;
 }
 var ovHits=[],cycHits=[];
@@ -1540,49 +1916,237 @@ function showTip(canvasId,hits,ex,ey){
 
 /* CYCLE */
 function rCycle(){
-  if(curCyc<0)curCyc=D.cycles.length-1;var c=D.cycles[curCyc];var excl=isExcl(curCyc);
-  var h='<div class="pills">';D.cycles.forEach(function(cc,i){var ex=isExcl(i);h+='<button class="pill'+(curCyc===i?' on':'')+'" style="'+(ex?'text-decoration:line-through;opacity:.5':'')+'" onclick="curCyc='+i+';render()">'+cc.label+'</button>'});h+='</div>';
+  if(curCyc<0)curCyc=D.cycles.length-1;
+  var c=D.cycles[curCyc];var excl=isExcl(curCyc);
+  var info=cInfo();var isCurrent=(curCyc===info.ci);
+  var h='';
+  // Cycle selection pills
+  h+='<div class="pills">';
+  D.cycles.forEach(function(cc,i){
+    var ex=isExcl(i);
+    var star=ex?' ★':'';
+    h+='<button class="pill'+(curCyc===i?' on':'')+'" style="'+(ex&&curCyc!==i?'text-decoration:line-through;opacity:.6':'')+'" onclick="curCyc='+i+';cycCmp=-1;render()">'+cc.label+star+'</button>';
+  });
+  h+='</div>';
+
+  // === NEW: Cycle Story card ===
+  var story=cycleStory(curCyc);
+  h+='<div class="section"><div class="card" style="padding:14px 16px;border-left:3px solid '+(excl?'#D4A24A':(isCurrent?'var(--cobalt)':'var(--txt5)'))+'">';
+  h+='<div style="font-size:10px;font-weight:700;color:'+(excl?'#A87A1A':(isCurrent?'var(--cobalt)':'var(--txt3)'))+';text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">'+(excl?'★ Pregnancy cycle':(isCurrent?'This cycle':'Cycle '+(curCyc+1)))+'</div>';
+  h+='<div style="font-size:12px;color:var(--txt);line-height:1.5">'+story+'</div>';
+  h+='</div></div>';
+
+  // Excluded badge
   if(excl)h+='<div class="section"><div class="card" style="background:var(--rose-bg);display:flex;justify-content:space-between;align-items:center;padding:12px 16px"><div><div style="font-size:12px;font-weight:700;color:var(--rose)">Excluded from averages</div><div style="font-size:11px;color:var(--txt3);margin-top:2px">Data visible, not in predictions</div></div><button onclick="togExcl('+curCyc+')" style="background:var(--card);padding:6px 12px;border-radius:10px;font-size:11px;font-weight:700;color:var(--forest)">Include</button></div></div>';
-  else{h+='<div class="filters"><button class="flt" onclick="togExcl('+curCyc+')" style="color:var(--rose)">Exclude</button>';
+  else{
+    h+='<div class="filters"><button class="flt" onclick="togExcl('+curCyc+')" style="color:var(--rose)">Exclude</button>';
     h+='<button class="flt flt-ov'+(sOv?' on':'')+'" onclick="sOv=!sOv;render()">OV</button>';
     h+='<button class="flt flt-per'+(sPer?' on':'')+'" onclick="sPer=!sPer;render()">Period</button>';
     h+='<button class="flt flt-sex'+(sSex?' on':'')+'" onclick="sSex=!sSex;render()">Intimacy</button>';
     h+='<button class="flt" style="'+(sBBTcyc?'background:var(--burnt);color:#fff':'')+'" onclick="sBBTcyc=!sBBTcyc;render()">BBT</button>';
-    h+='<button class="flt" style="'+(sWrist?'background:var(--plum);color:#fff':'')+'" onclick="sWrist=!sWrist;render()">Wrist</button></div>'}
-  h+='<div class="section"><div class="cw"><canvas id="cC" style="height:200px"></canvas></div>';
+    h+='<button class="flt" style="'+(sWrist?'background:var(--plum);color:#fff':'')+'" onclick="sWrist=!sWrist;render()">Wrist</button></div>';
+  }
+
+  // Chart — bigger (270px instead of 200)
+  h+='<div class="section"><div class="cw"><canvas id="cC" style="height:270px"></canvas></div>';
   h+='<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 6px;font-size:9px;font-weight:600;color:var(--txt4)">';
   h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:2px;background:#C4652A;border-radius:1px"></span>BBT</span>';
   if(sWrist)h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:0;border-top:2px dashed #6B4E8B"></span>Wrist</span>';
   h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:0;border-top:2px dashed #2B5C8A"></span>Coverline</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;background:#A8445522;border-radius:2px"></span>Menstrual</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;background:#4A7D5E22;border-radius:2px"></span>Follicular</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;background:#9A7B1E33;border-radius:2px"></span>Ovulatory</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;background:#6B4E8B22;border-radius:2px"></span>Luteal</span>';
   h+='</div></div>';
+
   // Calendar
   h+='<div class="section">'+buildCalendar(cInfo(),curCyc)+'</div>';
-  var od2=ovDay(c);var cl2=avgCL2();var lp=od2&&c.length?(c.length-od2):null;
-  h+='<div class="section land-hide"><div class="sg"><div class="sc"><div class="sv">'+(c.length||'Current')+'</div><div class="sl">'+(c.length?'Days':'Cycle')+'</div></div>';
-  h+='<div class="sc"><div class="sv">'+(od2?'Day '+od2:'—')+'</div><div class="sl">Ovulation</div></div>';
-  h+='<div class="sc"><div class="sv">'+(cl2?cl2.toFixed(2)+'°':'—')+'</div><div class="sl">Coverline</div></div>';
-  h+='<div class="sc"><div class="sv">'+(lp?lp+'d':'—')+'</div><div class="sl">Luteal Phase</div></div></div></div>';
+
+  // === NEW: At-a-glance compact stats strip ===
+  var od2=ovDay(c);var eod2=effOv(curCyc);var cl2=avgCL2();
+  var lp=eod2&&c.length?(c.length-eod2):null;
+  var lpOngoing=(eod2&&!c.length&&isCurrent)?(info.cd-eod2):null;
+  var folLen=eod2?(eod2-1):null;
+  var tsAll=c.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
+  var avgTemp=tsAll.length?(tsAll.reduce(function(a,b){return a+b},0)/tsAll.length):null;
+  // Triphasic status for this cycle
+  var cTri=detectTriphasic(c,curCyc);
+  var triVal,triCol;
+  if(cTri===null){triVal='—';triCol='var(--txt4)'}
+  else if(cTri.found){triVal='Yes (+'+cTri.shift+'°)';triCol='var(--plum)'}
+  else{triVal='No';triCol='var(--txt3)'}
+  h+='<div class="section"><div class="card" style="padding:10px 12px">';
+  h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">';
+  function statCell(lbl,val,col){return '<div style="text-align:center"><div style="font-size:14px;font-weight:800;color:'+(col||'var(--txt)')+'">'+(val||'—')+'</div><div style="font-size:9px;font-weight:600;color:var(--txt4);text-transform:uppercase;letter-spacing:.4px;margin-top:2px">'+lbl+'</div></div>'}
+  h+=statCell('Length',c.length?c.length+'d':(isCurrent?'Day '+info.cd:'—'));
+  h+=statCell('OV day',eod2?'Day '+eod2:null,eod2?'var(--gold)':null);
+  h+=statCell('Follicular',folLen?folLen+'d':null,'var(--forest)');
+  h+=statCell('Luteal',lp?lp+'d':(lpOngoing?lpOngoing+'d*':null),lp?'var(--plum)':(lpOngoing?'var(--txt3)':null));
+  h+=statCell('Coverline',cl2?cl2.toFixed(2)+'°':null,'var(--cobalt)');
+  h+=statCell('Avg temp',avgTemp?avgTemp.toFixed(2)+'°':null);
+  h+='</div>';
+  // Triphasic — its own wider row because the value can be longer
+  h+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,.06);display:flex;justify-content:space-between;align-items:center">';
+  h+='<span style="font-size:10px;font-weight:600;color:var(--txt4);text-transform:uppercase;letter-spacing:.4px">Triphasic pattern</span>';
+  h+='<span style="font-size:13px;font-weight:800;color:'+triCol+'">'+triVal+'</span>';
+  h+='</div>';
+  if(cTri===null&&eod2)h+='<div style="font-size:9px;color:var(--txt4);text-align:right;margin-top:2px">Need ≥8 post-OV readings</div>';
+  if(lpOngoing)h+='<div style="font-size:9px;color:var(--txt4);text-align:center;margin-top:6px">* Luteal so far — final length TBD</div>';
+  h+='</div></div>';
+
+  // === NEW: Compare-this-cycle-with dropdown ===
+  if(D.cycles.length>=2){
+    h+='<div class="section"><div class="card" style="padding:10px 12px">';
+    h+='<div style="display:flex;align-items:center;gap:8px">';
+    h+='<span style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">Compare with:</span>';
+    h+='<select onchange="cycCmp=parseInt(this.value);render()" style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--cream3);background:var(--card);font-size:12px;font-weight:600;color:var(--txt);outline:none">';
+    h+='<option value="-1">— Select cycle —</option>';
+    D.cycles.forEach(function(cc,i){
+      if(i===curCyc)return;
+      var ex=isExcl(i)?' ★':'';
+      h+='<option value="'+i+'"'+(cycCmp===i?' selected':'')+'>C'+(i+1)+' · '+cc.label+ex+'</option>';
+    });
+    h+='</select></div>';
+    // Show quick comparison if selected
+    if(cycCmp>=0&&cycCmp!==curCyc&&D.cycles[cycCmp]){
+      var cb=D.cycles[cycCmp];var odB=ovDay(cb);var lpB=odB&&cb.length?(cb.length-odB):null;
+      var tsB=cb.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
+      var avgB=tsB.length?(tsB.reduce(function(a,b){return a+b},0)/tsB.length):null;
+      // Triphasic status for both cycles
+      var bTri=detectTriphasic(cb,cycCmp);
+      function triLabel(t){if(t===null)return '—';if(t.found)return '✓ +'+t.shift+'°';return 'No'}
+      h+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,.06)">';
+      h+='<div style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:6px;font-size:11px">';
+      h+='<div style="color:var(--txt3);font-weight:600"></div>';
+      h+='<div style="color:'+(isExcl(curCyc)?'#D4A24A':PAL[curCyc%7])+';font-weight:700;text-align:center">This (C'+(curCyc+1)+')</div>';
+      h+='<div style="color:'+(isExcl(cycCmp)?'#D4A24A':PAL[cycCmp%7])+';font-weight:700;text-align:center">C'+(cycCmp+1)+'</div>';
+      function cmpRow(l,a,b){h+='<div style="color:var(--txt3);padding:3px 0">'+l+'</div><div style="text-align:center;font-weight:700;padding:3px 0">'+(a==null?'—':a)+'</div><div style="text-align:center;font-weight:700;padding:3px 0">'+(b==null?'—':b)+'</div>'}
+      cmpRow('Length',c.length?c.length+'d':(isCurrent?'Day '+info.cd:'—'),cb.length?cb.length+'d':'—');
+      cmpRow('OV day',eod2?'Day '+eod2:'—',odB?'Day '+odB:'—');
+      cmpRow('Luteal',lp?lp+'d':(lpOngoing?lpOngoing+'d*':'—'),lpB?lpB+'d':'—');
+      cmpRow('Avg temp',avgTemp?avgTemp.toFixed(2)+'°':'—',avgB?avgB.toFixed(2)+'°':'—');
+      cmpRow('Triphasic',triLabel(cTri),triLabel(bTri));
+      h+='</div>';
+      h+='<div style="text-align:center;margin-top:8px"><button onclick="sw(\'compare\');setTimeout(function(){cmpA='+curCyc+';cmpB='+cycCmp+';render()},50)" style="background:var(--cob-bg);color:var(--cobalt);padding:6px 12px;border-radius:8px;font-size:10px;font-weight:700">Full comparison in Compare tab ›</button></div>';
+      h+='</div>';
+    }
+    h+='</div></div>';
+  }
+
+  // Readings list — with DPO added to each row
   h+='<div class="section land-hide">'+colHdr('cy-readings','Readings',c.readings.length);
   h+=colBody('cy-readings');
   h+='<div class="card" style="padding:8px 14px">';
-  c.readings.slice().reverse().forEach(function(r){var sy=D.sym[r.date]||[];var mo=D.mood[r.date]||[];var sx=D.sex[r.date];var ph=D.photos[r.date];var nt=D.notes[r.date];var md=D.meds[r.date]||[];
-    h+='<div class="rdg" onclick="openEdit(\''+r.date+'\','+curCyc+')"><div><div class="rdg-d">'+r.day+'</div><div class="rdg-dt">'+fd(r.date)+'</div></div><div class="rdg-m"><div class="rdg-t">'+(r.temp!=null?r.temp.toFixed(2):'—')+'°C</div><div class="rdg-tags">';
+  c.readings.slice().reverse().forEach(function(r){
+    var sy=D.sym[r.date]||[];var mo=D.mood[r.date]||[];var sx=D.sex[r.date];var ph=D.photos[r.date];var nt=D.notes[r.date];var md=D.meds[r.date]||[];
+    var rdpo=eod2&&r.day>eod2?(r.day-eod2):null;
+    h+='<div class="rdg" onclick="openEdit(\''+r.date+'\','+curCyc+')"><div><div class="rdg-d">'+r.day+(rdpo?' <span style="font-size:9px;color:var(--plum);font-weight:600">/ '+rdpo+'DPO</span>':'')+'</div><div class="rdg-dt">'+fd(r.date)+'</div></div><div class="rdg-m"><div class="rdg-t">'+(r.temp!=null?r.temp.toFixed(2):'—')+'°C</div><div class="rdg-tags">';
     if(r.ov)h+='<span class="rdg-tag" style="background:var(--gold-bg);color:var(--gold)">OV</span>';
     if(r.flow)h+='<span class="rdg-tag" style="background:var(--rose-bg);color:var(--rose)">'+r.flow+'</span>';
     mo.forEach(function(m){h+='<span class="rdg-tag" style="background:var(--cob-bg);color:var(--cobalt)">'+m+'</span>'});
     sy.forEach(function(s){h+='<span class="rdg-tag" style="background:var(--burnt-bg);color:var(--burnt)">'+s+'</span>'});
     md.forEach(function(m){h+='<span class="rdg-tag" style="background:var(--forest-bg);color:var(--forest)">💊'+m+'</span>'});
     if(nt)h+='<span class="rdg-tag" style="background:var(--plum-bg);color:var(--plum)">📝</span>';
-    h+='</div></div><div style="display:flex;gap:4px;align-items:center">';if(sx)h+='<div style="width:6px;height:6px;background:var(--cobalt);transform:rotate(45deg)"></div>';if(ph)h+='<span style="font-size:11px">📷</span>';h+='<span style="color:var(--txt5);font-size:14px">›</span></div></div>'});
+    h+='</div></div><div style="display:flex;gap:4px;align-items:center">';
+    if(sx)h+='<div style="width:6px;height:6px;background:var(--cobalt);transform:rotate(45deg)"></div>';
+    if(ph)h+='<span style="font-size:11px">📷</span>';
+    h+='<span style="color:var(--txt5);font-size:14px">›</span></div></div>'
+  });
   h+='</div>';
-  h+=colEnd()+'</div>';return h;
+  h+=colEnd()+'</div>';
+  return h;
 }
-function dCyc(){var cv=document.getElementById('cC');if(!cv)return;var c=D.cycles[curCyc];var _hits=[];var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight,p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b;var ts=c.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
-  // Include wrist temps in Y range if wrist toggled on
+function dCyc(){
+  var cv=document.getElementById('cC');if(!cv)return;
+  var c=D.cycles[curCyc];var _hits=[];
+  var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;
+  var ctx=cv.getContext('2d');ctx.scale(dp,dp);
+  var W=cv.offsetWidth,H=cv.offsetHeight,p={t:10,r:10,b:26,l:38},gW=W-p.l-p.r,gH=H-p.t-p.b;
+  var ts=c.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
   var wts=[];if(sWrist){c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date])wts.push(D.wrist[r.date])})}
   var allTs=ts.concat(wts);
-  if(!allTs.length){ctx.fillStyle='#A0928A';ctx.font='13px -apple-system';ctx.textAlign='center';ctx.fillText('No temperature data',W/2,H/2);return};var mn=Math.floor(Math.min.apply(null,allTs)*10)/10-.05,mx2=Math.ceil(Math.max.apply(null,allTs)*10)/10+.05;var mxDay=c.readings[c.readings.length-1].day;function x(d){return p.l+(d-1)/(Math.max(mxDay,2)-1)*gW}function y(t){return p.t+(1-(t-mn)/(mx2-mn))*gH}ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;for(var t2=Math.ceil(mn*10)/10;t2<=mx2;t2=Math.round((t2+.1)*10)/10){ctx.beginPath();ctx.moveTo(p.l,y(t2));ctx.lineTo(W-p.r,y(t2));ctx.stroke();ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t2.toFixed(1),p.l-4,y(t2)+3)}var cl=avgCL2();if(cl){ctx.save();ctx.setLineDash([5,3]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();ctx.moveTo(p.l,y(cl));ctx.lineTo(W-p.r,y(cl));ctx.stroke();ctx.restore();ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.font="bold 8px -apple-system";ctx.textAlign="left";ctx.fillText("CL "+cl.toFixed(2),W-p.r-52,y(cl)-4)}if(sBBTcyc){ctx.strokeStyle="#C4652A";ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();c.readings.forEach(function(r,i){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();var eov=effOv(curCyc);c.readings.forEach(function(r){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);_hits.push({x:px,y:py,day:r.day,date:r.date,temp:r.temp,cycle:'C'+(curCyc+1),ov:eov&&r.day===eov,lh:!!r.ov,flow:r.flow,sex:!!D.sex[r.date],dpo:eov&&r.day>eov?(r.day-eov):null,tqual:D.tqual&&D.tqual[r.date]||null});var _fl=D.tqual&&D.tqual[r.date];ctx.fillStyle=r.ov?"#9A7B1E":r.flow?"#A84455":"#C4652A";if(_fl){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.stroke()}else{ctx.beginPath();ctx.arc(px,py,r.ov?4:3,0,Math.PI*2);ctx.fill()};if(r.ov&&sOv){ctx.fillStyle="#fff";ctx.font="bold 6px sans-serif";ctx.textAlign="center";ctx.fillText("+",px,py+2)}if(eov&&r.day===eov&&!r.ov&&sOv){ctx.fillStyle="#9A7B1E";ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}if(r.flow&&sPer){ctx.fillStyle="#A84455";ctx.beginPath();ctx.arc(px,py+10,3,0,Math.PI*2);ctx.fill()}if(D.sex[r.date]&&sSex){ctx.fillStyle="#2B5C8A";ctx.globalAlpha=.7;ctx.save();ctx.translate(px,H-p.b-8);ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore();ctx.globalAlpha=1}if(r.day%5===0||r.day===1||r.ov||r.day===eov){ctx.fillStyle="#A0928A";ctx.font="8px -apple-system";ctx.textAlign="center";ctx.fillText(r.day,px,H-p.b+12)}})};// Wrist temp dashed line
-if(sWrist){var wristPts=[];c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){var wt=D.wrist[r.date];if(wt>=mn&&wt<=mx2)wristPts.push({day:r.day,temp:wt})}});if(wristPts.length>1){ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle='#6B4E8B';ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();wristPts.forEach(function(w,i){var px=x(w.day),py=y(w.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});ctx.stroke();wristPts.forEach(function(w){ctx.fillStyle='#6B4E8B';ctx.beginPath();ctx.arc(x(w.day),y(w.temp),2.5,0,Math.PI*2);ctx.fill()});ctx.restore()}}cycHits=_hits;cv.onclick=function(e){showTip('cC',cycHits,e.clientX,e.clientY)}}
+  if(!allTs.length){ctx.fillStyle='#A0928A';ctx.font='13px -apple-system';ctx.textAlign='center';ctx.fillText('No temperature data',W/2,H/2);return}
+  var mn=Math.floor(Math.min.apply(null,allTs)*10)/10-.05;
+  var mx2=Math.ceil(Math.max.apply(null,allTs)*10)/10+.05;
+  var mxDay=c.readings[c.readings.length-1].day;
+  // Extend x-axis to at least the expected cycle length so phases are visible even pre-OV
+  var info=cInfo();
+  var xMaxDay=Math.max(mxDay,curCyc===info.ci?info.av:mxDay);
+  if(xMaxDay<14)xMaxDay=14;
+  function x(d){return p.l+(d-1)/(Math.max(xMaxDay,2)-1)*gW}
+  function y(t){return p.t+(1-(t-mn)/(mx2-mn))*gH}
+
+  // === NEW: Phase bands (drawn first, behind everything) ===
+  var eov=effOv(curCyc);
+  var av=curCyc===info.ci?info.av:(c.length||28);
+  var ao=info.ao;
+  var phaseOv=eov||ao;
+  // Menstrual 1-5
+  ctx.fillStyle="rgba(168,68,85,.09)";ctx.fillRect(x(1),p.t,x(6)-x(1),gH);
+  // Follicular 6 to OV-2
+  if(phaseOv>=7){ctx.fillStyle="rgba(74,125,94,.09)";ctx.fillRect(x(6),p.t,x(phaseOv-1)-x(6),gH)}
+  // Ovulatory OV-1 to OV+1
+  ctx.fillStyle="rgba(154,123,30,.13)";
+  var ovStart=Math.max(1,phaseOv-1);var ovEnd=phaseOv+2;
+  if(ovEnd<=xMaxDay+1)ctx.fillRect(x(ovStart),p.t,x(ovEnd)-x(ovStart),gH);
+  // Luteal OV+2 to cycle end
+  if(phaseOv+2<=xMaxDay){ctx.fillStyle="rgba(107,78,139,.09)";ctx.fillRect(x(phaseOv+2),p.t,x(xMaxDay+1)-x(phaseOv+2),gH)}
+
+  // Gridlines + Y labels
+  ctx.strokeStyle="rgba(0,0,0,.06)";ctx.lineWidth=1;
+  for(var t2=Math.ceil(mn*10)/10;t2<=mx2;t2=Math.round((t2+.1)*10)/10){
+    ctx.beginPath();ctx.moveTo(p.l,y(t2));ctx.lineTo(W-p.r,y(t2));ctx.stroke();
+    ctx.fillStyle="#A0928A";ctx.font="600 9px -apple-system";ctx.textAlign="right";ctx.fillText(t2.toFixed(1),p.l-4,y(t2)+3);
+  }
+
+  // Coverline
+  var cl=avgCL2();
+  if(cl&&cl>=mn&&cl<=mx2){
+    ctx.save();ctx.setLineDash([5,3]);ctx.strokeStyle="#2B5C8A";ctx.lineWidth=1.5;ctx.globalAlpha=.6;
+    ctx.beginPath();ctx.moveTo(p.l,y(cl));ctx.lineTo(W-p.r,y(cl));ctx.stroke();ctx.restore();
+    ctx.globalAlpha=1;ctx.fillStyle="#2B5C8A";ctx.font="bold 8px -apple-system";ctx.textAlign="left";
+    ctx.fillText("CL "+cl.toFixed(2),W-p.r-52,y(cl)-4);
+  }
+
+  // BBT line
+  if(sBBTcyc){
+    ctx.strokeStyle="#C4652A";ctx.lineWidth=2.5;ctx.setLineDash([]);
+    ctx.beginPath();
+    c.readings.forEach(function(r,i){if(r.temp==null)return;var px=x(r.day),py=y(r.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});
+    ctx.stroke();
+    c.readings.forEach(function(r){
+      if(r.temp==null)return;
+      var px=x(r.day),py=y(r.temp);
+      _hits.push({x:px,y:py,day:r.day,date:r.date,temp:r.temp,cycle:'C'+(curCyc+1),ov:eov&&r.day===eov,lh:!!r.ov,flow:r.flow,sex:!!D.sex[r.date],dpo:eov&&r.day>eov?(r.day-eov):null,tqual:D.tqual&&D.tqual[r.date]||null});
+      var _fl=D.tqual&&D.tqual[r.date];
+      ctx.fillStyle=r.ov?"#9A7B1E":r.flow?"#A84455":"#C4652A";
+      if(_fl){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.stroke()}
+      else{ctx.beginPath();ctx.arc(px,py,r.ov?4:3,0,Math.PI*2);ctx.fill()}
+      if(r.ov&&sOv){ctx.fillStyle="#fff";ctx.font="bold 6px sans-serif";ctx.textAlign="center";ctx.fillText("+",px,py+2)}
+      if(eov&&r.day===eov&&!r.ov&&sOv){ctx.fillStyle="#9A7B1E";ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 7px sans-serif";ctx.textAlign="center";ctx.fillText("O",px,py+2.5)}
+      if(r.flow&&sPer){ctx.fillStyle="#A84455";ctx.beginPath();ctx.arc(px,py+10,3,0,Math.PI*2);ctx.fill()}
+      if(D.sex[r.date]&&sSex){ctx.fillStyle="#2B5C8A";ctx.globalAlpha=.7;ctx.save();ctx.translate(px,H-p.b-8);ctx.rotate(Math.PI/4);ctx.fillRect(-3,-3,6,6);ctx.restore();ctx.globalAlpha=1}
+      if(r.day%5===0||r.day===1||r.ov||r.day===eov){ctx.fillStyle="#A0928A";ctx.font="8px -apple-system";ctx.textAlign="center";ctx.fillText(r.day,px,H-p.b+12)}
+    });
+  }
+
+  // Wrist temp dashed line
+  if(sWrist){
+    var wristPts=[];
+    c.readings.forEach(function(r){if(D.wrist&&D.wrist[r.date]){var wt=D.wrist[r.date];if(wt>=mn&&wt<=mx2)wristPts.push({day:r.day,temp:wt})}});
+    if(wristPts.length>1){
+      ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle='#6B4E8B';ctx.lineWidth=1.5;ctx.globalAlpha=.6;
+      ctx.beginPath();
+      wristPts.forEach(function(w,i){var px=x(w.day),py=y(w.temp);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)});
+      ctx.stroke();
+      wristPts.forEach(function(w){ctx.fillStyle='#6B4E8B';ctx.beginPath();ctx.arc(x(w.day),y(w.temp),2.5,0,Math.PI*2);ctx.fill()});
+      ctx.restore();
+    }
+  }
+
+  cycHits=_hits;
+  cv.onclick=function(e){showTip('cC',cycHits,e.clientX,e.clientY)};
+}
 
 /* COMPARE */
 function rCompare(){
@@ -1776,6 +2340,10 @@ function rCompare(){
     h+=cmpRow('Length',ca.length?ca.length+'d':null,cb.length?cb.length+'d':null);
     h+=cmpRow('Ovulation',odA?'Day '+odA:null,odB?'Day '+odB:null);
     h+=cmpRow('Luteal phase',lpA?lpA+'d':null,lpB?lpB+'d':null,'high');
+    // Triphasic status — explicit per-cycle readout
+    var triCmpA=detectTriphasic(ca,cmpA),triCmpB=detectTriphasic(cb,cmpB);
+    function triCmpLabel(t){if(t===null)return null;if(t.found)return '✓ +'+t.shift+'°';return 'No'}
+    h+=cmpRow('Triphasic',triCmpLabel(triCmpA),triCmpLabel(triCmpB));
     h+=cmpRow('Coverline',clA?clA.toFixed(2)+'°':null,clB?clB.toFixed(2)+'°':null);
     h+=cmpRow('Intimacy days',sexA,sexB,'high');
     h+=cmpRow('Conception score',cpA?cpA.pct+'%':null,cpB?cpB.pct+'%':null,'high');
@@ -1930,31 +2498,6 @@ function rCompare(){
   }
   else if(cmpA>=0&&cmpB>=0)h+='<div class="section"><div class="card" style="color:var(--txt3);font-size:12px">Pick two different cycles</div></div>';
 
-  // Pregnancy tests
-  h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Pregnancy Tests</span><button class="sec-title" style="color:var(--cobalt);background:none" onclick="openPT()">+ Add</button></div>';
-  if(D.ptests.length){h+='<div class="card" style="padding:8px 14px">';D.ptests.slice().reverse().forEach(function(pt,i){var ri=D.ptests.length-1-i;var col=pt.result==='positive'?'var(--forest)':pt.result==='negative'?'var(--rose)':'var(--gold)';h+='<div class="pt-row"><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--txt)">'+fd(pt.date)+'</div><div style="font-size:11px;color:var(--txt3)">'+(pt.brand||'No brand')+(pt.dpo?' · '+pt.dpo+' DPO':'')+'</div></div><span class="pt-res" style="background:'+col+';color:#fff">'+pt.result+'</span><button onclick="delPT('+ri+')" style="background:none;color:var(--txt5);font-size:14px;padding:4px">✕</button></div>'});h+='</div>'}
-  else h+='<div class="card" style="color:var(--txt4);font-size:12px">No tests logged yet</div>';
-  h+='</div>';
-  // PHOTO GALLERY
-  var _gPh=[];
-  D.ptests.forEach(function(pt,i){if(pt.photo)_gPh.push({type:'test',date:pt.date,photo:pt.photo,label:pt.result+(pt.brand?' ('+pt.brand+')':''),dpo:pt.dpo})});
-  if(D.opkPhotos){Object.keys(D.opkPhotos).sort().reverse().forEach(function(d){if(D.opkPhotos[d])_gPh.push({type:'opk',date:d,photo:D.opkPhotos[d],label:'OPK '+(D.opks&&D.opks[d]==='pos'?'Positive':'Negative')})})}
-  if(_gPh.length){
-    window._gallery=_gPh;
-    h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Test Photo Gallery</span><span class="sec-title">'+_gPh.length+'</span></div>';
-    h+='<div class="card" style="padding:10px"><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">';
-    _gPh.forEach(function(p,idx){
-      var bdr=p.type==='test'?(p.label.indexOf('positive')>-1?'var(--forest)':p.label.indexOf('negative')>-1?'var(--rose)':'var(--gold)'):'var(--gold)';
-      h+='<div onclick="viewGPh('+idx+')" style="cursor:pointer;position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1;border:2px solid '+bdr+'">';
-      h+='<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover">';
-      h+='<div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.7));padding:4px 6px">';
-      h+='<div style="font-size:8px;font-weight:700;color:#fff">'+fd(p.date)+'</div>';
-      h+='<div style="font-size:7px;color:rgba(255,255,255,.7)">'+p.label+(p.dpo?' \u00b7 '+p.dpo+'DPO':'')+'</div>';
-      h+='</div></div>'});
-    h+='</div></div></div>';
-  }
-
-  h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Data Management</span></div><div class="card"><div class="bk-row"><button class="bk-btn" style="background:var(--cob-bg);color:var(--cobalt)" onclick="backup()">⬇ Backup</button><button class="bk-btn" style="background:var(--burnt-bg);color:var(--burnt)" onclick="document.getElementById(\'restF\').click()">⬆ Restore</button></div><input type="file" id="restF" style="display:none" accept=".json" onchange="restore(this)"><div style="font-size:10px;color:var(--txt4);margin-top:8px;text-align:center">Backup saves all your data as a JSON file</div></div></div>';
   return h;
 }
 function dCmp(){var cv=document.getElementById('cmpC');if(!cv||cmpA<0||cmpB<0)return;var ca=D.cycles[cmpA],cb=D.cycles[cmpB];var dp=window.devicePixelRatio||1;cv.width=cv.offsetWidth*dp;cv.height=cv.offsetHeight*dp;var ctx=cv.getContext('2d');ctx.scale(dp,dp);var W=cv.offsetWidth,H=cv.offsetHeight,pad={t:10,r:10,b:26,l:38},gW=W-pad.l-pad.r,gH=H-pad.t-pad.b;
@@ -1996,7 +2539,9 @@ function rDoctor(info){
   
   // Build current cycle insights
   var od=ovDay(c);var eod=effOv(ci);var cl=avgCL2();
-  var lp=eod&&c.length?(c.length-eod):(eod&&info.cd>eod?(info.cd-eod):null);
+  // Distinguish completed luteal (c.length exists, cycle is done) from ongoing DPO
+  var completedLP=(eod&&c.length)?(c.length-eod):null;
+  var currentLP=(eod&&!c.length&&info.cd>eod)?(info.cd-eod):null;
   var dpo=eod&&info.cd>eod?(info.cd-eod):null;
   var temps=c.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
   var sexCount=0;c.readings.forEach(function(r){if(D.sex[r.date])sexCount++});
@@ -2010,15 +2555,39 @@ function rDoctor(info){
   goodS.push({icon:'📍',k:'Currently in '+phN+' phase',v:'Day '+info.cd+(dpo?' / '+dpo+' DPO':'')+(info.av?' of ~'+info.av:'')});
   
   // Ovulation
-  if(eod&&od)goodS.push({icon:'🥚',k:'Ovulation confirmed',v:'LH+ on Day '+od+(eod!==od?', estimated OV Day '+eod:'')+'. Triphasic temp shift detected'});
+  if(eod&&od){
+    // Check what kind of shift actually happened to describe it accurately
+    var ovTri=detectTriphasic(c,ci);
+    var shiftDesc='';
+    if(ovTri&&ovTri.found)shiftDesc='. Triphasic temp pattern detected';
+    else if(dpo&&dpo>=3)shiftDesc='. Biphasic temp shift confirms OV';
+    else if(dpo)shiftDesc='. Temp shift emerging';
+    goodS.push({icon:'🥚',k:'Ovulation confirmed',v:'LH+ on Day '+od+(eod!==od?', estimated OV Day '+eod:'')+shiftDesc});
+  }
   else if(eod)goodS.push({icon:'🥚',k:'Ovulation likely Day '+eod,v:'Estimated from temp shift. No LH+ test logged this cycle'});
   else if(info.cd>=18)warnS.push({icon:'❓',k:'Ovulation not yet detected',v:'Day '+info.cd+' with no clear shift. May still ovulate later, or this could be anovulatory. If your luteal phase is consistently <10d or no OV, mention to GP'});
   
   // Luteal phase quality
-  if(lp){
-    if(lp<10)warnS.push({icon:'🚨',k:'Short luteal phase',v:lp+'d so far. Below 10 days can suggest luteal phase defect — worth asking GP about progesterone testing'});
-    else if(lp<12)noteS.push({icon:'📊',k:'Slightly short luteal phase',v:lp+'d. Borderline — track for a few cycles. Most successful pregnancies need 11+ day luteal phase'});
-    else goodS.push({icon:'✓',k:'Healthy luteal phase',v:lp+'d post-OV. Good progesterone signal — supports implantation'});
+  if(completedLP){
+    // Completed cycle — evaluate final luteal length
+    if(completedLP<10)warnS.push({icon:'🚨',k:'Short luteal phase',v:completedLP+'d. Below 10 days can suggest luteal phase defect — worth asking GP about progesterone testing'});
+    else if(completedLP<12)noteS.push({icon:'📊',k:'Slightly short luteal phase',v:completedLP+'d. Borderline — track for a few cycles. Most successful pregnancies need 11+ day luteal phase'});
+    else goodS.push({icon:'✓',k:'Healthy luteal phase',v:completedLP+'d post-OV. Good progesterone signal — supports implantation'});
+  }else if(currentLP){
+    // Ongoing cycle — compare against historical avg to decide what to say
+    var histLuts=[];D.cycles.forEach(function(oc,oi){if(!isExcl(oi)){var ood=ovDay(oc);if(ood&&oc.length)histLuts.push(oc.length-ood)}});
+    var histAvg=histLuts.length?histLuts.reduce(function(a,b){return a+b},0)/histLuts.length:null;
+    var histMax=histLuts.length?Math.max.apply(null,histLuts):null;
+    if(histMax&&currentLP>histMax){
+      // Genuinely late — longer than every past luteal phase
+      goodS.push({icon:'⏳',k:'Luteal phase longer than usual',v:currentLP+'d so far — longer than any of your completed cycles (previous max '+histMax+'d). If period hasn\'t arrived, worth testing.'});
+    }else if(histAvg&&currentLP>Math.round(histAvg)){
+      // Past avg but not past max — reassuring
+      goodS.push({icon:'⏳',k:'Past your average luteal length',v:currentLP+'d so far (your avg is '+Math.round(histAvg)+'d). Sustained temps here are a good sign — period may still arrive in the next day or two, or keep watching.'});
+    }else{
+      // Still within normal luteal duration — just report current status, no judgment
+      noteS.push({icon:'📍',k:'Luteal phase in progress',v:currentLP+'d post-OV'+(histAvg?' (your avg is '+Math.round(histAvg)+'d)':'')+'. Too early to evaluate final luteal length — that\'s measured once period arrives.'});
+    }
   }
   
   // Conception timing
@@ -2075,7 +2644,8 @@ function rDoctor(info){
   
   // ===== PERSONAL TEMP NARRATIVE =====
   if(temps.length>=3){
-    h+='<div class="section"><div class="sec-hdr"><span class="sec-title" style="font-size:11px;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;font-weight:700">What your temperatures are telling you</div></div>';
+    h+='<div class="section">'+colHdr('doc-narrative','What your temperatures are telling you');
+    h+=colBody('doc-narrative');
     h+='<div class="card" style="padding:14px 16px">';
     
     // Sort readings by day for narrative
@@ -2132,7 +2702,10 @@ function rDoctor(info){
     // === STORY 4: Triphasic check ===
     var tri=detectTriphasic(c,ci);
     if(tri&&tri.found){
-      stories.push({icon:'✨',title:'Triphasic pattern detected',body:'<strong>Your temps show a SECOND rise of '+tri.shift+'° around Day '+tri.day+'.</strong> A triphasic pattern (a third level above your normal post-OV temps) is a classic — though not definitive — early pregnancy sign. About 12% of pregnancies show this. Doesn\'t mean pregnant, but worth noting.'});
+      var triWhen=tri.dpo?tri.dpo+' DPO':'7–10 DPO';
+      var triHist=triphasicHistory(ci);
+      var personalNote=triphasicHistoryNote(triHist);
+      stories.push({icon:'✨',title:'Triphasic pattern detected',body:'<strong>Your temps show a SECOND rise of '+tri.shift+'° around '+triWhen+'.</strong> A triphasic pattern (a third level above your normal post-OV temps) is a classic — though not definitive — early pregnancy sign. About 12% of pregnancies show this.'+personalNote});
     }
     
     // === STORY 5: Wrist temp story ===
@@ -2196,127 +2769,15 @@ function rDoctor(info){
     });
     
     h+='<div class="ai-disclaimer" style="margin-top:10px">Pattern interpretation only. Temperature can be affected by sleep, alcohol, illness, and measurement timing.</div>';
-    h+='</div></div>';
+    h+='</div>'+colEnd()+'</div>';
   }
 
-  // ===== COMPARE TO ANOTHER CYCLE =====
-  h+='<div class="section"><div class="sec-hdr"><span class="sec-title" style="font-size:11px;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;font-weight:700">Compare to Another Cycle</div></div>';
-  h+='<div class="card" style="padding:12px 14px"><div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Pick a previous cycle to compare side-by-side with this one.</div>';
-  h+='<select onchange="docCmpA='+ci+';docCmpB=parseInt(this.value);render()" style="width:100%;padding:12px;border-radius:10px;border:1.5px solid var(--cream3);font-size:13px;font-weight:600;background:var(--card);color:var(--txt);outline:none">';
-  h+='<option value="-1">— Select a cycle —</option>';
-  D.cycles.forEach(function(cc,i){
-    if(i===ci)return;
-    var ex=isExcl(i)?' [excluded]':'';
-    h+='<option value="'+i+'"'+(docCmpB===i?' selected':'')+'>C'+(i+1)+' · '+cc.label+ex+'</option>';
-  });
-  h+='</select></div></div>';
-  
-  // Show comparison if selected
-  if(docCmpB>=0&&docCmpB!==ci&&D.cycles[docCmpB]){
-    var ca=c;var cb=D.cycles[docCmpB];
-    var lA='C'+(ci+1),lB='C'+(docCmpB+1);
-    var odA=ovDay(ca),odB=ovDay(cb);
-    var lpA=odA&&ca.length?(ca.length-odA):(odA&&info.cd>odA?(info.cd-odA):null);
-    var lpB=odB&&cb.length?(cb.length-odB):null;
-    var cpA=conceptionProb(ci),cpB=conceptionProb(docCmpB);
-    var cmA=cmScore(ci),cmB=cmScore(docCmpB);
-    var sexA=0,sexB=0;
-    ca.readings.forEach(function(r){if(D.sex[r.date])sexA++});
-    cb.readings.forEach(function(r){if(D.sex[r.date])sexB++});
-    var tsA=ca.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
-    var tsB=cb.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
-    var avgA=tsA.length?(tsA.reduce(function(a,b){return a+b},0)/tsA.length):null;
-    var avgB=tsB.length?(tsB.reduce(function(a,b){return a+b},0)/tsB.length):null;
-    
-    var insights=[],stronger=[],neutral=[];
-    
-    // Length
-    if(ca.length&&cb.length){
-      var ldiff=ca.length-cb.length;
-      if(Math.abs(ldiff)<=2)neutral.push({icon:'✓',k:'Cycle length',v:'Both '+ca.length+'/'+cb.length+'d — consistent'});
-      else if(Math.abs(ldiff)<=5)insights.push({icon:'📏',c:'var(--cobalt)',k:'Cycle length differs',v:lA+' '+ca.length+'d vs '+lB+' '+cb.length+'d. '+Math.abs(ldiff)+'d difference is within normal variation'});
-      else insights.push({icon:'⚠️',c:'var(--gold)',k:'Notable cycle length variation',v:lA+' '+ca.length+'d vs '+lB+' '+cb.length+'d — '+Math.abs(ldiff)+'d difference. If this becomes a pattern, mention to GP'});
-    }
-    
-    // OV
-    if(odA&&odB){
-      var odiff=odA-odB;
-      if(Math.abs(odiff)<=1)neutral.push({icon:'✓',k:'Ovulation timing',v:'Day '+odA+'/'+odB+' — very consistent'});
-      else if(Math.abs(odiff)<=3)insights.push({icon:'🥚',c:'var(--cobalt)',k:'OV timing slightly differs',v:lA+' Day '+odA+', '+lB+' Day '+odB+' — within normal range'});
-      else insights.push({icon:'⏰',c:'var(--gold)',k:'Ovulation timing varies',v:lA+' Day '+odA+' vs '+lB+' Day '+odB+' — '+Math.abs(odiff)+'d gap affects fertile window timing'});
-    }
-    
-    // Luteal
-    if(lpA&&lpB){
-      if(lpA<10||lpB<10){var sC=lpA<10?lA:lB;var sLP=Math.min(lpA,lpB);
-        insights.push({icon:'🚨',c:'var(--rose)',k:'Short luteal phase in '+sC,v:sLP+'d. Below 10 days can indicate luteal phase defect'});
-      }else if(Math.abs(lpA-lpB)<=2)neutral.push({icon:'✓',k:'Luteal phase',v:lpA+'/'+lpB+'d — both healthy'});
-      else insights.push({icon:'📊',c:'var(--cobalt)',k:'Luteal phase variation',v:lpA+'d vs '+lpB+'d. Both still healthy (10+)'});
-    }
-    
-    // Conception
-    if(cpA&&cpB){
-      var cpdiff=cpA.pct-cpB.pct;
-      var bC=cpA.pct>cpB.pct?lA:lB;var bP=Math.max(cpA.pct,cpB.pct);
-      if(Math.abs(cpdiff)<=10)neutral.push({icon:'✓',k:'Conception timing',v:'Both ~'+Math.round((cpA.pct+cpB.pct)/2)+'%'});
-      else stronger.push({icon:'🎯',c:'var(--forest)',k:'Better timing in '+bC,v:bC+' '+bP+'% vs '+(bC===lA?cpB.pct:cpA.pct)+'%. '+(cpdiff>0&&bC===lA?'This cycle':'The other cycle')+' caught the fertile window better'});
-    }
-    
-    // CM
-    if(cmA&&cmB){
-      if(Math.abs(cmA.pct-cmB.pct)<=15)neutral.push({icon:'✓',k:'CM quality',v:'Similar — '+cmA.pct+'%/'+cmB.pct+'%'});
-      else{var bCM=cmA.pct>cmB.pct?lA:lB;
-        stronger.push({icon:'💧',c:'var(--forest)',k:'Better fertile CM in '+bCM,v:Math.max(cmA.pct,cmB.pct)+'% vs '+Math.min(cmA.pct,cmB.pct)+'%'});
-      }
-    }
-    
-    // Temp baseline
-    if(avgA&&avgB){
-      var tdiff=avgA-avgB;
-      if(Math.abs(tdiff)<0.1)neutral.push({icon:'✓',k:'Temperature baseline',v:'Stable — '+avgA.toFixed(2)+'°/'+avgB.toFixed(2)+'°'});
-      else if(Math.abs(tdiff)>=0.2)insights.push({icon:'🌡',c:'var(--gold)',k:'Notable temp shift',v:lA+' '+avgA.toFixed(2)+'° vs '+lB+' '+avgB.toFixed(2)+'°. '+Math.abs(tdiff).toFixed(2)+'° shift could be thyroid, illness, or measurement timing'});
-    }
-    
-    // Sex
-    if(Math.abs(sexA-sexB)>=3){
-      var moreSex=sexA>sexB?lA:lB;
-      insights.push({icon:'💞',c:'var(--cobalt)',k:'Intimacy frequency differs',v:moreSex+' had '+Math.max(sexA,sexB)+'d vs '+Math.min(sexA,sexB)+'d. More frequent = more chances'});
-    }
-    
-    // Pregnancy benchmark
-    if(isExcl(ci)&&!isExcl(docCmpB))stronger.push({icon:'🤰',c:'var(--forest)',k:'This cycle was a pregnancy',v:'Benchmark — what worked then'});
-    if(isExcl(docCmpB)&&!isExcl(ci))stronger.push({icon:'🤰',c:'var(--forest)',k:lB+' was a pregnancy',v:'That\'s your benchmark cycle. Compare timing, CM, and sex frequency closely to see what differed'});
-    
-    // Verdict
-    var verdict='',vCol='var(--cobalt)';
-    if(stronger.length>=2&&insights.length<=1){verdict='Cycles look strong overall';vCol='var(--forest)'}
-    else if(insights.filter(function(i){return i.c==='var(--rose)'}).length>0){verdict='Notable differences worth discussing';vCol='var(--rose)'}
-    else if(insights.filter(function(i){return i.c==='var(--gold)'}).length>=2){verdict='Some inconsistency between cycles';vCol='var(--gold)'}
-    else if(neutral.length>=3){verdict='Your cycles are remarkably consistent';vCol='var(--forest)'}
-    else verdict='Broadly similar with some variation';
-    
-    h+='<div class="section"><div class="card" style="padding:14px 16px;border-left:3px solid '+vCol+'">';
-    h+='<div style="font-size:10px;font-weight:700;color:'+vCol+';text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Comparison Verdict</div>';
-    h+='<div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:10px">'+verdict+'</div>';
-    h+=renderInsights(stronger,'What\'s working','var(--forest)');
-    h+=renderInsights(insights.sort(function(a,b){var p={'var(--rose)':3,'var(--gold)':2,'var(--cobalt)':1};return (p[b.c]||0)-(p[a.c]||0)}),'Worth noting','var(--cobalt)');
-    h+=renderInsights(neutral,'Consistent','var(--txt4)');
-    h+='</div></div>';
-    
-    // Quick stats table
-    h+='<div class="section"><div class="card" style="padding:0;overflow:hidden">';
-    h+='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--cream)"><th style="padding:8px;text-align:left"></th><th style="padding:8px;color:'+PAL[ci%7]+'">'+lA+'</th><th style="padding:8px;color:'+PAL[docCmpB%7]+'">'+lB+'</th></tr></thead><tbody>';
-    function dRow(l,a,b){if(a==null&&b==null)return '';return '<tr style="border-top:1px solid rgba(0,0,0,.05)"><td style="padding:6px 8px;color:var(--txt3)">'+l+'</td><td style="padding:6px 8px;font-weight:700">'+(a==null?'—':a)+'</td><td style="padding:6px 8px;font-weight:700">'+(b==null?'—':b)+'</td></tr>'}
-    h+=dRow('Length',ca.length?ca.length+'d':'ongoing',cb.length?cb.length+'d':null);
-    h+=dRow('Ovulation',odA?'Day '+odA:null,odB?'Day '+odB:null);
-    h+=dRow('Luteal',lpA?lpA+'d':null,lpB?lpB+'d':null);
-    h+=dRow('Conception',cpA?cpA.pct+'%':null,cpB?cpB.pct+'%':null);
-    h+=dRow('CM quality',cmA?cmA.pct+'%':null,cmB?cmB.pct+'%':null);
-    h+=dRow('Intimacy',sexA+'d',sexB+'d');
-    h+=dRow('Avg temp',avgA?avgA.toFixed(2)+'°':null,avgB?avgB.toFixed(2)+'°':null);
-    h+='</tbody></table></div></div>';
-  }
-  
+  // Compare to another cycle is now available in the Cycle and Compare tabs — pointer instead of duplicate
+  h+='<div class="section"><div class="card" style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="sw(\'compare\')">';
+  h+='<div><div style="font-size:12px;font-weight:700;color:var(--cobalt)">Compare this cycle to another</div>';
+  h+='<div style="font-size:11px;color:var(--txt3);margin-top:2px">Full side-by-side view in the Compare tab</div></div>';
+  h+='<span style="color:var(--cobalt);font-size:16px;font-weight:700">›</span></div></div>';
+
   // Doctor report buttons at bottom
   h+='<div class="section"><div class="sec-hdr"><span class="sec-title" style="font-size:11px;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;font-weight:700">Export</div></div>';
   h+='<div class="card" style="padding:12px 14px">';
@@ -2330,6 +2791,20 @@ function rDoctor(info){
 function rInsights(){
   var h='';
   var st=cycleStats();
+  var reg=regularityScore();
+  // === NEW: Headline card — the 3 most important numbers ===
+  var headlineBits=[];
+  headlineBits.push({v:st.numCycles,l:'Cycles tracked',c:'var(--cobalt)'});
+  if(st.avgLut)headlineBits.push({v:st.avgLut+'d',l:'Avg luteal',c:st.avgLut>=12?'var(--forest)':st.avgLut>=10?'var(--gold)':'var(--rose)'});
+  if(reg)headlineBits.push({v:reg.score+'%',l:reg.lbl,c:reg.score>=70?'var(--forest)':reg.score>=50?'var(--gold)':'var(--burnt)'});
+  h+='<div class="section"><div class="card" style="padding:16px 14px;background:linear-gradient(135deg,var(--cob-bg),var(--cream))">';
+  h+='<div style="font-size:10px;font-weight:700;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Your Numbers</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat('+headlineBits.length+',1fr);gap:10px">';
+  headlineBits.forEach(function(b){
+    h+='<div style="text-align:center"><div style="font-size:22px;font-weight:800;color:'+b.c+'">'+b.v+'</div><div style="font-size:10px;font-weight:600;color:var(--txt3);margin-top:2px">'+b.l+'</div></div>';
+  });
+  h+='</div></div></div>';
+
   h+='<div class="section">'+colHdr('i-stats','Stats Dashboard');
   h+=colBody('i-stats');
   h+='<div class="sg">';
@@ -2362,8 +2837,7 @@ function rInsights(){
   if(cp2)h+='<div class="sum-row"><span class="sum-lbl">Conception score</span><span class="sum-val" style="color:'+(cp2.pct>=70?'var(--forest)':cp2.pct>=40?'var(--gold)':'var(--txt4)')+'">'+cp2.pct+'%</span></div>';
   h+='</div>'+colEnd()+'</div>';
 
-  // Cycle regularity
-  var reg=regularityScore();
+  // Cycle regularity (detailed view)
   if(reg){
     var regCol=reg.score>=70?"var(--forest)":reg.score>=50?"var(--gold)":"var(--burnt)";
     h+='<div class="section">'+colHdr('i-reg','Cycle Regularity');
@@ -2599,19 +3073,54 @@ function rInsights(){
     h+='</div>'+colEnd()+'</div>';
   }
 
-  // Doctor Summary Export
-  h+='<div class="section"><div class="sec-hdr"><span class="sec-title">Doctor Report</span></div>';
-  h+='<div class="card" style="padding:14px 16px"><div style="font-size:12px;color:var(--txt2);line-height:1.5;margin-bottom:10px">Generate a comprehensive summary of your cycle data for your GP or fertility clinic.</div>';
-  h+='<button onclick="exportDoctorReport()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--cobalt);color:#fff">Generate Doctor Report</button>';
-  h+='<button onclick="exportDayByDay()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--burnt);color:#fff;margin-top:6px">Current Cycle — Day by Day</button>';
-  h+='</div></div>';
-
   // Notes
   var nl=timeline();
   h+='<div class="section">'+colHdr('i-notes','Notes Timeline',nl.length);
   h+=colBody('i-notes');
   if(nl.length){h+='<div class="card" style="padding:8px 14px">';nl.forEach(function(n){h+='<div class="ni"><div class="nm">'+fdf(n.d)+(n.cd?' · Day '+n.cd:'')+(n.cy?' · C'+n.cy:'')+'</div><div class="nt">'+n.t+'</div></div>'});h+='</div>'}else h+='<div class="card" style="color:var(--txt4);font-size:12px">No notes yet</div>';
   h+=colEnd()+'</div>';
+
+  // Pregnancy tests (moved here from Compare)
+  h+='<div class="section">'+colHdr('i-ptests','Pregnancy Tests',D.ptests.length);
+  h+=colBody('i-ptests');
+  h+='<div class="card" style="padding:8px 14px">';
+  h+='<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button onclick="openPT()" style="font-size:11px;font-weight:700;color:var(--cobalt);background:var(--cob-bg);padding:6px 12px;border-radius:8px">+ Add test</button></div>';
+  if(D.ptests.length){
+    D.ptests.slice().reverse().forEach(function(pt,i){
+      var ri=D.ptests.length-1-i;
+      var col=pt.result==='positive'?'var(--forest)':pt.result==='negative'?'var(--rose)':'var(--gold)';
+      h+='<div class="pt-row"><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--txt)">'+fd(pt.date)+'</div><div style="font-size:11px;color:var(--txt3)">'+(pt.brand||'No brand')+(pt.dpo?' · '+pt.dpo+' DPO':'')+'</div></div><span class="pt-res" style="background:'+col+';color:#fff">'+pt.result+'</span><button onclick="delPT('+ri+')" style="background:none;color:var(--txt5);font-size:14px;padding:4px">✕</button></div>';
+    });
+  }else h+='<div style="color:var(--txt4);font-size:12px;padding:8px 0">No tests logged yet</div>';
+  h+='</div>'+colEnd()+'</div>';
+
+  // Photo gallery (moved here from Compare)
+  var _gPh=[];
+  D.ptests.forEach(function(pt){if(pt.photo)_gPh.push({type:'test',date:pt.date,photo:pt.photo,label:pt.result+(pt.brand?' ('+pt.brand+')':''),dpo:pt.dpo})});
+  if(D.opkPhotos){Object.keys(D.opkPhotos).sort().reverse().forEach(function(d){if(D.opkPhotos[d])_gPh.push({type:'opk',date:d,photo:D.opkPhotos[d],label:'OPK '+(D.opks&&D.opks[d]==='pos'?'Positive':'Negative')})})}
+  if(_gPh.length){
+    window._gallery=_gPh;
+    h+='<div class="section">'+colHdr('i-photos','Test Photo Gallery',_gPh.length);
+    h+=colBody('i-photos');
+    h+='<div class="card" style="padding:10px"><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">';
+    _gPh.forEach(function(p,idx){
+      var bdr=p.type==='test'?(p.label.indexOf('positive')>-1?'var(--forest)':p.label.indexOf('negative')>-1?'var(--rose)':'var(--gold)'):'var(--gold)';
+      h+='<div onclick="viewGPh('+idx+')" style="cursor:pointer;position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1;border:2px solid '+bdr+'">';
+      h+='<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover">';
+      h+='<div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.7));padding:4px 6px">';
+      h+='<div style="font-size:8px;font-weight:700;color:#fff">'+fd(p.date)+'</div>';
+      h+='<div style="font-size:7px;color:rgba(255,255,255,.7)">'+p.label+(p.dpo?' \u00b7 '+p.dpo+'DPO':'')+'</div>';
+      h+='</div></div>';
+    });
+    h+='</div></div>'+colEnd()+'</div>';
+  }
+
+  // Data management (moved here from Compare)
+  h+='<div class="section">'+colHdr('i-backup','Data Management');
+  h+=colBody('i-backup');
+  h+='<div class="card"><div class="bk-row"><button class="bk-btn" style="background:var(--cob-bg);color:var(--cobalt)" onclick="backup()">⬇ Backup</button><button class="bk-btn" style="background:var(--burnt-bg);color:var(--burnt)" onclick="document.getElementById(\'restF\').click()">⬆ Restore</button></div><input type="file" id="restF" style="display:none" accept=".json" onchange="restore(this)"><div style="font-size:10px;color:var(--txt4);margin-top:8px;text-align:center">Backup saves all your data as a JSON file</div></div>';
+  h+=colEnd()+'</div>';
+
   return h;
 }
 function getPhaseTips(pn,info){
