@@ -3,5 +3,5 @@ main = "cytrack-gemini-worker.js"
 compatibility_date = "2024-01-01"
 
 [vars]
-# Leave APP_SECRET empty here — we'll set it in the dashboard as a secret
-# Just declaring it so the worker knows it exists
+APP_SECRET = "test123"
+GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
