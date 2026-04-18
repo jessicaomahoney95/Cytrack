@@ -1,24 +1,23 @@
 {
-  "name": "CyTrack — Jess's Cycle Tracker",
-  "short_name": "CyTrack",
-  "description": "BBT cycle tracking for TTC",
-  "start_url": "./index.html",
+  "name": "\u200B",
+  "short_name": "\u200B",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#B25835",
-  "theme_color": "#B25835",
+  "background_color": "#F5E5D6",
+  "theme_color": "#F5E5D6",
+  "start_url": "./",
+  "scope": "./",
   "icons": [
     {
       "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
