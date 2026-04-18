@@ -1597,7 +1597,7 @@ function journeyData(){
     var od=ovDay(c);if(od){var dt=ad(c.key,od-1);items.push({date:dt,type:"ov",text:"Ovulation detected (Day "+od+")",color:"var(--gold)"})}
   });
   D.ptests.forEach(function(pt){items.push({date:pt.date,type:"test",text:"Pregnancy test: "+pt.result+(pt.brand?" ("+pt.brand+")":""),color:pt.result==="positive"?"var(--forest)":"var(--txt4)"})});
-  if(D.opks){Object.keys(D.opks).forEach(function(d){items.push({date:d,type:"opk",text:"OPK: "+(D.opks[d]==="pos"?"Positive ➕":"Negative ➖"),color:D.opks[d]==="pos"?"var(--gold)":"var(--txt4)"})})}
+  if(D.opks){Object.keys(D.opks).forEach(function(d){var r=getOpkResult(d);var inten=getOpkIntensity(d);items.push({date:d,type:"opk",text:"OPK: "+(r==="pos"?"Positive ➕":"Negative ➖")+(inten?" (intensity "+inten+")":""),color:r==="pos"?"var(--gold)":"var(--txt4)"})})}
   D.appts.forEach(function(a){items.push({date:a.date,type:"appt",text:a.title+(a.notes?" — "+a.notes:""),color:"var(--cobalt)"})});
   return items.sort(function(a,b){return b.date.localeCompare(a.date)})
 }
@@ -1614,6 +1614,8 @@ function load(){
   if(!D.appts)D.appts=[];if(!D.journal)D.journal={};if(!D.checks)D.checks={};if(!D.opks)D.opks={};if(!D.tqual)D.tqual={};if(!D.opkPhotos)D.opkPhotos={};
   if(!D.wrist)D.wrist={};if(typeof SEED_WRIST!=='undefined'&&Object.keys(D.wrist).length<10){Object.keys(SEED_WRIST).forEach(function(d){if(!D.wrist[d])D.wrist[d]=SEED_WRIST[d]})}if(!D.sleep)D.sleep={};if(!D.darkMode)D.darkMode=false;if(!D.ttime)D.ttime={};if(!D.sleepHrs)D.sleepHrs={};if(!D.bedtime)D.bedtime='22:30';if(!D.waketime)D.waketime='06:30';if(!D.sleepTimes)D.sleepTimes={};
   if(!D.cmAmt)D.cmAmt={};  // Per-day, per-CM-type amount: {date: {"CM: Egg white": "lots"|"some"|"little"}}
+  if(!D.symTime)D.symTime={};  // Per-day, per-symptom time: {date: {"Cramps": "14:30"}}
+  if(!D.outcomes)D.outcomes={};  // Per-cycle outcome: {cycleIdx: {result, notes, loggedAt}}
   if(!D.askLog)D.askLog=[];  // Question bank: [{ts, q, a, rating: 'up'|'down'|null, note: '', source: 'rules'|'ai'}]
   if(!D.aiCfg)D.aiCfg={url:'',secret:'',enabled:false};  // Gemini Worker config
   var validSyms=["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting","CM: Egg white","CM: Watery","CM: Creamy","CM: Sticky","CM: Dry"];
@@ -1824,7 +1826,7 @@ function render(){
   }
   // Tabs at top
   h+='<div class="tabs">';
-  ["today","ask","overlay","cycle","compare","doctor","insights"].forEach(function(t){
+  ["today","ask","overlay","cycle","compare","doctor","insights","partner"].forEach(function(t){
     h+='<button class="tab'+(curTab===t?' on':'')+'" onclick="sw(\''+t+'\')">'+t[0].toUpperCase()+t.slice(1)+'</button>';
   });
   h+='</div></div>';
@@ -1835,6 +1837,7 @@ function render(){
   else if(curTab==="cycle")h+=rCycle();
   else if(curTab==="compare")h+=rCompare();
   else if(curTab==="doctor")h+=rDoctor(info);
+  else if(curTab==="partner")h+=rPartner(info);
   else h+=rInsights();
   h+='</div>';app.innerHTML=h;
   setTimeout(function(){
@@ -1850,6 +1853,39 @@ function quickLog3(){saveUndo();var inp=document.getElementById('mornT');var raw
 function rToday(info){  var h='';
   var todaySy=D.sym[td()]||[];var todayMo=D.mood[td()]||[];
   var streak=getStreak();
+
+  // ===== CYCLE OUTCOME PROMPT =====
+  // If previous cycle completed but has no outcome logged yet, prompt
+  var prevCi=info.ci-1;
+  if(prevCi>=0&&D.cycles[prevCi]&&D.cycles[prevCi].length&&(!D.outcomes||!D.outcomes[prevCi])){
+    var prevC=D.cycles[prevCi];
+    h+='<div class="section"><div class="card" style="padding:14px 16px;background:var(--lavender-bg);border-left:3px solid var(--plum)">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    h+='<span style="font-size:10px;font-weight:700;color:var(--plum);text-transform:uppercase;letter-spacing:.8px">📝 How did last cycle go?</span>';
+    h+='<button onclick="skipOutcome('+prevCi+')" style="font-size:10px;color:var(--txt4);background:none;border:none;cursor:pointer">Skip</button>';
+    h+='</div>';
+    h+='<div style="font-size:11px;color:var(--txt2);margin-bottom:10px">Cycle '+(prevCi+1)+' ended. Capture the outcome for your history — takes 10 seconds.</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
+    [['normal','Just a normal cycle','var(--cobalt)'],['bfn','BFN — trying again','var(--txt3)'],['bfp','BFP — pregnant','var(--forest)'],['chemical','Chemical pregnancy','var(--rose)'],['mc','Miscarriage','var(--rose)'],['other','Something else','var(--gold)']].forEach(function(opt){
+      h+='<button onclick="logOutcome('+prevCi+',\''+opt[0]+'\')" style="padding:8px 12px;border-radius:10px;font-size:11px;font-weight:700;background:var(--card);color:'+opt[2]+';border:1px solid var(--cream3);cursor:pointer">'+opt[1]+'</button>';
+    });
+    h+='</div></div></div>';
+  }
+
+  // ===== PRE-PERIOD WARNING (above everything else if triggered) =====
+  var ppSig=prePeriodSignal();
+  if(ppSig){
+    var border=ppSig.strength==='high'?'var(--rose)':ppSig.strength==='medium'?'var(--burnt)':'var(--gold)';
+    var bg=ppSig.strength==='high'?'var(--rose-bg)':ppSig.strength==='medium'?'var(--peach-bg)':'var(--butter-bg)';
+    h+='<div class="section"><div class="card" style="padding:14px 16px;background:'+bg+';border-left:3px solid '+border+'">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    h+='<span style="font-size:10px;font-weight:700;color:'+border+';text-transform:uppercase;letter-spacing:.8px">⚠ Period Likely Soon</span>';
+    if(ppSig.eta)h+='<span style="font-size:10px;font-weight:700;color:'+border+'">'+ppSig.eta+'</span>';
+    h+='</div>';
+    h+='<div style="font-size:11px;color:var(--txt2);line-height:1.6">'+ppSig.signals.join(' · ')+'</div>';
+    h+='<div style="font-size:10px;color:var(--txt3);margin-top:6px;font-style:italic">Based on '+ppSig.dpo+' DPO, temp trend, and your logged symptoms.</div>';
+    h+='</div></div>';
+  }
 
   // ===== MORNING BRIEFING (new top card) =====
   var briefing=morningBriefing(info);
@@ -2112,7 +2148,22 @@ function rToday(info){  var h='';
     var on=todaySy.indexOf(s)>-1;
     h+='<button class="qs-chip'+(on?' on on-s':'')+'" onclick="qSym(\''+s+'\')">'+s+'</button>';
   });
-  h+='</div></div>';
+  h+='</div>';
+  // Time chips for active symptoms
+  var activeSymsWithTime=todaySy.filter(function(s){return s.indexOf('CM:')!==0});
+  if(activeSymsWithTime.length){
+    h+='<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:5px">';
+    activeSymsWithTime.forEach(function(s){
+      var t=getSymTime(s,td());
+      if(!t)return;  // shouldn't happen since we auto-set, but guard
+      // Pretty format for button label
+      var parts=t.split(':');var h12=parseInt(parts[0],10)%12||12;var ampm=parseInt(parts[0],10)>=12?'pm':'am';
+      var lbl=s+' · '+h12+':'+parts[1]+ampm;
+      h+='<button onclick="editSymTime(\''+s+'\')" style="padding:3px 8px;border-radius:10px;font-size:9px;font-weight:600;background:var(--cream);color:var(--txt3);border:1px solid var(--cream3);cursor:pointer">🕐 '+lbl+'</button>';
+    });
+    h+='</div>';
+  }
+  h+='</div>';
   h+='<div style="margin-top:10px"><div class="fl">Mood</div>';
   h+='<div class="qs-chips">';
   ["Happy","Calm","Energetic","Tired","Irritable","Anxious","Sad","Emotional"].forEach(function(m){
@@ -2122,8 +2173,8 @@ function rToday(info){  var h='';
   h+='</div></div>';
   h+='<div style="display:flex;gap:6px;margin-top:10px">';
   h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px;'+(D.sex[td()]?'background:var(--cobalt);color:#fff':'')+'" onclick="qSex()">Sex</button>';
-  var todayOPK=D.opks&&D.opks[td()];
-  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px;'+(todayOPK==='pos'?'background:var(--gold);color:#fff':todayOPK==='neg'?'background:var(--cream3);color:var(--txt3)':'')+'" onclick="cycleOPK()">OPK'+(todayOPK==='pos'?' +':todayOPK==='neg'?' −':'')+'</button>';
+  var todayOPKRes=getOpkResult(td());var todayOPKInt=getOpkIntensity(td());
+  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px;'+(todayOPKRes==='pos'?'background:var(--gold);color:#fff':todayOPKRes==='neg'?'background:var(--cream3);color:var(--txt3)':'')+'" onclick="cycleOPK()">OPK'+(todayOPKInt?' '+todayOPKInt+'/5':'')+'</button>';
   h+='</div>';
   h+='<div style="display:flex;gap:6px;margin-top:6px">';
   h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px" onclick="openPT()">Pregnancy test</button>';
@@ -2546,12 +2597,82 @@ function gamePlan(info){
 
 function getStreak(){var c=D.cycles[D.cycles.length-1];var streak=0;var d=td();for(var i=0;i<60;i++){if(c.readings.some(function(r){return r.date===d})){streak++;d=ad(d,-1)}else break}return streak}
 
-function qSym(s){saveUndo();var date=td();var sy=D.sym[date]||[];var idx=sy.indexOf(s);if(idx>-1){sy.splice(idx,1);if(s.indexOf('CM:')===0&&D.cmAmt&&D.cmAmt[date]){delete D.cmAmt[date][s];if(!Object.keys(D.cmAmt[date]).length)delete D.cmAmt[date]}}else sy.push(s);if(sy.length)D.sym[date]=sy;else delete D.sym[date];save();render()}
+function qSym(s){
+  saveUndo();var date=td();var sy=D.sym[date]||[];var idx=sy.indexOf(s);
+  if(idx>-1){
+    sy.splice(idx,1);
+    if(s.indexOf('CM:')===0&&D.cmAmt&&D.cmAmt[date]){delete D.cmAmt[date][s];if(!Object.keys(D.cmAmt[date]).length)delete D.cmAmt[date]}
+    if(D.symTime&&D.symTime[date]){delete D.symTime[date][s];if(!Object.keys(D.symTime[date]).length)delete D.symTime[date]}
+  }else{
+    sy.push(s);
+    // Auto-timestamp on add (not for CM — CM has its own amount UI)
+    if(s.indexOf('CM:')!==0){
+      if(!D.symTime)D.symTime={};
+      if(!D.symTime[date])D.symTime[date]={};
+      var now=new Date();
+      D.symTime[date][s]=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+    }
+  }
+  if(sy.length)D.sym[date]=sy;else delete D.sym[date];
+  save();render()
+}
 function qMood(m){saveUndo();var date=td();var mo=D.mood[date]||[];var idx=mo.indexOf(m);if(idx>-1)mo.splice(idx,1);else mo.push(m);if(mo.length)D.mood[date]=mo;else delete D.mood[date];save();render()}
 function qSex(){saveUndo();var date=td();if(D.sex[date])delete D.sex[date];else D.sex[date]=1;save();render()}
 /* Set CM amount for a given CM type on a date. amt = 'lots' | 'some' | 'little' or null to clear */
 function setCmAmt(cmType,amt,date){saveUndo();date=date||td();if(!D.cmAmt)D.cmAmt={};if(!D.cmAmt[date])D.cmAmt[date]={};if(amt)D.cmAmt[date][cmType]=amt;else delete D.cmAmt[date][cmType];if(!Object.keys(D.cmAmt[date]).length)delete D.cmAmt[date];save();render()}
 function getCmAmt(cmType,date){if(!D.cmAmt||!D.cmAmt[date])return null;return D.cmAmt[date][cmType]||null}
+/* Set symptom time — HH:MM string or null to clear */
+function setSymTime(sym,time,date){
+  saveUndo();date=date||td();
+  if(!D.symTime)D.symTime={};
+  if(!D.symTime[date])D.symTime[date]={};
+  if(time)D.symTime[date][sym]=time;else delete D.symTime[date][sym];
+  if(!Object.keys(D.symTime[date]).length)delete D.symTime[date];
+  save();render();
+}
+function getSymTime(sym,date){if(!D.symTime||!D.symTime[date])return null;return D.symTime[date][sym]||null}
+/* Prompt user to change a symptom's time */
+function editSymTime(sym,date){
+  date=date||td();
+  var cur=getSymTime(sym,date)||'';
+  var newTime=prompt('Time for "'+sym+'" (HH:MM) — leave blank to clear:',cur);
+  if(newTime===null)return;
+  newTime=newTime.trim();
+  if(newTime&&!/^\d{1,2}:\d{2}$/.test(newTime)){flash('Invalid time format');return}
+  if(newTime){
+    var parts=newTime.split(':');var hh=parts[0].padStart(2,'0');var mm=parts[1];
+    newTime=hh+':'+mm;
+  }
+  setSymTime(sym,newTime||null,date);
+}
+/* Log a cycle outcome. Optionally prompt for notes. */
+function logOutcome(ci,result){
+  saveUndo();
+  var notes='';
+  // Prompt for optional notes for meaningful outcomes
+  if(result!=='normal'&&result!=='other'){
+    var promptText='Anything you want to note? (optional, press Enter to skip)';
+    if(result==='bfp')promptText='Anything notable about this pregnancy cycle? (optional)';
+    if(result==='chemical'||result==='mc')promptText='Anything you want to remember? (optional)';
+    notes=prompt(promptText,'')||'';
+  }
+  if(!D.outcomes)D.outcomes={};
+  D.outcomes[ci]={result:result,notes:notes,loggedAt:new Date().toISOString()};
+  save();render();
+  var resultLbl=result==='normal'?'Normal cycle':result==='bfn'?'BFN':result==='bfp'?'BFP logged 🌟':result==='chemical'?'Chemical pregnancy':result==='mc'?'Miscarriage':'Outcome';
+  flash(resultLbl+' recorded');
+}
+function skipOutcome(ci){
+  if(!D.outcomes)D.outcomes={};
+  D.outcomes[ci]={result:'skipped',notes:'',loggedAt:new Date().toISOString()};
+  save();render();
+  flash('Skipped');
+}
+/* Allow user to edit or clear a previously logged outcome */
+function editOutcome(ci){
+  if(!confirm('Re-log outcome for Cycle '+(ci+1)+'? (Current will be cleared and you\'ll be asked again)'))return;
+  if(D.outcomes&&D.outcomes[ci]){delete D.outcomes[ci];save();render()}
+}
 /* Format CM symptom with amount for display. Returns "Egg white" or "Egg white (a lot)" */
 function fmtCM(sym,date){
   if(!sym||sym.indexOf('CM:')!==0)return sym;
@@ -2562,25 +2683,138 @@ function fmtCM(sym,date){
   var amtLbl=amt==='lots'?'a lot':amt==='some'?'some':'a little';
   return base+' ('+amtLbl+')';
 }
+/* Format any symptom: CM-amount OR time-tagged e.g. "Cramps (2:30pm)" */
+function fmtSym(sym,date){
+  if(sym.indexOf('CM:')===0)return fmtCM(sym,date);
+  var t=getSymTime(sym,date);
+  if(!t)return sym;
+  // Pretty 12h format: "14:30" -> "2:30pm"
+  var parts=t.split(':');var h=parseInt(parts[0],10);var m=parts[1];
+  var ampm=h>=12?'pm':'am';var h12=h%12||12;
+  return sym+' ('+h12+':'+m+ampm+')';
+}
+
+/* OPK helpers — support legacy string format ('pos'|'neg') and new object format {result, intensity} */
+function getOpk(date){var v=D.opks&&D.opks[date];if(!v)return null;if(typeof v==='string')return{result:v,intensity:v==='pos'?4:1};return v}
+function getOpkResult(date){var v=getOpk(date);return v?v.result:null}
+function getOpkIntensity(date){var v=getOpk(date);return v?v.intensity:null}
+function setOpk(date,result,intensity){
+  if(!D.opks)D.opks={};
+  if(!result){delete D.opks[date];return}
+  // Auto-derive result from intensity if not passed
+  if(!result&&intensity!=null)result=intensity>=4?'pos':'neg';
+  D.opks[date]={result:result,intensity:intensity||(result==='pos'?4:1)};
+}
+/* Pre-period warning detector — returns {likely, strength, signals, eta} or null */
+function prePeriodSignal(){
+  var info=cInfo();var c=info.c;var dpo=info.ho?(info.cd-info.od):null;
+  if(dpo===null||dpo<8)return null;  // Only meaningful from 8+ DPO
+  if(c.length)return null;  // Period already arrived (cycle complete)
+
+  var signals=[];var strength=0;
+  var cl=avgCL2();
+  var today=td();
+  var yest=ad(today,-1);
+  var todayR=c.readings.find(function(x){return x.date===today});
+  var yestR=c.readings.find(function(x){return x.date===yest});
+
+  // Signal 1: Temp drop
+  if(todayR&&todayR.temp!=null&&yestR&&yestR.temp!=null){
+    var drop=yestR.temp-todayR.temp;
+    if(drop>=0.15){signals.push('<strong>Temp drop:</strong> '+drop.toFixed(2)+'° since yesterday');strength+=3}
+    else if(drop>=0.08){signals.push('Temp dipping: '+drop.toFixed(2)+'° since yesterday');strength+=1}
+  }
+  if(todayR&&todayR.temp!=null&&cl){
+    var belowCL=cl-todayR.temp;
+    if(belowCL>=0.05){signals.push('<strong>Below coverline</strong> by '+belowCL.toFixed(2)+'°');strength+=3}
+  }
+
+  // Signal 2: Mood shifts (irritable, sad, emotional arriving today)
+  var todayMo=D.mood[today]||[];
+  var yestMo=D.mood[yest]||[];
+  var lowMoods=['Irritable','Sad','Emotional','Anxious'];
+  var newLowMoods=todayMo.filter(function(m){return lowMoods.indexOf(m)>-1&&yestMo.indexOf(m)===-1});
+  if(newLowMoods.length){signals.push('Mood shift: '+newLowMoods.join(', '));strength+=1}
+
+  // Signal 3: PMS symptoms appearing
+  var todaySy=D.sym[today]||[];
+  var pmsSymptoms=['Cramps','Breast tenderness','Bloating','Backache','Acne','Spotting'];
+  var todayPms=todaySy.filter(function(s){return pmsSymptoms.indexOf(s)>-1});
+  if(todayPms.length>=2){signals.push('PMS symptoms: '+todayPms.join(', '));strength+=2}
+  else if(todayPms.length===1){signals.push('PMS symptom: '+todayPms[0]);strength+=1}
+
+  // Signal 4: Past average luteal reached
+  var luts=[];D.cycles.forEach(function(oc,oi){if(!isExcl(oi)){var od2=ovDay(oc);if(od2&&oc.length)luts.push(oc.length-od2)}});
+  var avgLut=luts.length?Math.round(luts.reduce(function(a,b){return a+b},0)/luts.length):null;
+  var etaText=null;
+  if(avgLut){
+    var daysOut=avgLut-dpo;
+    if(daysOut===0){etaText='Period due today';strength+=2}
+    else if(daysOut===1){etaText='Period expected tomorrow';strength+=1}
+    else if(daysOut===-1){etaText='1 day past average luteal';strength+=2}
+    else if(daysOut<-1){etaText=Math.abs(daysOut)+' days past average';strength+=3}
+    else if(daysOut<=2)etaText='Period expected in '+daysOut+' days';
+  }
+
+  if(signals.length===0||strength<2)return null;
+
+  return{
+    likely:true,
+    strength:strength>=5?'high':strength>=3?'medium':'low',
+    signals:signals,
+    eta:etaText,
+    dpo:dpo,
+  };
+}
 function toggleCheck(idx){if(!D.checks)D.checks={};if(!D.checks[td()])D.checks[td()]={};D.checks[td()][idx]=!D.checks[td()][idx];save();render()}
 function cycleOPK(){openOPKModal()}
 function openOPKModal(){
-  var cur=D.opks&&D.opks[td()]||'';var curPh=D.opkPhotos&&D.opkPhotos[td()]||'';
+  var curInt=getOpkIntensity(td())||0;var curRes=getOpkResult(td())||'';
+  var curPh=D.opkPhotos&&D.opkPhotos[td()]||'';
   var h='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl"><div class="mt">OPK Test \u2014 '+fd(td())+'</div>';
-  h+='<div class="fr"><div class="fl">Result</div><div class="chips">';
-  ['pos','neg'].forEach(function(r){var label=r==='pos'?'Positive \u2795':'Negative \u2796';
-    h+='<button class="chip chip-f'+(cur===r?' on':'')+'" data-f="'+r+'" onclick="pF(this)">'+label+'</button>'});
-  h+='</div></div>';
+  h+='<div class="fr"><div class="fl">Test line darkness (0 = no line, 5 = darker than control = peak)</div>';
+  h+='<div style="display:flex;gap:4px;justify-content:space-between;margin-top:6px">';
+  [0,1,2,3,4,5].forEach(function(n){
+    var active=curInt===n;
+    var lbl=n===0?'None':n===1?'Faint':n===2?'Light':n===3?'Medium':n===4?'Dark':'Peak';
+    var color=n===0?'var(--txt4)':n<=2?'var(--txt3)':n===3?'var(--gold)':'var(--burnt)';
+    h+='<button onclick="window._opkInt='+n+';renderOpkModal()" data-int="'+n+'" class="opk-int-btn" style="flex:1;padding:10px 4px;border-radius:10px;font-size:10px;font-weight:700;background:'+(active?color:'var(--cream)')+';color:'+(active?'#fff':color)+';border:1px solid '+(active?color:'var(--cream3)')+';cursor:pointer">';
+    h+='<div style="font-size:14px;font-weight:800">'+n+'</div><div style="font-size:8px;margin-top:2px">'+lbl+'</div>';
+    h+='</button>';
+  });
+  h+='</div>';
+  h+='<div style="font-size:10px;color:var(--txt3);margin-top:8px;line-height:1.5">Positive (LH+) = 4 or 5. Track the rise — it usually spikes 12-36h before ovulation.</div>';
+  h+='</div>';
   h+='<div class="fr"><div class="fl">Photo</div>';
   if(curPh)h+='<div style="display:flex;gap:10px;align-items:center"><img src="'+curPh+'" class="pth" style="width:80px;height:80px"><button class="chip" onclick="delete D.opkPhotos[td()];save();closeM();openOPKModal()">Remove</button></div>';
   else h+='<label class="pu"><input type="file" accept="image/*" style="display:none" id="opkPh" onchange="saveOPKPh(this)">\ud83d\udcf7 Add OPK photo</label>';
   h+='</div>';
   h+='<div class="br"><button class="cb" onclick="closeM()">Cancel</button><button class="sb" onclick="saveOPK()">Save</button></div>';
-  if(cur)h+='<button class="db" onclick="delete D.opks[td()];delete D.opkPhotos[td()];save();closeM();render();flash(\'OPK cleared\')">Clear OPK</button>';
+  if(curInt>0||curRes)h+='<button class="db" onclick="delete D.opks[td()];delete D.opkPhotos[td()];window._opkInt=null;save();closeM();render();flash(\'OPK cleared\')">Clear OPK</button>';
   h+='</div></div>';var div=document.createElement('div');div.id='mdl';div.innerHTML=h;document.body.appendChild(div);
+  window._opkInt=curInt;
 }
-function saveOPK(){var fe=document.querySelector('#mdl .chip-f.on');if(!fe){flash("Pick a result");return}
-  if(!D.opks)D.opks={};D.opks[td()]=fe.dataset.f;save();closeM();render();flash("OPK: "+(fe.dataset.f==='pos'?'Positive \u2795':'Negative \u2796'))}
+function renderOpkModal(){
+  // Update visual state of intensity buttons
+  var btns=document.querySelectorAll('.opk-int-btn');
+  btns.forEach(function(b){
+    var n=parseInt(b.dataset.int,10);
+    var active=window._opkInt===n;
+    var color=n===0?'var(--txt4)':n<=2?'var(--txt3)':n===3?'var(--gold)':'var(--burnt)';
+    b.style.background=active?color:'var(--cream)';
+    b.style.color=active?'#fff':color;
+    b.style.borderColor=active?color:'var(--cream3)';
+  });
+}
+function saveOPK(){
+  var n=window._opkInt;
+  if(n==null||n===0){flash("Tap a line darkness (1-5)");return}
+  if(!D.opks)D.opks={};
+  var result=n>=4?'pos':'neg';
+  D.opks[td()]={result:result,intensity:n};
+  save();closeM();render();
+  flash("OPK: "+(result==='pos'?'Positive \u2795':'Negative \u2796')+' (intensity '+n+')');
+}
 function saveOPKPh(inp){var f=inp.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(e){if(!D.opkPhotos)D.opkPhotos={};D.opkPhotos[td()]=e.target.result;save();closeM();openOPKModal()};rd.readAsDataURL(f)}
 
 /* OVERLAY — BIGGER chart */
@@ -2845,7 +3079,7 @@ function showTip(canvasId,hits,ex,ey){
   if(best.tqual)tags.push('⚠️ '+best.tqual);
   if(tags.length)lines.push(tags.join(' '));
   var syms=(D.sym[best.date]||[]).concat(D.mood[best.date]||[]);
-  if(syms.length)lines.push(syms.slice(0,3).map(function(s){return fmtCM(s,best.date)}).join(', '));
+  if(syms.length)lines.push(syms.slice(0,3).map(function(s){return fmtSym(s,best.date)}).join(', '));
   tip.innerHTML=lines.join('<br>');
   var parent=cv.parentElement;parent.style.position='relative';
   tip.style.left=Math.max(10,Math.min(cx-60,parent.offsetWidth-140))+'px';
@@ -2875,6 +3109,26 @@ function rCycle(){
   h+='<div class="section"><div class="card" style="padding:14px 16px;border-left:3px solid '+(excl?'#D4A24A':(isCurrent?'var(--cobalt)':'var(--txt5)'))+'">';
   h+='<div style="font-size:10px;font-weight:700;color:'+(excl?'#A87A1A':(isCurrent?'var(--cobalt)':'var(--txt3)'))+';text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">'+(excl?'★ Pregnancy cycle':(isCurrent?'This cycle':'Cycle '+(curCyc+1)))+'</div>';
   h+='<div style="font-size:12px;color:var(--txt);line-height:1.5">'+story+'</div>';
+  // Show outcome if logged
+  var outcome=D.outcomes&&D.outcomes[curCyc];
+  if(outcome&&outcome.result!=='skipped'){
+    var outcomeLbl={normal:'Normal cycle',bfn:'BFN',bfp:'🌟 BFP — Pregnant',chemical:'Chemical pregnancy',mc:'Miscarriage',other:'Other'}[outcome.result]||outcome.result;
+    var outcomeCol=outcome.result==='bfp'?'var(--forest)':outcome.result==='bfn'?'var(--txt3)':outcome.result==='chemical'||outcome.result==='mc'?'var(--rose)':'var(--cobalt)';
+    h+='<div style="margin-top:8px;padding:6px 10px;background:var(--cream);border-radius:8px;display:flex;justify-content:space-between;align-items:center">';
+    h+='<div><span style="font-size:10px;font-weight:700;color:'+outcomeCol+';text-transform:uppercase;letter-spacing:.4px">Outcome:</span> <span style="font-size:11px;color:var(--txt);font-weight:600">'+outcomeLbl+'</span>';
+    if(outcome.notes)h+='<div style="font-size:10px;color:var(--txt3);margin-top:2px;font-style:italic">"'+outcome.notes+'"</div>';
+    h+='</div>';
+    h+='<button onclick="editOutcome('+curCyc+')" style="font-size:9px;color:var(--txt4);background:none;border:none;cursor:pointer">Edit</button>';
+    h+='</div>';
+  }else if(!isCurrent&&c.length){
+    // Cycle is complete but no outcome logged — mini prompt
+    h+='<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">';
+    h+='<span style="font-size:9px;color:var(--txt4);padding:3px 0">Outcome:</span>';
+    [['normal','Normal'],['bfn','BFN'],['bfp','BFP'],['chemical','Chemical'],['mc','MC']].forEach(function(opt){
+      h+='<button onclick="logOutcome('+curCyc+',\''+opt[0]+'\')" style="padding:3px 8px;border-radius:8px;font-size:9px;font-weight:600;background:var(--cream);color:var(--txt3);border:1px solid var(--cream3);cursor:pointer">'+opt[1]+'</button>';
+    });
+    h+='</div>';
+  }
   h+='</div></div>';
 
   // Excluded badge
@@ -2934,6 +3188,61 @@ function rCycle(){
   if(cTri===null&&eod2)h+='<div style="font-size:9px;color:var(--txt4);text-align:right;margin-top:2px">Need ≥8 post-OV readings</div>';
   if(lpOngoing)h+='<div style="font-size:9px;color:var(--txt4);text-align:center;margin-top:6px">* Luteal so far — final length TBD</div>';
   h+='</div></div>';
+
+  // === OPK Trend for this cycle (only if any OPKs logged) ===
+  var opkDays=[];
+  c.readings.forEach(function(r){
+    var inten=getOpkIntensity(r.date);
+    if(inten!=null){
+      // also include r.ov as marker for LH+ detected
+      opkDays.push({day:r.day,date:r.date,intensity:inten,isLH:!!r.ov});
+    }
+  });
+  // Also include OPKs logged without a corresponding temp reading
+  if(D.opks){
+    Object.keys(D.opks).forEach(function(d){
+      if(d<c.key)return;
+      // Inside this cycle's date range?
+      var nextCycleStart=D.cycles[curCyc+1]?D.cycles[curCyc+1].key:'9999';
+      if(d>=nextCycleStart)return;
+      if(opkDays.find(function(o){return o.date===d}))return;  // already added
+      var dayN=db(c.key,d)+1;
+      var inten=getOpkIntensity(d);
+      if(inten!=null)opkDays.push({day:dayN,date:d,intensity:inten,isLH:false});
+    });
+  }
+  opkDays.sort(function(a,b){return a.day-b.day});
+  if(opkDays.length>=1){
+    h+='<div class="section"><div class="card" style="padding:14px 16px">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+    h+='<span style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.6px">OPK Trend</span>';
+    var peakDay=opkDays.reduce(function(a,b){return b.intensity>a.intensity?b:a},opkDays[0]);
+    h+='<span style="font-size:10px;color:var(--txt3)">Peak: '+peakDay.intensity+'/5 on Day '+peakDay.day+'</span>';
+    h+='</div>';
+    // Render bars — one per day in the range, height = intensity
+    var minD=opkDays[0].day;var maxD=opkDays[opkDays.length-1].day;
+    // Fill any missing days so the chart shows the full sequence
+    h+='<div style="display:flex;gap:3px;align-items:flex-end;height:70px;padding:4px 0">';
+    for(var d=minD;d<=maxD;d++){
+      var o=opkDays.find(function(x){return x.day===d});
+      var inten=o?o.intensity:0;
+      var pct=inten*20;  // 0-100%
+      var color=inten===0?'var(--cream3)':inten<=2?'var(--txt4)':inten===3?'var(--gold)':'var(--burnt)';
+      var label=inten>0?inten:'';
+      h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:14px">';
+      h+='<div style="width:100%;background:var(--cream);border-radius:3px;flex:1;display:flex;align-items:flex-end;overflow:hidden">';
+      if(inten>0)h+='<div style="width:100%;height:'+pct+'%;background:'+color+';border-radius:2px"></div>';
+      h+='</div>';
+      h+='<div style="font-size:8px;font-weight:700;color:var(--txt4)">'+d+'</div>';
+      h+='</div>';
+    }
+    h+='</div>';
+    // Legend
+    h+='<div style="display:flex;gap:10px;justify-content:center;font-size:9px;color:var(--txt3);margin-top:8px;flex-wrap:wrap">';
+    h+='<span>1-2 · Faint/Light</span><span>3 · Medium</span><span style="color:var(--burnt);font-weight:700">4-5 · Positive (LH+)</span>';
+    h+='</div>';
+    h+='</div></div>';
+  }
 
   // === NEW: Day-by-day export for THIS cycle ===
   h+='<div class="section"><div class="card" style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px">';
@@ -2996,7 +3305,7 @@ function rCycle(){
       var isCM=s.indexOf('CM:')===0;
       var bg=isCM?'var(--gold-bg)':'var(--burnt-bg)';
       var col=isCM?'var(--gold)':'var(--burnt)';
-      h+='<span class="rdg-tag" style="background:'+bg+';color:'+col+'">'+fmtCM(s,r.date)+'</span>';
+      h+='<span class="rdg-tag" style="background:'+bg+';color:'+col+'">'+fmtSym(s,r.date)+'</span>';
     });
     md.forEach(function(m){h+='<span class="rdg-tag" style="background:var(--forest-bg);color:var(--forest)">💊'+m+'</span>'});
     if(nt)h+='<span class="rdg-tag" style="background:var(--plum-bg);color:var(--plum)">📝</span>';
@@ -3118,7 +3427,7 @@ function rCompare(){
     var syms=r?D.sym[r.date]||[]:[];
     var moods=r?D.mood[r.date]||[]:[];
     var sex=r?!!D.sex[r.date]:false;
-    var opk=r&&D.opks?D.opks[r.date]:null;
+    var opk=r?getOpkResult(r.date):null;
     var note=r?D.notes[r.date]||'':'';
     var flow=r?r.flow:null;
     var wasOv=r?!!r.ov:false;
@@ -3201,7 +3510,7 @@ function rCompare(){
           var isCM=s.indexOf('CM:')===0;var isMood=d.moods.indexOf(s)>-1;
           var bg=isCM?'var(--gold-bg)':isMood?'var(--cob-bg)':'var(--burnt-bg)';
           var col=isCM?'var(--gold)':isMood?'var(--cobalt)':'var(--burnt)';
-          h+='<span style="font-size:9px;padding:2px 7px;border-radius:8px;background:'+bg+';color:'+col+';font-weight:600">'+fmtCM(s,d.date)+'</span>';
+          h+='<span style="font-size:9px;padding:2px 7px;border-radius:8px;background:'+bg+';color:'+col+';font-weight:600">'+fmtSym(s,d.date)+'</span>';
         });
         h+='</div>';
       }
@@ -3248,7 +3557,7 @@ function rCompare(){
         h+='<div><span style="font-size:12px;font-weight:600;color:'+PAL[d.i%7]+'">C'+(d.i+1)+'</span>';
         h+='<span style="font-size:10px;color:var(--txt3);margin-left:6px">'+fd(d.date)+'</span>';
         var tags2=[];if(d.sex)tags2.push('💙');
-        d.syms.concat(d.mood).slice(0,2).forEach(function(s){tags2.push(fmtCM(s,d.date))});
+        d.syms.concat(d.mood).slice(0,2).forEach(function(s){tags2.push(fmtSym(s,d.date))});
         if(tags2.length)h+='<span style="font-size:9px;color:var(--txt4);margin-left:6px">'+tags2.join(' · ')+'</span>';
         h+='</div>';
         h+='<div style="text-align:right"><span style="font-size:14px;font-weight:700;color:var(--txt)">'+d.temp.toFixed(2)+'°</span>';
@@ -3741,6 +4050,222 @@ function rDoctor(info){
   return h;
 }
 
+/* Partner tab — plain-English cycle status to share with partner */
+function rPartner(info){
+  var h='';
+  var c=info.c;var ci=info.ci;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
+  var ph=phase(cd,info.av,info.ao,info.ho,info.od);
+  var fwStart=info.ao-5;var fwEnd=info.ao;
+  var today=td();
+  var sexLoggedToday=!!D.sex[today];
+
+  // ===== STATUS BIG BLOCK =====
+  var bigStatus='',bigSub='',bigEmoji='',bigColor='';
+  if(ph.n.indexOf('Menstrual')>-1){
+    bigEmoji='🌙';bigStatus='Period — low pressure week';bigColor='var(--rose)';
+    bigSub='Taking care of herself. Fertile window is about '+(fwStart-cd)+' days away.';
+  }else if(cd<fwStart-2&&!info.ho){
+    bigEmoji='🌱';bigStatus='Not fertile yet';bigColor='var(--forest)';
+    bigSub='Fertile window opens in '+(fwStart-cd)+' days. Relax mode.';
+  }else if(cd>=fwStart-2&&cd<fwStart&&!info.ho){
+    bigEmoji='📅';bigStatus='Fertile window opens in '+(fwStart-cd)+' day'+(fwStart-cd===1?'':'s');bigColor='var(--gold)';
+    bigSub='Heads up — we\'re approaching the important days. Start thinking about evenings together.';
+  }else if(cd>=fwStart&&cd<=fwEnd&&!info.ho){
+    var daysIn=cd-fwStart+1;
+    bigEmoji='🔥';bigStatus='FERTILE WINDOW — DAY '+daysIn+' of 6';bigColor='var(--burnt)';
+    if(sexLoggedToday)bigSub='Sex logged today ✓. Nice. Every other day is ideal through ovulation.';
+    else bigSub='THIS is the week. Prioritise tonight. Every other day is fine, nightly even better.';
+  }else if(info.ho&&dpo!=null&&dpo<=1){
+    bigEmoji='💫';bigStatus='Just ovulated — last chance today';bigColor='var(--burnt)';
+    bigSub='Egg is released. Sex today still counts. After that it\'s the waiting game.';
+  }else if(dpo!=null&&dpo<=5){
+    bigEmoji='⏳';bigStatus='Two-week wait — '+dpo+' DPO';bigColor='var(--plum)';
+    bigSub='Too early to tell anything. She might be extra tired or moody — progesterone. No pregnancy signs possible yet.';
+  }else if(dpo!=null&&dpo<=9){
+    bigEmoji='⏳';bigStatus='Two-week wait — '+dpo+' DPO';bigColor='var(--plum)';
+    bigSub='Implantation window. Any symptoms could be PMS or early pregnancy — impossible to tell. Be extra patient and kind.';
+  }else if(dpo!=null&&dpo<=14){
+    bigEmoji='🧪';bigStatus='Testing window — '+dpo+' DPO';bigColor='var(--gold)';
+    bigSub='Period or pregnancy will reveal itself in the next few days. This is the hardest part.';
+  }else if(dpo!=null&&dpo>=15){
+    bigEmoji='❓';bigStatus='Late — '+dpo+' DPO';bigColor='var(--rose)';
+    bigSub='Past her typical luteal length. Testing strongly recommended.';
+  }else{
+    bigEmoji='📊';bigStatus='Day '+cd+' of cycle';bigColor='var(--cobalt)';
+    bigSub=ph.n+' phase.';
+  }
+
+  h+='<div class="section"><div class="card" style="padding:20px 18px;background:var(--blush-bg);border-left:3px solid '+bigColor+'">';
+  h+='<div style="font-size:10px;font-weight:700;color:'+bigColor+';text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">For Your Partner</div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">';
+  h+='<span style="font-size:32px">'+bigEmoji+'</span>';
+  h+='<div style="font-size:15px;font-weight:700;color:var(--txt);line-height:1.3;letter-spacing:-.2px">'+bigStatus+'</div>';
+  h+='</div>';
+  h+='<div style="font-size:13px;color:var(--txt2);line-height:1.5">'+bigSub+'</div>';
+  h+='</div></div>';
+
+  // ===== KEY DATES =====
+  h+='<div class="section"><div class="card" style="padding:16px 18px">';
+  h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">Key Dates This Cycle</div>';
+
+  var rows=[];
+  rows.push(['Cycle started',fd(c.key),cd===1?'today':(cd-1)+' days ago']);
+
+  if(info.ao&&!info.ho){
+    var fwStartDate=ad(c.key,fwStart-1);
+    var daysToFW=fwStart-cd;
+    rows.push(['Fertile window opens',fd(fwStartDate),daysToFW>0?'in '+daysToFW+' days':daysToFW===0?'today':Math.abs(daysToFW)+' days ago']);
+  }
+  if(info.ao){
+    var peakDate=ad(c.key,info.ao-1);
+    var daysToPeak=info.ao-cd;
+    var peakLbl=info.ho?'Ovulated':'Likely ovulation';
+    rows.push([peakLbl,fd(peakDate),info.ho?(dpo+' DPO'):(daysToPeak>0?'in '+daysToPeak+' days':daysToPeak===0?'today':Math.abs(daysToPeak)+' days ago')]);
+  }
+  // Period prediction
+  var avgLut=null;
+  var luts=[];D.cycles.forEach(function(oc,oi){if(!isExcl(oi)){var od2=ovDay(oc);if(od2&&oc.length)luts.push(oc.length-od2)}});
+  if(luts.length)avgLut=Math.round(luts.reduce(function(a,b){return a+b},0)/luts.length);
+  if(info.ho&&avgLut){
+    var periodDate=ad(ad(c.key,info.od-1),avgLut);
+    var daysToPeriod=avgLut-dpo;
+    rows.push(['Period expected',fd(periodDate),daysToPeriod>0?'in '+daysToPeriod+' days':daysToPeriod===0?'today':Math.abs(daysToPeriod)+' days ago']);
+  }
+
+  rows.forEach(function(r,i){
+    h+='<div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0'+(i>0?';border-top:1px solid var(--cream2)':'')+'">';
+    h+='<span style="font-size:12px;color:var(--txt3);font-weight:500">'+r[0]+'</span>';
+    h+='<div style="text-align:right"><div style="font-size:13px;color:var(--txt);font-weight:700">'+r[1]+'</div>';
+    h+='<div style="font-size:10px;color:var(--txt4)">'+r[2]+'</div></div>';
+    h+='</div>';
+  });
+  h+='</div></div>';
+
+  // ===== WHAT HELPS RIGHT NOW =====
+  var helps=[];
+  if(ph.n.indexOf('Menstrual')>-1){
+    helps.push('💛 Check in on how she\'s feeling — cramps can be rough');
+    helps.push('🫖 Tea, a hot water bottle, chocolate always welcome');
+    helps.push('💆 Don\'t take moodiness personally — hormones crashed');
+  }else if(cd<fwStart-2&&!info.ho){
+    helps.push('🌿 Relax — no TTC pressure this week');
+    helps.push('💪 Stay healthy — sleep, exercise, limit alcohol');
+    helps.push('💞 Enjoy the low-pressure time together');
+  }else if(cd>=fwStart-2&&cd<fwStart&&!info.ho){
+    helps.push('🍷 Maybe skip heavy drinking next few nights');
+    helps.push('💤 Prioritise early nights this week');
+    helps.push('📅 Plan a date night within the fertile window');
+  }else if(cd>=fwStart&&cd<=fwEnd&&!info.ho){
+    if(!sexLoggedToday)helps.push('🔥 Sex tonight — this matters');
+    helps.push('💤 Every other day is best (sperm quality stays high)');
+    helps.push('🚫 Avoid alcohol, hot tubs, tight underwear');
+    helps.push('💕 Make it feel loving, not clinical — pressure hurts');
+  }else if(info.ho&&dpo!=null&&dpo<=1){
+    if(!sexLoggedToday)helps.push('🔥 One more for today if possible');
+    helps.push('💧 Sperm can still catch an egg if released ~12h ago');
+  }else if(dpo!=null&&dpo<=9){
+    helps.push('💜 Extra patience and softness this week');
+    helps.push('😴 She might be extra sleepy — progesterone is a sedative');
+    helps.push('🚫 Don\'t ask "any symptoms?" — creates pressure');
+    helps.push('🫂 Just be present. No need to fix anything');
+  }else if(dpo!=null&&dpo<=14){
+    helps.push('💛 Test day might come soon — don\'t ask repeatedly');
+    helps.push('🤐 Let her tell you — don\'t press about tests');
+    helps.push('💕 If BFN: period cramps, disappointment. Be kind');
+    helps.push('🌟 If BFP: let her lead the reaction');
+  }
+
+  if(helps.length){
+    h+='<div class="section"><div class="card" style="padding:16px 18px;background:var(--peach-bg);border-left:3px solid var(--burnt)">';
+    h+='<div style="font-size:10px;font-weight:700;color:var(--burnt);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">What helps right now</div>';
+    helps.forEach(function(hlp){
+      h+='<div style="font-size:12px;color:var(--txt);line-height:1.6;padding:3px 0">'+hlp+'</div>';
+    });
+    h+='</div></div>';
+  }
+
+  // ===== SHARE BUTTON =====
+  h+='<div class="section"><div class="card" style="padding:16px 18px">';
+  h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Share</div>';
+  h+='<div style="font-size:11px;color:var(--txt3);line-height:1.5;margin-bottom:10px">Copy a clean text summary to send your partner.</div>';
+  h+='<div style="display:flex;gap:6px">';
+  h+='<button onclick="copyPartnerText()" style="flex:1;padding:11px;border-radius:10px;background:var(--cobalt);color:#fff;font-size:12px;font-weight:700;border:none;cursor:pointer">📋 Copy text</button>';
+  h+='<button onclick="sharePartnerText()" style="flex:1;padding:11px;border-radius:10px;background:var(--plum);color:#fff;font-size:12px;font-weight:700;border:none;cursor:pointer">📤 Share</button>';
+  h+='</div></div></div>';
+
+  return h;
+}
+
+/* Build plain-text partner summary — used by copy/share buttons */
+function buildPartnerText(){
+  var info=cInfo();var c=info.c;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
+  var ph=phase(cd,info.av,info.ao,info.ho,info.od);
+  var fwStart=info.ao-5;var fwEnd=info.ao;
+  var lines=[];
+
+  // Status line
+  if(ph.n.indexOf('Menstrual')>-1){
+    lines.push('🌙 Period today — low pressure week. Fertile window is ~'+(fwStart-cd)+' days away.');
+  }else if(cd<fwStart-2&&!info.ho){
+    lines.push('🌱 Not fertile yet. Fertile window opens in '+(fwStart-cd)+' days ('+fd(ad(c.key,fwStart-1))+').');
+  }else if(cd>=fwStart-2&&cd<fwStart&&!info.ho){
+    lines.push('📅 Fertile window opens '+(fwStart-cd===0?'today':'in '+(fwStart-cd)+' days')+'. Heads up!');
+  }else if(cd>=fwStart&&cd<=fwEnd&&!info.ho){
+    var daysIn=cd-fwStart+1;
+    lines.push('🔥 FERTILE WINDOW — day '+daysIn+' of 6. Prioritise tonight.');
+  }else if(info.ho&&dpo!=null&&dpo<=1){
+    lines.push('💫 Just ovulated. '+(dpo===0?'Today':'One day post')+'-OV. Sex today still counts.');
+  }else if(dpo!=null&&dpo<=9){
+    lines.push('⏳ Two-week wait — '+dpo+' DPO. Too early to know anything.');
+  }else if(dpo!=null&&dpo<=14){
+    lines.push('🧪 Testing window — '+dpo+' DPO.');
+  }else if(dpo!=null&&dpo>=15){
+    lines.push('❓ Period is late ('+dpo+' DPO). Might test soon.');
+  }else{
+    lines.push('📊 Cycle Day '+cd+' — '+ph.n+' phase.');
+  }
+
+  // Period prediction if in luteal
+  var luts=[];D.cycles.forEach(function(oc,oi){if(!isExcl(oi)){var od2=ovDay(oc);if(od2&&oc.length)luts.push(oc.length-od2)}});
+  if(info.ho&&luts.length){
+    var avgLut=Math.round(luts.reduce(function(a,b){return a+b},0)/luts.length);
+    var periodDate=ad(ad(c.key,info.od-1),avgLut);
+    var daysToPeriod=avgLut-dpo;
+    if(daysToPeriod>0)lines.push('Period expected: '+fd(periodDate)+' (in '+daysToPeriod+' days)');
+    else if(daysToPeriod===0)lines.push('Period expected today');
+  }
+
+  // Key "what helps"
+  if(cd>=fwStart&&cd<=fwEnd&&!info.ho){
+    lines.push('');lines.push('💕 Sex every other day is ideal through ovulation.');
+  }else if(dpo!=null&&dpo>=6&&dpo<=12){
+    lines.push('');lines.push('💛 Extra patience — she might be extra tired or moody (progesterone).');
+  }
+
+  return lines.join('\n');
+}
+function copyPartnerText(){
+  var t=buildPartnerText();
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(t).then(function(){flash('✓ Copied to clipboard')}).catch(function(){
+      // Fallback
+      var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+      flash('✓ Copied');
+    });
+  }else{
+    var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    flash('✓ Copied');
+  }
+}
+function sharePartnerText(){
+  var t=buildPartnerText();
+  if(navigator.share){
+    navigator.share({text:t,title:'Cycle status'}).catch(function(){});
+  }else{
+    copyPartnerText();
+  }
+}
+
 function rInsights(){
   var h='';
   var st=cycleStats();
@@ -4050,7 +4575,7 @@ function rInsights(){
   // Photo gallery (moved here from Compare)
   var _gPh=[];
   D.ptests.forEach(function(pt){if(pt.photo)_gPh.push({type:'test',date:pt.date,photo:pt.photo,label:pt.result+(pt.brand?' ('+pt.brand+')':''),dpo:pt.dpo})});
-  if(D.opkPhotos){Object.keys(D.opkPhotos).sort().reverse().forEach(function(d){if(D.opkPhotos[d])_gPh.push({type:'opk',date:d,photo:D.opkPhotos[d],label:'OPK '+(D.opks&&D.opks[d]==='pos'?'Positive':'Negative')})})}
+  if(D.opkPhotos){Object.keys(D.opkPhotos).sort().reverse().forEach(function(d){if(D.opkPhotos[d])_gPh.push({type:'opk',date:d,photo:D.opkPhotos[d],label:'OPK '+(getOpkResult(d)==='pos'?'Positive':'Negative')})})}
   if(_gPh.length){
     window._gallery=_gPh;
     h+='<div class="section">'+colHdr('i-photos','Test Photo Gallery',_gPh.length);
@@ -4282,7 +4807,7 @@ function openDayView(date,ci){
       var isCM=s.indexOf('CM:')===0;
       var bg=isCM?'var(--gold-bg)':'var(--burnt-bg)';
       var col=isCM?'var(--gold)':'var(--burnt)';
-      h+='<span class="rdg-tag" style="background:'+bg+';color:'+col+';font-size:10px;padding:3px 8px;border-radius:8px">'+fmtCM(s,date)+'</span>';
+      h+='<span class="rdg-tag" style="background:'+bg+';color:'+col+';font-size:10px;padding:3px 8px;border-radius:8px">'+fmtSym(s,date)+'</span>';
     });
     mo.forEach(function(m){h+='<span class="rdg-tag" style="background:var(--cob-bg);color:var(--cobalt);font-size:10px;padding:3px 8px;border-radius:8px">'+m+'</span>'});
   h+='</div>'}
@@ -4573,8 +5098,8 @@ function exportDoctorReport(){
   r+='OPK HISTORY\n';
   r+='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
   var opkDates=Object.keys(D.opks||{}).sort();
-  var posOPK=opkDates.filter(function(d){return D.opks[d]==='pos'});
-  var negOPK=opkDates.filter(function(d){return D.opks[d]==='neg'});
+  var posOPK=opkDates.filter(function(d){return getOpkResult(d)==='pos'});
+  var negOPK=opkDates.filter(function(d){return getOpkResult(d)==='neg'});
   r+='Total tests: '+opkDates.length+' ('+posOPK.length+' positive, '+negOPK.length+' negative)\n';
   posOPK.forEach(function(d){r+='  Positive: '+fdf(d)+'\n'});
   r+='\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
@@ -4650,7 +5175,7 @@ function exportDayByDay(targetCi){
     if(rdg&&rdg.ov)r+='OPK: Positive (LH surge)\n';
     else if(opk)r+='OPK: '+(opk==='pos'?'Positive':'Negative')+'\n';
     if(sx)r+='Intimacy: Yes\n';
-    if(sy.length)r+='Symptoms: '+sy.map(function(s){return fmtCM(s,dt)}).join(', ')+'\n';
+    if(sy.length)r+='Symptoms: '+sy.map(function(s){return fmtSym(s,dt)}).join(', ')+'\n';
     if(mo.length)r+='Mood: '+mo.join(', ')+'\n';
     if(sl)r+='Sleep quality: '+sl+'\n';
     if(slT)r+='Sleep: '+slT.asleep+' → '+slT.woke+(slH?' ('+slH+'h)':'')+'\n';
