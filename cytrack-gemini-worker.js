@@ -2,21 +2,64 @@ export default {
   async fetch(request, env) {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, X-App-Secret',
     };
-    
-    // DIAGNOSTIC — show what the Worker can see
-    return new Response(JSON.stringify({
-      hasAppSecret: !!env.APP_SECRET,
-      appSecretLength: env.APP_SECRET ? env.APP_SECRET.length : 0,
-      hasGeminiKey: !!env.GEMINI_API_KEY,
-      geminiKeyLength: env.GEMINI_API_KEY ? env.GEMINI_API_KEY.length : 0,
-      receivedHeader: request.headers.get('X-App-Secret') || 'NONE',
-      allEnvKeys: Object.keys(env),
-    }, null, 2), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+    if (request.method !== 'POST') {
+      return new Response('Method not allowed', { status: 405, headers: corsHeaders });
+    }
+
+    const providedSecret = request.headers.get('X-App-Secret');
+    if (!providedSecret || providedSecret !== env.APP_SECRET) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    try {
+      const body = await request.json();
+      const model = body.model || 'gemini-2.5-flash';
+
+      const geminiRequest = {
+        contents: [{ role: 'user', parts: [{ text: body.prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 800, topP: 0.9 },
+      };
+      if (body.systemPrompt) {
+        geminiRequest.systemInstruction = { parts: [{ text: body.systemPrompt }] };
+      }
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      const geminiResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+        body: JSON.stringify(geminiRequest),
+      });
+
+      const data = await geminiResponse.json();
+      let answerText = '';
+      if (data?.candidates?.[0]?.content?.parts) {
+        answerText = data.candidates[0].content.parts.map(p => p.text || '').join('');
+      } else if (data?.error) {
+        return new Response(JSON.stringify({ error: data.error.message || 'Gemini error' }), {
+          status: geminiResponse.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ answer: answerText }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
   },
 };
