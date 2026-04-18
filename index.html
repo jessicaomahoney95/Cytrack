@@ -982,6 +982,8 @@ function handleAsk(){
   // If rules matched, use that answer immediately
   if(!isFallback){
     persistAskEntry(q,ruleAnswer,'rules');
+    // Rules answers don't feed into AI conversation history
+    window._aiConvo=[];
     inputEl.value='';
     render();
     return;
@@ -995,12 +997,17 @@ function handleAsk(){
     window._lastAskAnswer='<em style="color:var(--cobalt)">🤔 Asking Gemini…</em>';
     window._aiThinking=true;
     render();
-    askGemini(q).then(function(aiAnswer){
+    // Pass conversation history if this is a follow-up
+    var history=window._aiConvo||[];
+    askGemini(q,history).then(function(aiAnswer){
       window._aiThinking=false;
       if(aiAnswer){
         persistAskEntry(q,aiAnswer,'ai');
+        // Track this exchange for follow-ups (keep last 3 pairs)
+        if(!window._aiConvo)window._aiConvo=[];
+        window._aiConvo.push({q:q,a:aiAnswer});
+        if(window._aiConvo.length>3)window._aiConvo=window._aiConvo.slice(-3);
       }else{
-        // Gemini failed — fall back to the rules' "I don't know" message
         persistAskEntry(q,ruleAnswer+' <span style="color:var(--rose);font-size:10px">(Gemini call failed)</span>','rules');
       }
       render();
@@ -1014,8 +1021,18 @@ function handleAsk(){
 
   // No AI configured, use the rules fallback
   persistAskEntry(q,ruleAnswer,'rules');
+  window._aiConvo=[];
   inputEl.value='';
   render();
+}
+/* Clear the conversation history (starts a fresh AI convo) */
+function clearAiConvo(){
+  window._aiConvo=[];
+  window._lastAskAnswer=null;
+  window._lastAskQuestion=null;
+  window._lastAskSource=null;
+  render();
+  flash('Conversation cleared');
 }
 
 /* Save a Q+A to the bank and to the live "last answer" display */
@@ -1153,7 +1170,7 @@ function buildAIContext(){
 }
 
 /* Call Gemini via the Cloudflare Worker. Returns a promise with the answer text or null on failure. */
-function askGemini(question){
+function askGemini(question,history){
   if(!D.aiCfg||!D.aiCfg.enabled||!D.aiCfg.url||!D.aiCfg.secret){
     return Promise.resolve(null);
   }
@@ -1168,8 +1185,17 @@ function askGemini(question){
     '6. **USE UK SPELLING** and a warm but direct tone. Write 3-5 sentences. Use <strong> for key stats. No bullet lists unless asked.\n\n'+
     '7. **DON\'T SELF-CENSOR.** She is an adult TTC for months. Don\'t add disclaimers like "consult your doctor" unless the situation is genuinely serious (heavy bleeding, severe pain, suspicious pattern). She wants real answers, not liability language.\n\n'+
     '8. **QUESTION THE QUESTION when useful.** If she asks "why is my temp low" and her temp isn\'t actually low compared to coverline, say so. Don\'t invent a problem to answer.\n\n'+
+    '9. **FOLLOW-UPS: If a previous conversation exists, reference it.** You can say "As I mentioned..." or "To build on that..." — treat this as a continuing conversation, not isolated Q&A.\n\n'+
     'Today is '+ctx.today+'. Answer using her JSON data, which follows.';
-  var userPrompt='Her cycle data as JSON:\n\n'+JSON.stringify(ctx,null,2)+'\n\n=== QUESTION ===\n'+question;
+  // Build conversation history if present
+  var convoSection='';
+  if(history&&history.length){
+    convoSection='\n\n=== PREVIOUS EXCHANGE ===\n';
+    history.forEach(function(pair){
+      convoSection+='SHE ASKED: '+pair.q+'\nYOU SAID: '+pair.a.replace(/<[^>]*>/g,'')+'\n\n';
+    });
+  }
+  var userPrompt='Her cycle data as JSON:\n\n'+JSON.stringify(ctx,null,2)+convoSection+'\n\n=== NEW QUESTION ===\n'+question;
 
   return fetch(D.aiCfg.url,{
     method:'POST',
@@ -1908,8 +1934,9 @@ function rToday(info){  var h='';
   var bankN=(D.askLog||[]).length;
   if(bankN)h+='<button onclick="sw(\'ask\')" style="font-size:10px;font-weight:600;color:var(--cobalt);background:none;padding:2px 0;border:none;cursor:pointer">View bank ('+bankN+') ›</button>';
   h+='</div>';
+  var hasConvo=window._aiConvo&&window._aiConvo.length>0;
   h+='<div style="display:flex;gap:6px">';
-  h+='<input type="text" id="askInput" placeholder="e.g. why is my temp low?" onkeydown="if(event.key===\'Enter\')handleAsk()" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--cream3);background:var(--card);font-size:12px;color:var(--txt);outline:none">';
+  h+='<input type="text" id="askInput" placeholder="'+(hasConvo?'Follow up on this conversation…':'e.g. why is my temp low?')+'" onkeydown="if(event.key===\'Enter\')handleAsk()" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--cream3);background:var(--card);font-size:12px;color:var(--txt);outline:none">';
   h+='<button onclick="handleAsk()" style="padding:10px 16px;border-radius:10px;background:var(--cobalt);color:#fff;font-size:11px;font-weight:700;border:none;cursor:pointer">Ask</button>';
   h+='</div>';
   if(window._lastAskAnswer){
@@ -1923,12 +1950,35 @@ function rToday(info){  var h='';
       h+='<div style="display:flex;gap:6px;margin-top:10px;align-items:center">';
       h+='<button onclick="rateAsk(0,\'up\')" style="font-size:14px;background:none;padding:3px 6px;border:none;cursor:pointer">👍</button>';
       h+='<button onclick="rateAsk(0,\'down\')" style="font-size:14px;background:none;padding:3px 6px;border:none;cursor:pointer">👎</button>';
-      h+='<button onclick="window._lastAskAnswer=null;window._lastAskQuestion=null;render()" style="margin-left:auto;font-size:10px;color:var(--txt4);background:none;padding:2px 0;border:none;cursor:pointer">× Clear</button>';
+      if(hasConvo)h+='<span style="font-size:9px;color:var(--plum);margin-left:auto;font-weight:600">💭 '+window._aiConvo.length+' in convo</span>';
+      h+='<button onclick="clearAiConvo()" style="'+(hasConvo?'':'margin-left:auto;')+'font-size:10px;color:var(--txt4);background:none;padding:2px 0;border:none;cursor:pointer">× Clear</button>';
       h+='</div>';
     }
     h+='</div>';
   }else{
-    h+='<div style="margin-top:8px;font-size:10px;color:var(--txt4);font-style:italic">Try: "when should I test", "is my luteal phase healthy", "what does triphasic mean"</div>';
+    // Suggest questions based on cycle phase (Feature 6 — context-aware suggestions)
+    var dpoSug=info.ho?(info.cd-info.od):null;
+    var suggs=[];
+    if(dpoSug!=null&&dpoSug>=10){
+      suggs=['Should I test today?','Am I pregnant?','Why might my period be late?'];
+    }else if(dpoSug!=null&&dpoSug>=7){
+      suggs=['Could this be implantation?','What symptoms suggest pregnancy?','When can I reliably test?'];
+    }else if(dpoSug!=null&&dpoSug>=1){
+      suggs=['Is my luteal phase healthy?','Why am I so tired?','What does my temp pattern mean?'];
+    }else if(!info.ho&&info.cd>=info.ao-5&&info.cd<=info.ao){
+      suggs=['Am I fertile today?','When should we have sex?','Is my CM pattern normal?'];
+    }else if(!info.ho&&info.cd<info.ao-5){
+      suggs=['When does my fertile window start?','What can I do to prepare?','Is my cycle regular?'];
+    }else{
+      suggs=['What does triphasic mean?','Is my cycle healthy?','When is my next fertile window?'];
+    }
+    h+='<div style="margin-top:10px">';
+    h+='<div style="font-size:9px;color:var(--txt4);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:5px">Try asking</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:5px">';
+    suggs.forEach(function(s){
+      h+='<button onclick="document.getElementById(\'askInput\').value=\''+s.replace(/\'/g,"\\'")+'\';handleAsk()" style="font-size:10px;color:var(--plum);background:var(--lavender-bg);padding:5px 10px;border-radius:12px;border:1px solid var(--plum-bg);cursor:pointer;font-style:italic">'+s+'</button>';
+    });
+    h+='</div></div>';
   }
   h+='</div></div>';
 
@@ -1976,6 +2026,8 @@ function rToday(info){  var h='';
   h+='<div style="margin-top:10px;padding:10px 12px;background:var(--butter-bg);border-radius:10px">';
   h+='<div style="font-size:9px;font-weight:700;color:var(--gold);margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Fertility Fact</div>';
   h+='<div style="font-size:11px;color:var(--txt);line-height:1.4">'+getFact()+'</div></div>';
+  // Quick copy status button
+  h+='<button onclick="copyQuickStatus()" style="margin-top:10px;width:100%;padding:9px;background:var(--cream);color:var(--txt3);border:1px solid var(--cream3);border-radius:10px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">📋 Copy where I am today</button>';
   h+='</div></div>';
 
   // CIRCULAR CYCLE VIEW
@@ -4199,6 +4251,51 @@ function rPartner(info){
   return h;
 }
 
+/* Build quick personal "where am I today" clipboard summary — terse, factual */
+function buildQuickStatus(){
+  var info=cInfo();var c=info.c;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
+  var ph=phase(cd,info.av,info.ao,info.ho,info.od);
+  var today=td();
+  var todayR=c.readings.find(function(x){return x.date===today});
+  var cl=avgCL2();
+  var lines=[];
+  lines.push('Cycle '+(info.ci+1)+' · Day '+cd+(dpo!=null?' · '+dpo+' DPO':''));
+  lines.push('Phase: '+ph.n);
+  if(todayR&&todayR.temp!=null){
+    var tStr='Temp: '+todayR.temp.toFixed(2)+'°';
+    if(cl)tStr+=' (CL '+cl.toFixed(2)+', '+(todayR.temp>=cl?'+':'')+(todayR.temp-cl).toFixed(2)+')';
+    lines.push(tStr);
+  }
+  var todaySy=D.sym[today]||[];
+  if(todaySy.length){
+    lines.push('Symptoms: '+todaySy.map(function(s){return fmtSym(s,today)}).join(', '));
+  }
+  var todayMo=D.mood[today]||[];
+  if(todayMo.length)lines.push('Mood: '+todayMo.join(', '));
+  // Period prediction
+  var luts=[];D.cycles.forEach(function(oc,oi){if(!isExcl(oi)){var od2=ovDay(oc);if(od2&&oc.length)luts.push(oc.length-od2)}});
+  if(info.ho&&luts.length){
+    var avgLut=Math.round(luts.reduce(function(a,b){return a+b},0)/luts.length);
+    var daysToPeriod=avgLut-dpo;
+    if(daysToPeriod>0)lines.push('Period expected in '+daysToPeriod+'d (avg luteal '+avgLut+'d)');
+    else if(daysToPeriod===0)lines.push('Period expected today');
+    else lines.push((-daysToPeriod)+'d past typical luteal '+avgLut+'d');
+  }
+  return lines.join('\n');
+}
+function copyQuickStatus(){
+  var t=buildQuickStatus();
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(t).then(function(){flash('✓ Copied summary')}).catch(function(){
+      var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+      flash('✓ Copied');
+    });
+  }else{
+    var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    flash('✓ Copied');
+  }
+}
+
 /* Build plain-text partner summary — used by copy/share buttons */
 function buildPartnerText(){
   var info=cInfo();var c=info.c;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
@@ -4299,6 +4396,176 @@ function rInsights(){
   h+='<div class="sc"><div class="sv">'+(st.avgOv?'Day '+st.avgOv:'—')+'</div><div class="sl">Avg OV Day</div></div>';
   h+='</div>'+colEnd()+'</div>';
 
+  // ========== TRENDS OVER TIME ==========
+  if(D.cycles.length>=3){
+    h+='<div class="section">'+colHdr('i-trends','Trends Over Time');
+    h+=colBody('i-trends');
+
+    // Collect stats per cycle
+    var cycleData=[];
+    D.cycles.forEach(function(oc,oi){
+      if(!oc.length)return;  // skip current/incomplete
+      var od=ovDay(oc);
+      var lut=od?(oc.length-od):null;
+      var temps=oc.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
+      // Temp shift quality: (post-OV avg) - (pre-OV avg), higher = better
+      var shift=null;
+      if(od&&temps.length>5){
+        var pre=oc.readings.filter(function(r){return r.temp!=null&&r.day<od}).map(function(r){return r.temp});
+        var post=oc.readings.filter(function(r){return r.temp!=null&&r.day>=od}).map(function(r){return r.temp});
+        if(pre.length>=3&&post.length>=3){
+          var avgPre=pre.reduce(function(a,b){return a+b},0)/pre.length;
+          var avgPost=post.reduce(function(a,b){return a+b},0)/post.length;
+          shift=avgPost-avgPre;
+        }
+      }
+      cycleData.push({num:oi+1,len:oc.length,lut:lut,shift:shift,excl:isExcl(oi)});
+    });
+
+    if(cycleData.length>=3){
+      // ---- Cycle length chart ----
+      h+='<div class="card" style="padding:14px 16px;margin-bottom:8px">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">';
+      h+='<span style="font-size:11px;font-weight:700;color:var(--burnt);text-transform:uppercase;letter-spacing:.6px">Cycle Length Trend</span>';
+      var lens=cycleData.map(function(c){return c.len}).filter(function(l){return l});
+      var avgLen=lens.reduce(function(a,b){return a+b},0)/lens.length;
+      h+='<span style="font-size:10px;color:var(--txt3)">avg '+avgLen.toFixed(1)+'d</span>';
+      h+='</div>';
+      var minL=Math.min.apply(null,lens)-1,maxL=Math.max.apply(null,lens)+1;
+      h+='<div style="display:flex;gap:3px;align-items:flex-end;height:80px">';
+      cycleData.forEach(function(cd){
+        if(!cd.len){return}
+        var hPct=((cd.len-minL)/(maxL-minL))*100;
+        var col=cd.excl?'#D4A24A':(cd.len<avgLen-2?'var(--rose)':cd.len>avgLen+2?'var(--burnt)':'var(--plum)');
+        h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:14px">';
+        h+='<div style="font-size:8px;font-weight:700;color:var(--txt3)">'+cd.len+'</div>';
+        h+='<div style="width:100%;height:'+hPct+'%;background:'+col+';border-radius:3px 3px 0 0;min-height:8px"></div>';
+        h+='<div style="font-size:8px;color:var(--txt4)">C'+cd.num+'</div>';
+        h+='</div>';
+      });
+      h+='</div>';
+      h+='<div style="display:flex;gap:10px;justify-content:center;font-size:9px;color:var(--txt3);margin-top:8px;flex-wrap:wrap">';
+      h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--plum);border-radius:2px"></span> Typical</span>';
+      h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--rose);border-radius:2px"></span> Short</span>';
+      h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--burnt);border-radius:2px"></span> Long</span>';
+      h+='<span><span style="display:inline-block;width:8px;height:8px;background:#D4A24A;border-radius:2px"></span> Pregnancy</span>';
+      h+='</div>';
+      h+='</div>';
+
+      // ---- Luteal length chart ----
+      var lutData=cycleData.filter(function(c){return c.lut&&!c.excl});
+      if(lutData.length>=3){
+        var luts=lutData.map(function(c){return c.lut});
+        var avgLut2=luts.reduce(function(a,b){return a+b},0)/luts.length;
+        h+='<div class="card" style="padding:14px 16px;margin-bottom:8px">';
+        h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">';
+        h+='<span style="font-size:11px;font-weight:700;color:var(--plum);text-transform:uppercase;letter-spacing:.6px">Luteal Phase Trend</span>';
+        h+='<span style="font-size:10px;color:var(--txt3)">avg '+avgLut2.toFixed(1)+'d</span>';
+        h+='</div>';
+        var minLut=Math.min.apply(null,luts)-1,maxLut=Math.max.apply(null,luts)+1;
+        h+='<div style="display:flex;gap:3px;align-items:flex-end;height:80px">';
+        lutData.forEach(function(cd){
+          var hPct=((cd.lut-minLut)/(maxLut-minLut))*100;
+          // Luteal <10 is short (concerning), 10-11 borderline, 12+ good
+          var col=cd.lut<10?'var(--rose)':cd.lut<12?'var(--gold)':'var(--forest)';
+          h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:14px">';
+          h+='<div style="font-size:8px;font-weight:700;color:var(--txt3)">'+cd.lut+'</div>';
+          h+='<div style="width:100%;height:'+hPct+'%;background:'+col+';border-radius:3px 3px 0 0;min-height:8px"></div>';
+          h+='<div style="font-size:8px;color:var(--txt4)">C'+cd.num+'</div>';
+          h+='</div>';
+        });
+        h+='</div>';
+        h+='<div style="display:flex;gap:10px;justify-content:center;font-size:9px;color:var(--txt3);margin-top:8px;flex-wrap:wrap">';
+        h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--forest);border-radius:2px"></span> Healthy (12+)</span>';
+        h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--gold);border-radius:2px"></span> Borderline (10-11)</span>';
+        h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--rose);border-radius:2px"></span> Short (&lt;10)</span>';
+        h+='</div>';
+        h+='</div>';
+      }
+
+      // ---- Temp shift quality chart ----
+      var shiftData=cycleData.filter(function(c){return c.shift!=null&&!c.excl});
+      if(shiftData.length>=3){
+        var shifts=shiftData.map(function(c){return c.shift});
+        var avgShift=shifts.reduce(function(a,b){return a+b},0)/shifts.length;
+        h+='<div class="card" style="padding:14px 16px">';
+        h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">';
+        h+='<span style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.6px">Temp Shift Quality</span>';
+        h+='<span style="font-size:10px;color:var(--txt3)">avg +'+avgShift.toFixed(2)+'°</span>';
+        h+='</div>';
+        h+='<div style="font-size:10px;color:var(--txt4);margin-bottom:10px">Post-OV temp rise above pre-OV baseline. Higher = stronger progesterone signal.</div>';
+        var minShift=Math.min.apply(null,shifts);var maxShift=Math.max.apply(null,shifts);
+        if(maxShift-minShift<0.1)maxShift=minShift+0.1;  // floor
+        h+='<div style="display:flex;gap:3px;align-items:flex-end;height:80px">';
+        shiftData.forEach(function(cd){
+          var hPct=((cd.shift-minShift)/(maxShift-minShift))*100;
+          // >0.3° = strong, 0.2-0.3 = adequate, <0.2 = weak
+          var col=cd.shift>=0.3?'var(--forest)':cd.shift>=0.2?'var(--gold)':'var(--rose)';
+          h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:14px">';
+          h+='<div style="font-size:8px;font-weight:700;color:var(--txt3)">+'+cd.shift.toFixed(2)+'</div>';
+          h+='<div style="width:100%;height:'+Math.max(hPct,10)+'%;background:'+col+';border-radius:3px 3px 0 0"></div>';
+          h+='<div style="font-size:8px;color:var(--txt4)">C'+cd.num+'</div>';
+          h+='</div>';
+        });
+        h+='</div>';
+        h+='<div style="display:flex;gap:10px;justify-content:center;font-size:9px;color:var(--txt3);margin-top:8px;flex-wrap:wrap">';
+        h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--forest);border-radius:2px"></span> Strong (+0.3°+)</span>';
+        h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--gold);border-radius:2px"></span> Adequate</span>';
+        h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--rose);border-radius:2px"></span> Weak (&lt;0.2°)</span>';
+        h+='</div>';
+        h+='</div>';
+      }
+    }
+    h+=colEnd()+'</div>';
+  }
+
+  // ========== OUTCOMES HISTORY ==========
+  var outcomes=D.outcomes||{};
+  var outcomeKeys=Object.keys(outcomes).filter(function(k){return outcomes[k].result&&outcomes[k].result!=='skipped'});
+  if(outcomeKeys.length>=2){
+    h+='<div class="section">'+colHdr('i-outcomes','Outcomes History');
+    h+=colBody('i-outcomes');
+    h+='<div class="card" style="padding:14px 16px">';
+    var counts={normal:0,bfn:0,bfp:0,chemical:0,mc:0,other:0};
+    outcomeKeys.forEach(function(k){if(counts[outcomes[k].result]!=null)counts[outcomes[k].result]++});
+    h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">';
+    var tiles=[
+      {key:'normal',lbl:'Normal',col:'var(--cobalt)',bg:'var(--cob-bg)'},
+      {key:'bfn',lbl:'BFN',col:'var(--txt3)',bg:'var(--cream)'},
+      {key:'bfp',lbl:'BFP',col:'var(--forest)',bg:'var(--sage-bg)'},
+      {key:'chemical',lbl:'Chemical',col:'var(--rose)',bg:'var(--rose-bg)'},
+      {key:'mc',lbl:'MC',col:'var(--rose)',bg:'var(--rose-bg)'},
+      {key:'other',lbl:'Other',col:'var(--gold)',bg:'var(--butter-bg)'},
+    ];
+    tiles.forEach(function(t){
+      var n=counts[t.key];
+      h+='<div style="padding:10px;background:'+t.bg+';border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:'+t.col+'">'+n+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">'+t.lbl+'</div></div>';
+    });
+    h+='</div>';
+    h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Per cycle</div>';
+    var sortedKeys=outcomeKeys.map(Number).sort(function(a,b){return a-b});
+    sortedKeys.forEach(function(ci){
+      var o=outcomes[ci];
+      var tile=tiles.find(function(t){return t.key===o.result})||tiles[5];
+      var cyc=D.cycles[ci];
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--cream2)">';
+      h+='<div style="width:40px;flex-shrink:0;font-size:10px;font-weight:700;color:var(--txt3)">C'+(ci+1)+'</div>';
+      h+='<div style="flex:1;font-size:10px;color:var(--txt4)">'+(cyc?fd(cyc.key):'—')+'</div>';
+      h+='<div style="font-size:10px;font-weight:700;color:'+tile.col+';background:'+tile.bg+';padding:3px 10px;border-radius:8px;text-transform:uppercase;letter-spacing:.3px">'+tile.lbl+'</div>';
+      h+='</div>';
+      if(o.notes)h+='<div style="padding:2px 0 6px 50px;font-size:10px;color:var(--txt3);font-style:italic">"'+o.notes+'"</div>';
+    });
+    if(counts.bfn>0){
+      h+='<div style="margin-top:12px;padding:10px;background:var(--cream);border-radius:8px;font-size:11px;color:var(--txt2);line-height:1.5">';
+      var sumStr='<strong>'+counts.bfn+'</strong> BFN cycle'+(counts.bfn>1?'s':'')+' tracked';
+      if(counts.bfp>0)sumStr+=' · <strong>'+counts.bfp+'</strong> pregnancy';
+      if(counts.chemical+counts.mc>0)sumStr+=' · <strong>'+(counts.chemical+counts.mc)+'</strong> loss'+(counts.chemical+counts.mc>1?'es':'');
+      h+=sumStr;
+      h+='</div>';
+    }
+    h+='</div>'+colEnd()+'</div>';
+  }
+
   // Cycle summary
   var info=cInfo();var curC=info.c;
   h+='<div class="section">'+colHdr('i-summary','Cycle Summary');
@@ -4397,6 +4664,107 @@ function rInsights(){
   var lk=Object.keys(pt.l).sort(function(a,b){return pt.l[b]-pt.l[a]}).slice(0,6);var mxL=lk.length?pt.l[lk[0]]:1;
   lk.forEach(function(k){h+='<div class="pr"><span class="pn">'+k.replace('CM: ','')+'</span><div class="pt"><div class="pb" style="width:'+(pt.l[k]/mxL*100)+'%;background:var(--plum)"></div></div><span style="font-size:10px;color:var(--txt3);width:20px">'+pt.l[k]+'</span></div>'});
   if(!lk.length)h+='<div style="font-size:12px;color:var(--txt4)">No data</div>';h+='</div>';
+
+  // ---- Symptom timing heatmap (NEW) ----
+  // For each of the top symptoms, show which cycle days it clusters on
+  var allSymCount={};var symByDay={};  // symByDay[symptom][cycleDayBucket] = count
+  D.cycles.forEach(function(oc,oi){
+    if(isExcl(oi))return;
+    oc.readings.forEach(function(r){
+      var syms=D.sym[r.date]||[];
+      syms.forEach(function(s){
+        if(s.indexOf('CM:')===0)return;  // exclude CM
+        allSymCount[s]=(allSymCount[s]||0)+1;
+        if(!symByDay[s])symByDay[s]={};
+        // Bucket cycle days into 5-day segments (1-5, 6-10, 11-15, 16-20, 21-25, 26-30, 31+)
+        var bucket=Math.min(6,Math.floor((r.day-1)/5));
+        symByDay[s][bucket]=(symByDay[s][bucket]||0)+1;
+      });
+    });
+  });
+  var topSyms=Object.keys(allSymCount).sort(function(a,b){return allSymCount[b]-allSymCount[a]}).slice(0,8);
+  if(topSyms.length>=2){
+    h+='<div class="card" style="margin-top:8px;padding:14px 16px">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--burnt);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px">When symptoms cluster</div>';
+    h+='<div style="font-size:10px;color:var(--txt3);margin-bottom:12px">Density by cycle-day range across all cycles</div>';
+    // Header with day ranges
+    h+='<div style="display:grid;grid-template-columns:85px repeat(7,1fr);gap:3px;align-items:center;font-size:8px;color:var(--txt4);font-weight:700;margin-bottom:4px">';
+    h+='<div></div>';
+    ['1-5','6-10','11-15','16-20','21-25','26-30','31+'].forEach(function(lbl){
+      h+='<div style="text-align:center">'+lbl+'</div>';
+    });
+    h+='</div>';
+    topSyms.forEach(function(s){
+      var row=symByDay[s]||{};
+      var max=Math.max.apply(null,[1].concat(Object.values(row)));
+      h+='<div style="display:grid;grid-template-columns:85px repeat(7,1fr);gap:3px;align-items:center;margin-bottom:3px">';
+      h+='<div style="font-size:10px;color:var(--txt);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s+'</div>';
+      for(var b=0;b<7;b++){
+        var ct=row[b]||0;
+        var opacity=ct===0?0.08:0.2+(ct/max)*0.8;
+        var lbl=ct>0?ct:'';
+        h+='<div style="height:22px;background:rgba(216,146,114,'+opacity+');border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:'+(ct/max>0.5?'#fff':'var(--txt2)')+'">'+lbl+'</div>';
+      }
+      h+='</div>';
+    });
+    h+='<div style="font-size:9px;color:var(--txt4);margin-top:8px;font-style:italic">Darker = more days logged. Helps spot which part of your cycle a symptom tends to hit.</div>';
+    h+='</div>';
+  }
+
+  // ---- Symptom time-of-day analysis ----
+  var timeByDaypart={};  // {symptom: {morning, afternoon, evening, night}}
+  if(D.symTime){
+    Object.keys(D.symTime).forEach(function(d){
+      Object.keys(D.symTime[d]).forEach(function(s){
+        if(s.indexOf('CM:')===0)return;
+        var t=D.symTime[d][s];
+        if(!t)return;
+        var h24=parseInt(t.split(':')[0],10);
+        var bucket=h24<6?'night':h24<12?'morning':h24<18?'afternoon':'evening';
+        if(!timeByDaypart[s])timeByDaypart[s]={morning:0,afternoon:0,evening:0,night:0};
+        timeByDaypart[s][bucket]++;
+      });
+    });
+  }
+  var symsWithTime=Object.keys(timeByDaypart).filter(function(s){
+    var t=timeByDaypart[s];return (t.morning+t.afternoon+t.evening+t.night)>=3;
+  });
+  if(symsWithTime.length){
+    symsWithTime.sort(function(a,b){
+      var ta=timeByDaypart[a],tb=timeByDaypart[b];
+      return (tb.morning+tb.afternoon+tb.evening+tb.night)-(ta.morning+ta.afternoon+ta.evening+ta.night);
+    });
+    h+='<div class="card" style="margin-top:8px;padding:14px 16px">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--plum);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px">Time of Day</div>';
+    h+='<div style="font-size:10px;color:var(--txt3);margin-bottom:12px">When symptoms tend to strike. Need 3+ logged times for a symptom to appear here.</div>';
+    var parts=[
+      {k:'morning',lbl:'Morning',hint:'6a-12p',col:'#F7D4B0'},
+      {k:'afternoon',lbl:'Afternoon',hint:'12-6p',col:'#F5C8BE'},
+      {k:'evening',lbl:'Evening',hint:'6-12a',col:'#D9C8E0'},
+      {k:'night',lbl:'Night',hint:'12-6a',col:'#A692B8'},
+    ];
+    symsWithTime.slice(0,6).forEach(function(s){
+      var data=timeByDaypart[s];
+      var tot=data.morning+data.afternoon+data.evening+data.night;
+      h+='<div style="margin-bottom:10px">';
+      h+='<div style="font-size:11px;font-weight:600;color:var(--txt);margin-bottom:4px">'+s+' <span style="font-size:9px;color:var(--txt4);font-weight:500">('+tot+' logs)</span></div>';
+      h+='<div style="display:flex;height:20px;border-radius:6px;overflow:hidden;background:var(--cream2)">';
+      parts.forEach(function(p){
+        var pct=tot?(data[p.k]/tot)*100:0;
+        if(pct>0){
+          h+='<div style="width:'+pct+'%;background:'+p.col+';display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--txt);min-width:0;overflow:hidden">'+(pct>=15?data[p.k]:'')+'</div>';
+        }
+      });
+      h+='</div></div>';
+    });
+    // Legend
+    h+='<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px">';
+    parts.forEach(function(p){
+      h+='<span style="font-size:9px;color:var(--txt3);display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:'+p.col+'"></span>'+p.lbl+' <span style="color:var(--txt5)">'+p.hint+'</span></span>';
+    });
+    h+='</div>';
+    h+='</div>';
+  }
   h+=colEnd()+'</div>';
 
   // Wrist temp analysis
