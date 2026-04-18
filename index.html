@@ -1206,7 +1206,7 @@ function askGemini(question,history){
     body:JSON.stringify({
       systemPrompt:systemPrompt,
       prompt:userPrompt,
-      model:'gemini-2.5-flash',
+      model:'gemini-2.5-flash-lite',
     }),
   }).then(function(r){
     if(!r.ok)return r.json().then(function(j){throw new Error(j.error||('HTTP '+r.status))});
