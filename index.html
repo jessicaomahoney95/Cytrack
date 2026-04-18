@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="CyTrack">
-<meta name="theme-color" content="#B25835">
+<meta name="theme-color" content="#F5E5D6">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
@@ -17,7 +17,7 @@
 <title>Jess's Cycle Tracker v14</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{background:#B25835;color:#3D2C2C;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+html,body{background:linear-gradient(165deg,#F5E5D6 0%,#F5D8CC 35%,#EED5D8 65%,#E5D4E0 100%);background-attachment:fixed;color:#2A2424;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden;font-feature-settings:"ss01","cv01";min-height:100vh}
 body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
 .app{max-width:480px;margin:0 auto;padding:0 0 100px}
 @media(min-width:768px){
@@ -68,60 +68,69 @@ button{border:none;cursor:pointer;font-family:inherit;-webkit-tap-highlight-colo
 input,select,textarea{font-family:inherit}
 ::-webkit-scrollbar{display:none}
 :root{
---bg:#B25835;--cream:#FFF6F0;--cream2:#FEEDE3;--cream3:#F0DDD0;
---cobalt:#2B5C8A;--cob-bg:rgba(43,92,138,.08);
---burnt:#C4652A;--burnt-bg:rgba(196,101,42,.08);
---gold:#9A7B1E;--gold-bg:rgba(154,123,30,.08);
---rose:#A84455;--rose-bg:rgba(168,68,85,.06);
---plum:#6B4E8B;--plum-bg:rgba(107,78,139,.06);
---forest:#4A7D5E;--forest-bg:rgba(74,125,94,.06);
---txt:#3D2C2C;--txt2:#6B5E56;--txt3:#8A7D74;--txt4:#A0928A;--txt5:#B8ADA4;
---card:#fff;--sh:0 1px 3px rgba(60,30,10,.05),0 4px 12px rgba(60,30,10,.04);
+--bg:#F5E5D6;--cream:#FDF4EA;--cream2:#F2DECC;--cream3:#E3C9B0;
+--cobalt:#7A8BA8;--cob-bg:rgba(122,139,168,.14);
+--burnt:#D89272;--burnt-bg:rgba(216,146,114,.18);
+--gold:#C5A868;--gold-bg:rgba(197,168,104,.18);
+--rose:#D89499;--rose-bg:rgba(216,148,153,.16);
+--plum:#A692B8;--plum-bg:rgba(166,146,184,.14);
+--forest:#9BB598;--forest-bg:rgba(155,181,152,.16);
+--blush:#F5C8BE;--blush-bg:rgba(245,200,190,.35);
+--sage:#D5DFC5;--sage-bg:rgba(213,223,197,.35);
+--peach:#F7D4B0;--peach-bg:rgba(247,212,176,.38);
+--lavender:#D9C8E0;--lavender-bg:rgba(217,200,224,.38);
+--butter:#F5E2A8;--butter-bg:rgba(245,226,168,.32);
+--txt:#3A2F2B;--txt2:#6E5D52;--txt3:#8F7B6D;--txt4:#B29D8D;--txt5:#CFBBAA;
+--card:#FFFAF4;--sh:0 2px 4px rgba(120,80,40,.06),0 4px 16px rgba(120,80,40,.07);
 }
 /* Dark mode */
-.dark{--bg:#1C1210;--cream:#2A201C;--cream2:#1C1210;--cream3:#3D2C24;
---card:#2A201C;--txt:#E8DDD6;--txt2:#B8ADA4;--txt3:#8A7D74;--txt4:#6B5E56;--txt5:#4A3E36;
---cob-bg:rgba(43,92,138,.15);--burnt-bg:rgba(196,101,42,.15);--gold-bg:rgba(154,123,30,.15);
---rose-bg:rgba(168,68,85,.12);--plum-bg:rgba(107,78,139,.12);--forest-bg:rgba(74,125,94,.12);
---sh:0 1px 3px rgba(0,0,0,.2)}
-.dark .hdr{background:#1C1210}
-.dark .content{background:#1C1210}
-.dark .tabs .tab{background:rgba(255,255,255,.06);color:rgba(255,255,255,.35)}
-.dark .tabs .tab.on{background:var(--cream3);color:var(--burnt)}
+.dark{--bg:#1F1814;--cream:#2B211A;--cream2:#241B15;--cream3:#3F3128;
+--card:#2B211A;--txt:#E8DDD6;--txt2:#B8ADA4;--txt3:#8A7D74;--txt4:#6B5E56;--txt5:#4A3E36;
+--cob-bg:rgba(122,139,168,.18);--burnt-bg:rgba(216,146,114,.18);--gold-bg:rgba(197,168,104,.18);
+--rose-bg:rgba(216,148,153,.14);--plum-bg:rgba(166,146,184,.14);--forest-bg:rgba(155,181,152,.14);
+--blush-bg:rgba(245,200,190,.14);--sage-bg:rgba(213,223,197,.14);
+--peach-bg:rgba(247,212,176,.16);--lavender-bg:rgba(217,200,224,.16);--butter-bg:rgba(245,226,168,.14);
+--sh:0 1px 3px rgba(0,0,0,.28)}
+html.dark,body.dark{background:linear-gradient(165deg,#1F1814 0%,#241A15 50%,#1C1620 100%);background-attachment:fixed}
+.dark .hdr{background:transparent}
+.dark .content{background:transparent}
+.dark .tabs .tab{background:rgba(255,255,255,.04);color:rgba(255,255,255,.4)}
+.dark .tabs .tab.on{background:var(--cream3);color:var(--txt)}
 .dark .notif{background:var(--card)}
 .dark .gp{background:var(--card)}
 .dark .sum-card{background:var(--card)}
 .dark .tww-card{background:var(--card)}
-.dark .morning-temp input{background:rgba(255,255,255,.08)}
-.dark .morning-fact{background:rgba(255,255,255,.06)}
+.dark .morning-temp input{background:rgba(255,255,255,.06)}
+.dark .morning-fact{background:rgba(255,255,255,.04)}
 .dark .ql input{background:var(--card);border-color:var(--cream3);color:var(--txt)}
 .dark .fi{background:var(--card);border-color:var(--cream3);color:var(--txt)}
 .dark .mbg{background:rgba(0,0,0,.6)}
-.dark .mdl{background:#2A201C}
-.dark .hdr-btn{background:rgba(255,255,255,.08);color:rgba(255,255,255,.5)}
+.dark .mdl{background:#241F1C}
+.dark .hdr-btn{background:rgba(255,255,255,.06);color:rgba(255,255,255,.55)}
 .dark .qs-chip{background:var(--cream3);color:var(--txt3)}
 .dark .chip{background:var(--cream3);color:var(--txt3)}
 .dark .pill{background:var(--card);color:var(--txt4)}
 .dark .flt{background:var(--card);color:var(--txt4)}
-.dark .toast{background:var(--burnt)}
+.dark .toast{background:var(--cobalt)}
 /* Header */
-.hdr{padding:20px 20px 0;background:#B25835}
+.hdr{padding:18px 18px 0;background:transparent}
 .hdr-row{display:flex;justify-content:space-between;align-items:flex-start}
-.hdr h1{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.5px;margin:0}
-.hdr-sub{font-size:11px;color:rgba(255,255,255,.45);margin-top:2px;font-weight:500}
+.hdr h1{font-size:22px;font-weight:700;color:var(--txt);letter-spacing:-.4px;margin:0}
+.hdr-sub{font-size:11px;color:var(--txt3);margin-top:3px;font-weight:500}
 .hdr-btns{display:flex;gap:4px;align-items:center}
-.hdr-btn{background:rgba(255,255,255,.1);border-radius:8px;padding:7px 10px;color:rgba(255,255,255,.6);font-size:9px;font-weight:600;letter-spacing:.3px}
-.hdr-btn:active{background:rgba(255,255,255,.2)}
+.hdr-btn{background:var(--peach-bg);border-radius:8px;padding:7px 10px;color:var(--burnt);font-size:10px;font-weight:600;letter-spacing:.2px;border:none;cursor:pointer;transition:background .15s}
+.hdr-btn:active{background:var(--blush-bg)}
 /* Tabs at top */
-.tabs{display:flex;gap:2px;padding:10px 16px 14px;background:transparent}
-.tab{flex:1;padding:8px 0;border-radius:10px;font-size:11px;font-weight:600;background:rgba(255,255,255,.1);color:rgba(255,255,255,.5);text-align:center;transition:all .15s}
-.tab.on{background:var(--cream);color:var(--txt);font-weight:700}
+.tabs{display:flex;gap:2px;padding:8px 14px 14px;background:transparent;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:1;min-width:auto;padding:9px 8px;border-radius:10px;font-size:11px;font-weight:600;background:transparent;color:var(--txt3);text-align:center;transition:all .15s;border:none;cursor:pointer;white-space:nowrap}
+.tab.on{background:var(--card);color:var(--burnt);font-weight:700;box-shadow:var(--sh)}
 /* Content */
-.content{background:#B25835;border-radius:0;min-height:80vh;padding:6px 0 40px}
-.section{padding:0 14px;margin-bottom:6px}
-.sec-hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 0 6px}
-.sec-title{font-size:11px;font-weight:600;letter-spacing:.2px;color:rgba(255,255,255,.7)}
-.card{background:var(--cream);border-radius:16px;padding:14px;box-shadow:0 2px 8px rgba(80,30,10,.08);margin-bottom:8px}
+.content{background:transparent;border-radius:0;min-height:80vh;padding:6px 0 40px}
+.section{padding:0 14px;margin-bottom:8px}
+.sec-hdr{display:flex;justify-content:space-between;align-items:center;padding:16px 2px 8px}
+.sec-title{font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--txt3);text-transform:uppercase}
+.card{background:var(--card);border-radius:14px;padding:14px 16px;box-shadow:var(--sh);margin-bottom:8px;border:1px solid rgba(0,0,0,.03)}
 /* Collapsible */
 .sec-hdr-col{display:flex;justify-content:space-between;align-items:center;padding:12px 0 6px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
 .sec-hdr-col .sec-arrow{font-size:10px;color:var(--txt5);transition:transform .2s ease;margin-left:5px;display:inline-block}
@@ -130,14 +139,14 @@ input,select,textarea{font-family:inherit}
 .sec-body.collapsed{max-height:0;opacity:0;margin:0;padding:0}
 /* Morning welcome */
 .morning-wrap{padding:8px 0 0}
-.morning-hi{font-size:24px;font-weight:800;color:#fff;letter-spacing:-.5px}
-.morning-fact{margin:14px 0;padding:12px 14px;background:rgba(255,255,255,.08);border-radius:12px;font-size:11px;color:rgba(255,255,255,.75);line-height:1.5;font-weight:400}
-.morning-phase{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:16px}
+.morning-hi{font-size:24px;font-weight:700;color:var(--txt);letter-spacing:-.4px}
+.morning-fact{margin:14px 0;padding:12px 14px;background:var(--cream);border-radius:12px;font-size:11px;color:var(--txt2);line-height:1.5;font-weight:400;border:1px solid var(--cream2)}
 .morning-temp{display:flex;gap:8px;align-items:center}
-.morning-temp input{flex:1;padding:14px;border:none;border-radius:12px;font-size:18px;font-weight:700;background:rgba(255,255,255,.12);color:#fff;text-align:center;outline:none}
-.morning-temp input::placeholder{color:rgba(255,255,255,.3)}
-.morning-temp input:focus{background:rgba(255,255,255,.18)}
-.morning-temp button{padding:14px 22px;border-radius:12px;font-size:14px;font-weight:700;background:rgba(255,255,255,.9);color:var(--burnt)}
+.morning-temp input{flex:1;padding:14px;border:1px solid var(--cream3);border-radius:12px;font-size:18px;font-weight:700;background:var(--card);color:var(--txt);text-align:center;outline:none}
+.morning-temp input::placeholder{color:var(--txt4)}
+.morning-temp input:focus{border-color:var(--cobalt)}
+.morning-temp button{padding:14px 22px;border-radius:12px;font-size:14px;font-weight:700;background:var(--cobalt);color:#fff;border:none;cursor:pointer}
+.morning-phase{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:16px;background:var(--cream);color:var(--txt2)}
 /* Ring */
 .ring-container{position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center;margin:0 auto}
 .ring-svg{width:150px;height:150px}
@@ -189,7 +198,7 @@ canvas{width:100%;display:block}
 .chip-m.on{background:var(--cobalt)}.chip-s.on{background:var(--burnt)}.chip-c.on{background:var(--gold)}.chip-f.on{background:var(--rose)}
 .br{display:flex;gap:8px;margin-top:14px}
 .cb{flex:1;padding:13px;border-radius:14px;font-size:14px;font-weight:700;background:var(--cream3);color:var(--txt3)}
-.sb{flex:2;padding:13px;border-radius:14px;font-size:14px;font-weight:800;background:var(--burnt);color:#fff}
+.sb{flex:2;padding:13px;border-radius:14px;font-size:14px;font-weight:800;background:var(--cobalt);color:#fff;border:none;cursor:pointer}
 .sb:active{transform:scale(.97)}
 .db{width:100%;padding:11px;border-radius:12px;font-size:12px;font-weight:700;background:var(--rose-bg);color:var(--rose);margin-top:8px}
 /* FAB */
@@ -307,7 +316,8 @@ textarea{resize:vertical;min-height:56px}
 .gp-check.done{background:var(--forest);border-color:var(--forest);color:#fff}
 /* Quick symptom chips */
 .qs-chips{display:flex;flex-wrap:wrap;gap:4px}
-.qs-chip{padding:5px 9px;border-radius:14px;font-size:10px;font-weight:600;background:var(--cream3);color:var(--txt4)}
+.qs-chip{padding:6px 10px;border-radius:14px;font-size:10px;font-weight:600;background:var(--cream);color:var(--txt3);border:1px solid var(--cream3);cursor:pointer;transition:all .15s}
+.qs-chip:hover{background:var(--cream2)}
 .qs-chip.on{color:#fff;box-shadow:none;border-color:transparent}
 .qs-chip.on-s{background:var(--burnt)}.qs-chip.on-m{background:var(--cobalt)}.qs-chip.on-c{background:var(--gold)}
 /* Streak */
@@ -1020,8 +1030,9 @@ function persistAskEntry(q,answer,source){
 /* Build a comprehensive context snapshot for Gemini — current cycle + last 3 cycles + patterns */
 function buildAIContext(){
   var info=cInfo();var c=info.c;var ci=info.ci;
+  var today=td();
   var ctx={
-    today:td(),
+    today:today,
     currentCycle:{
       number:ci+1,
       startDate:c.key,
@@ -1035,51 +1046,79 @@ function buildAIContext(){
       isExcluded:isExcl(ci),
     },
     today_data:{
-      temp:null,wrist:null,sleep:null,sleepHours:null,
-      symptoms:D.sym[td()]||[],
-      mood:D.mood[td()]||[],
-      cmAmounts:D.cmAmt&&D.cmAmt[td()]||{},
-      sex:!!D.sex[td()],
-      opk:D.opks&&D.opks[td()]||null,
+      temp:null,
+      tempVsCoverline:null,
+      wrist:null,
+      sleep:null,
+      sleepHours:null,
+      symptoms:D.sym[today]||[],
+      mood:D.mood[today]||[],
+      cmAmounts:D.cmAmt&&D.cmAmt[today]||{},
+      sex:!!D.sex[today],
+      opk:D.opks&&D.opks[today]||null,
+      flow:null,
+      note:D.notes&&D.notes[today]||null,
     },
-    recentReadings:[],  // last 7 days of current cycle
-    pastCycles:[],  // up to 3 prior completed cycles
+    recentReadings:[],  // last 10 days of current cycle
+    pastCycles:[],  // up to 5 prior cycles (for broader pattern context)
+    pregnancyTests:(D.ptests||[]).slice(-10),  // last 10 tests with dates and results
     patterns:[],
     luteralPhaseHistory:[],
     cycleLengthHistory:[],
   };
 
-  var todayR=c.readings.find(function(x){return x.date===td()});
-  if(todayR){ctx.today_data.temp=todayR.temp}
-  if(D.wrist&&D.wrist[td()])ctx.today_data.wrist=D.wrist[td()];
-  if(D.sleep&&D.sleep[td()])ctx.today_data.sleep=D.sleep[td()];
-  if(D.sleepHrs&&D.sleepHrs[td()])ctx.today_data.sleepHours=D.sleepHrs[td()];
+  var todayR=c.readings.find(function(x){return x.date===today});
+  var cl=avgCL2();
+  if(todayR){
+    ctx.today_data.temp=todayR.temp;
+    if(cl&&todayR.temp!=null){
+      var diff=todayR.temp-cl;
+      ctx.today_data.tempVsCoverline=(diff>=0?'+':'')+diff.toFixed(2)+' (coverline '+cl.toFixed(2)+')';
+    }
+    if(todayR.flow)ctx.today_data.flow=todayR.flow;
+    if(todayR.ov)ctx.today_data.lhPositive=true;
+  }
+  if(D.wrist&&D.wrist[today])ctx.today_data.wrist=D.wrist[today];
+  if(D.sleep&&D.sleep[today])ctx.today_data.sleep=D.sleep[today];
+  if(D.sleepHrs&&D.sleepHrs[today])ctx.today_data.sleepHours=D.sleepHrs[today];
 
-  // Last 7 days of readings
-  c.readings.slice(-7).forEach(function(r){
+  // Last 10 days of readings with full data
+  c.readings.slice(-10).forEach(function(r){
+    var dpoVal=info.od&&r.day>info.od?(r.day-info.od):null;
     ctx.recentReadings.push({
       day:r.day,
       date:r.date,
+      dpo:dpoVal,
       temp:r.temp,
+      tempVsCoverline:cl&&r.temp!=null?((r.temp-cl>=0?'+':'')+(r.temp-cl).toFixed(2)):null,
       flow:r.flow||null,
       lhPositive:!!r.ov,
       symptoms:D.sym[r.date]||[],
       mood:D.mood[r.date]||[],
       cmAmounts:D.cmAmt&&D.cmAmt[r.date]||{},
       sex:!!D.sex[r.date],
+      notes:D.notes&&D.notes[r.date]||null,
     });
   });
 
-  // Last 3 completed cycles (excluding current)
+  // Last 5 cycles (excluding current) — broader context
   var pastIdx=[];
-  for(var i=ci-1;i>=0&&pastIdx.length<3;i--)pastIdx.push(i);
+  for(var i=ci-1;i>=0&&pastIdx.length<5;i--)pastIdx.push(i);
   pastIdx.forEach(function(i){
     var pc=D.cycles[i];var pod=ovDay(pc);
     var temps=pc.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
     var avgT=temps.length?(temps.reduce(function(a,b){return a+b},0)/temps.length).toFixed(2):null;
     var tri=detectTriphasic(pc,i);
+    // Count fertile CM days and intimacy days in past cycle
+    var sexDays=0,fertileCMDays=0;
+    pc.readings.forEach(function(r){
+      if(D.sex[r.date])sexDays++;
+      var syms=D.sym[r.date]||[];
+      if(syms.some(function(s){return s==='CM: Egg white'||s==='CM: Watery'}))fertileCMDays++;
+    });
     ctx.pastCycles.push({
       number:i+1,
+      startDate:pc.key,
       length:pc.length,
       ovDay:pod,
       lutealLength:pod&&pc.length?(pc.length-pod):null,
@@ -1087,6 +1126,8 @@ function buildAIContext(){
       excluded:isExcl(i),
       pregnancy:isExcl(i),
       triphasic:tri?(tri.found?'yes':'no'):'insufficient_data',
+      sexDays:sexDays,
+      fertileCMDays:fertileCMDays,
     });
     if(pod&&pc.length)ctx.luteralPhaseHistory.push(pc.length-pod);
     if(pc.length)ctx.cycleLengthHistory.push(pc.length);
@@ -1095,6 +1136,15 @@ function buildAIContext(){
   // Patterns
   var pp=personalPatterns();
   if(pp&&pp.length)ctx.patterns=pp.slice(0,5).map(function(p){return{label:p.label,detail:p.detail}});
+
+  // Compact summary strings — easier for LLM to digest than nested JSON
+  ctx.summary={
+    cyclesTracked:D.cycles.length,
+    completedCycles:D.cycles.filter(function(oc,oi){return oc.length&&!isExcl(oi)}).length,
+    avgCycleLength:ctx.cycleLengthHistory.length?(ctx.cycleLengthHistory.reduce(function(a,b){return a+b},0)/ctx.cycleLengthHistory.length).toFixed(1):null,
+    avgLutealLength:ctx.luteralPhaseHistory.length?(ctx.luteralPhaseHistory.reduce(function(a,b){return a+b},0)/ctx.luteralPhaseHistory.length).toFixed(1):null,
+    hadPregnancyCycle:D.cycles.some(function(oc,oi){return isExcl(oi)}),
+  };
 
   return ctx;
 }
@@ -1105,8 +1155,18 @@ function askGemini(question){
     return Promise.resolve(null);
   }
   var ctx=buildAIContext();
-  var systemPrompt='You are a friendly, knowledgeable fertility-tracking assistant integrated into the user\'s personal cycle-tracking app called CyTrack. Your job is to answer questions about their cycle data clearly and warmly.\n\nIMPORTANT GUIDELINES:\n- Be specific and reference their actual data when possible (today is '+ctx.today+').\n- Keep answers conversational, 2-5 sentences. NOT clinical or preachy.\n- Never give medical diagnoses. If something serious comes up, suggest they discuss with their GP.\n- Use UK spelling.\n- Don\'t restate the question.\n- Use simple HTML formatting if helpful: <strong>, <em>. No headings or lists unless specifically asked.\n- If the question is unrelated to fertility/cycles, politely redirect.\n- The user is actively trying to conceive (TTC).';
-  var userPrompt='Here is the user\'s current cycle context (JSON):\n\n'+JSON.stringify(ctx,null,2)+'\n\nUSER QUESTION: '+question;
+  var systemPrompt='You are CyTrack AI, a direct and data-savvy fertility assistant built into a personal cycle-tracking app. You speak with the user as a knowledgeable friend who has full access to their tracking data and uses it constantly.\n\n'+
+    'CORE RULES — Follow these without exception:\n\n'+
+    '1. **BE SPECIFIC WITH NUMBERS.** Every answer MUST reference at least one specific number from the user\'s data: DPO, cycle day, exact temps, exact dates, luteal phase length, coverline. Never answer vaguely when the data contains the answer.\n\n'+
+    '2. **NO HEDGING PHRASES.** Banned phrases: "it could be many things", "spotting can be common", "it\'s possible", "you might want to consider", "various reasons", "some people find". Instead: pick the most likely 1-2 causes based on WHERE SHE IS in the cycle and say which is most likely.\n\n'+
+    '3. **READ THE DATA BEFORE ANSWERING.** Check today_data.symptoms, today_data.temp, currentCycle.dpo, recentReadings for today\'s actual logged info. If she asks about something (e.g. spotting), FIRST check if she\'s logged it — if yes, reference it explicitly ("I can see you logged spotting today"). If NO, say so directly ("You haven\'t logged spotting today — is this new right now?").\n\n'+
+    '4. **REASON FROM HER PATTERN.** She has tracked '+ctx.summary.cyclesTracked+' cycles'+(ctx.summary.hadPregnancyCycle?' including one pregnancy cycle':'')+'. Her avg luteal is '+(ctx.summary.avgLutealLength||'unknown')+'d. Today she is CD'+ctx.currentCycle.currentDay+(ctx.currentCycle.dpo?', '+ctx.currentCycle.dpo+' DPO':'')+'. ANCHOR every answer to this position.\n\n'+
+    '5. **ACTIONABLE, NOT VAGUE.** When she asks "might I be pregnant" at 14+ DPO, the answer is specific: "Yes — at '+(ctx.currentCycle.dpo||'X')+' DPO with your typical luteal of '+(ctx.summary.avgLutealLength||'X')+'d, your period would have arrived. Test now with FMU — a negative at this DPO is very reliable." Not "it\'s possible, you might want to test soon."\n\n'+
+    '6. **USE UK SPELLING** and a warm but direct tone. Write 3-5 sentences. Use <strong> for key stats. No bullet lists unless asked.\n\n'+
+    '7. **DON\'T SELF-CENSOR.** She is an adult TTC for months. Don\'t add disclaimers like "consult your doctor" unless the situation is genuinely serious (heavy bleeding, severe pain, suspicious pattern). She wants real answers, not liability language.\n\n'+
+    '8. **QUESTION THE QUESTION when useful.** If she asks "why is my temp low" and her temp isn\'t actually low compared to coverline, say so. Don\'t invent a problem to answer.\n\n'+
+    'Today is '+ctx.today+'. Answer using her JSON data, which follows.';
+  var userPrompt='Her cycle data as JSON:\n\n'+JSON.stringify(ctx,null,2)+'\n\n=== QUESTION ===\n'+question;
 
   return fetch(D.aiCfg.url,{
     method:'POST',
@@ -1242,15 +1302,15 @@ function rAsk(){
   var aiOn=D.aiCfg&&D.aiCfg.enabled&&D.aiCfg.url&&D.aiCfg.secret;
 
   // Hero — big ask box
-  h+='<div class="section"><div class="card" style="padding:14px 16px;background:linear-gradient(135deg,var(--burnt-bg) 0%,var(--gold-bg) 100%);border-left:3px solid var(--burnt)">';
-  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-  h+='<span style="font-size:12px;font-weight:800;color:var(--burnt);text-transform:uppercase;letter-spacing:.6px">💬 Ask anything about your data</span>';
-  if(aiOn)h+='<span style="font-size:9px;font-weight:700;color:var(--forest);background:var(--forest-bg);padding:3px 7px;border-radius:6px">✨ AI ON</span>';
-  else h+='<span style="font-size:9px;font-weight:700;color:var(--txt4);background:var(--cream);padding:3px 7px;border-radius:6px">RULES ONLY</span>';
+  h+='<div class="section"><div class="card" style="padding:16px 18px;background:var(--lavender-bg);border-left:3px solid var(--plum)">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+  h+='<span style="font-size:11px;font-weight:700;color:var(--plum);text-transform:uppercase;letter-spacing:.8px">Ask anything about your data</span>';
+  if(aiOn)h+='<span style="font-size:9px;font-weight:700;color:var(--forest);background:var(--sage-bg);padding:3px 8px;border-radius:6px">AI ON</span>';
+  else h+='<span style="font-size:9px;font-weight:700;color:var(--txt4);background:var(--cream);padding:3px 8px;border-radius:6px">RULES ONLY</span>';
   h+='</div>';
   h+='<div style="display:flex;gap:6px">';
   h+='<input type="text" id="askInput" placeholder="e.g. why is my temp low today?" onkeydown="if(event.key===\'Enter\')handleAsk()" style="flex:1;padding:11px 14px;border-radius:10px;border:1px solid var(--cream3);background:var(--card);font-size:13px;color:var(--txt);outline:none">';
-  h+='<button onclick="handleAsk()" style="padding:11px 18px;border-radius:10px;background:var(--burnt);color:#fff;font-size:12px;font-weight:700;border:none">Ask</button>';
+  h+='<button onclick="handleAsk()" style="padding:11px 18px;border-radius:10px;background:var(--plum);color:#fff;font-size:12px;font-weight:700;border:none;cursor:pointer">Ask</button>';
   h+='</div>';
   if(aiOn){
     h+='<div style="margin-top:8px;font-size:10px;color:var(--txt3);line-height:1.5">Tries built-in patterns first; falls through to Gemini AI for novel questions. All saved to your bank.</div>';
@@ -1749,13 +1809,13 @@ function render(){
     h+='<div class="morning-wrap">';
     h+='<div style="display:flex;justify-content:space-between;align-items:flex-start">';
     h+='<div><div class="morning-hi">'+hiMsg+'</div>';
-    h+='<div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">Day '+info.cd+' · '+ph.n+'</div></div>';
+    h+='<div style="font-size:12px;color:var(--txt3);margin-top:3px">Day '+info.cd+' · '+ph.n+'</div></div>';
     h+='<div class="hdr-btns"><button class="hdr-btn" onclick="toggleDark()">'+(D.darkMode?'Light':'Dark')+'</button><button class="hdr-btn" onclick="backup()">Save</button><button class="hdr-btn" onclick="document.getElementById(\'hdrRest\').click()">Load</button>';
     h+='<input type="file" id="hdrRest" style="display:none" accept=".json" onchange="restore(this)"></div></div>';
-    h+='<div style="font-size:13px;color:rgba(255,255,255,.8);margin:16px 0 12px;line-height:1.6;font-weight:400">'+morningMsg+'</div>';
+    h+='<div style="font-size:13px;color:var(--txt2);margin:16px 0 12px;line-height:1.6;font-weight:400">'+morningMsg+'</div>';
     h+='<div class="morning-fact">'+getFact()+'</div>';
-    h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:5px">Temperature</div>';
-    h+='<div class="morning-temp"><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="mornT" placeholder="3650" oninput="autoDecimal(this)"><input type="time" id="mornTime" style="padding:10px 8px;border:none;border-radius:12px;font-size:13px;background:rgba(255,255,255,.12);color:#fff;outline:none;width:90px;text-align:center" value="'+(new Date().getHours().toString().padStart(2,'0')+':'+new Date().getMinutes().toString().padStart(2,'0'))+'"><button onclick="quickLog3()">Log</button></div>';
+    h+='<div style="font-size:10px;color:var(--txt3);margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Temperature</div>';
+    h+='<div class="morning-temp"><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="mornT" placeholder="3650" oninput="autoDecimal(this)"><input type="time" id="mornTime" style="padding:10px 8px;border:1px solid var(--cream3);border-radius:12px;font-size:13px;background:var(--card);color:var(--txt);outline:none;width:90px;text-align:center" value="'+(new Date().getHours().toString().padStart(2,'0')+':'+new Date().getMinutes().toString().padStart(2,'0'))+'"><button onclick="quickLog3()">Log</button></div>';
     h+='</div>';
   } else {
     h+='<div class="hdr-row"><div><h1>'+hiMsg+'</h1><div class="hdr-sub">'+wbMsg+'</div></div>';
@@ -1794,42 +1854,42 @@ function rToday(info){  var h='';
   // ===== MORNING BRIEFING (new top card) =====
   var briefing=morningBriefing(info);
   if(briefing){
-    h+='<div class="section"><div class="card" style="padding:14px 16px;background:linear-gradient(135deg,var(--cob-bg) 0%,var(--gold-bg) 100%);border-left:3px solid var(--cobalt)">';
-    h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">';
-    h+='<span style="font-size:10px;font-weight:800;color:var(--cobalt);text-transform:uppercase;letter-spacing:.6px">✨ Today\'s Briefing</span>';
+    h+='<div class="section"><div class="card" style="padding:16px 18px;background:var(--peach-bg);border-left:3px solid var(--burnt)">';
+    h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">';
+    h+='<span style="font-size:10px;font-weight:700;color:var(--burnt);text-transform:uppercase;letter-spacing:.8px">Today\'s Briefing</span>';
     h+='</div>';
-    h+='<div style="font-size:13px;color:var(--txt);line-height:1.55">'+briefing+'</div>';
+    h+='<div style="font-size:13px;color:var(--txt);line-height:1.6">'+briefing+'</div>';
     h+='</div></div>';
   }
 
   // ===== ASK ANYTHING BOX =====
-  h+='<div class="section"><div class="card" style="padding:12px 14px">';
-  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-  h+='<span style="font-size:10px;font-weight:800;color:var(--burnt);text-transform:uppercase;letter-spacing:.6px">💬 Ask anything</span>';
+  h+='<div class="section"><div class="card" style="padding:14px 16px">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+  h+='<span style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px">Ask anything</span>';
   var bankN=(D.askLog||[]).length;
-  if(bankN)h+='<button onclick="sw(\'ask\')" style="font-size:10px;font-weight:600;color:var(--cobalt);background:none;padding:2px 0">View bank ('+bankN+') ›</button>';
+  if(bankN)h+='<button onclick="sw(\'ask\')" style="font-size:10px;font-weight:600;color:var(--cobalt);background:none;padding:2px 0;border:none;cursor:pointer">View bank ('+bankN+') ›</button>';
   h+='</div>';
   h+='<div style="display:flex;gap:6px">';
-  h+='<input type="text" id="askInput" placeholder="e.g. why is my temp low?" onkeydown="if(event.key===\'Enter\')handleAsk()" style="flex:1;padding:9px 12px;border-radius:10px;border:1px solid var(--cream3);background:var(--card);font-size:12px;color:var(--txt);outline:none">';
-  h+='<button onclick="handleAsk()" style="padding:9px 14px;border-radius:10px;background:var(--burnt);color:#fff;font-size:11px;font-weight:700;border:none">Ask</button>';
+  h+='<input type="text" id="askInput" placeholder="e.g. why is my temp low?" onkeydown="if(event.key===\'Enter\')handleAsk()" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--cream3);background:var(--card);font-size:12px;color:var(--txt);outline:none">';
+  h+='<button onclick="handleAsk()" style="padding:10px 16px;border-radius:10px;background:var(--cobalt);color:#fff;font-size:11px;font-weight:700;border:none;cursor:pointer">Ask</button>';
   h+='</div>';
   if(window._lastAskAnswer){
-    h+='<div style="margin-top:10px;padding:10px 12px;background:var(--cream);border-radius:10px;border-left:2px solid var(--burnt)">';
-    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:6px">';
+    h+='<div style="margin-top:12px;padding:12px 14px;background:var(--cream);border-radius:10px;border-left:2px solid var(--cobalt)">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:6px">';
     h+='<div style="font-size:10px;color:var(--txt4);font-style:italic;flex:1">You asked: "'+window._lastAskQuestion+'"</div>';
-    if(window._lastAskSource==='ai')h+='<span style="font-size:8px;font-weight:700;color:var(--gold);background:var(--gold-bg);padding:2px 5px;border-radius:4px;flex-shrink:0">✨ AI</span>';
+    if(window._lastAskSource==='ai')h+='<span style="font-size:8px;font-weight:700;color:var(--gold);background:var(--gold-bg);padding:2px 6px;border-radius:4px;flex-shrink:0">AI</span>';
     h+='</div>';
     h+='<div style="font-size:12px;color:var(--txt);line-height:1.5">'+window._lastAskAnswer+'</div>';
     if(!window._aiThinking){
-      h+='<div style="display:flex;gap:6px;margin-top:8px;align-items:center">';
-      h+='<button onclick="rateAsk(0,\'up\')" style="font-size:14px;background:none;padding:2px 6px">👍</button>';
-      h+='<button onclick="rateAsk(0,\'down\')" style="font-size:14px;background:none;padding:2px 6px">👎</button>';
-      h+='<button onclick="window._lastAskAnswer=null;window._lastAskQuestion=null;render()" style="margin-left:auto;font-size:10px;color:var(--txt4);background:none;padding:2px 0">× Clear</button>';
+      h+='<div style="display:flex;gap:6px;margin-top:10px;align-items:center">';
+      h+='<button onclick="rateAsk(0,\'up\')" style="font-size:14px;background:none;padding:3px 6px;border:none;cursor:pointer">👍</button>';
+      h+='<button onclick="rateAsk(0,\'down\')" style="font-size:14px;background:none;padding:3px 6px;border:none;cursor:pointer">👎</button>';
+      h+='<button onclick="window._lastAskAnswer=null;window._lastAskQuestion=null;render()" style="margin-left:auto;font-size:10px;color:var(--txt4);background:none;padding:2px 0;border:none;cursor:pointer">× Clear</button>';
       h+='</div>';
     }
     h+='</div>';
   }else{
-    h+='<div style="margin-top:6px;font-size:10px;color:var(--txt4);font-style:italic">Try: "when should I test", "is my luteal phase healthy", "what does triphasic mean"</div>';
+    h+='<div style="margin-top:8px;font-size:10px;color:var(--txt4);font-style:italic">Try: "when should I test", "is my luteal phase healthy", "what does triphasic mean"</div>';
   }
   h+='</div></div>';
 
@@ -1843,7 +1903,7 @@ function rToday(info){  var h='';
   // Top row: DPO/Day + Biology title + Ring
   h+='<div style="display:flex;align-items:flex-start;gap:14px">';
   // Ring — compact
-  h+='<div style="position:relative;width:80px;height:80px;flex-shrink:0"><svg width="80" height="80" viewBox="0 0 80 80"><defs><linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="var(--cobalt)"/><stop offset="100%" stop-color="var(--burnt)"/></linearGradient></defs>';
+  h+='<div style="position:relative;width:80px;height:80px;flex-shrink:0"><svg width="80" height="80" viewBox="0 0 80 80"><defs><linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="var(--plum)"/><stop offset="100%" stop-color="var(--burnt)"/></linearGradient></defs>';
   h+='<circle fill="none" stroke="var(--cream3)" stroke-width="5" cx="40" cy="40" r="'+r2+'"/>';
   h+='<circle fill="none" stroke="url(#rg)" stroke-width="5" stroke-linecap="round" cx="40" cy="40" r="'+r2+'" stroke-dasharray="'+circ+'" stroke-dashoffset="'+off+'" transform="rotate(-90 40 40)"/>';
   h+='</svg><div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">';
@@ -1874,8 +1934,8 @@ function rToday(info){  var h='';
   h+='</div>'}
 
   // Fertility fact
-  h+='<div style="margin-top:10px;padding:10px 12px;background:var(--cob-bg);border-radius:10px">';
-  h+='<div style="font-size:9px;font-weight:600;color:var(--cobalt);margin-bottom:3px">Fertility Fact</div>';
+  h+='<div style="margin-top:10px;padding:10px 12px;background:var(--butter-bg);border-radius:10px">';
+  h+='<div style="font-size:9px;font-weight:700;color:var(--gold);margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Fertility Fact</div>';
   h+='<div style="font-size:11px;color:var(--txt);line-height:1.4">'+getFact()+'</div></div>';
   h+='</div></div>';
 
@@ -3420,11 +3480,11 @@ function rDoctor(info){
   var c=info.c;var ci=info.ci;
   
   // Header card
-  h+='<div class="section"><div class="card" style="padding:14px 16px;background:linear-gradient(135deg,var(--cob-bg),var(--cream))">';
-  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="font-size:24px">🩺</span>';
-  h+='<div><div style="font-size:16px;font-weight:800;color:var(--txt)">Cycle Doctor</div>';
-  h+='<div style="font-size:11px;color:var(--txt3)">Pattern analysis & comparison</div></div></div>';
-  h+='<div style="font-size:11px;color:var(--txt2);line-height:1.5;padding-top:8px;border-top:1px solid rgba(0,0,0,.06)">Tracks your hormonal patterns and explains what your data means. <strong>Not medical advice</strong> — always discuss concerns with your GP.</div>';
+  h+='<div class="section"><div class="card" style="padding:16px 18px;background:var(--sage-bg);border-left:3px solid var(--forest)">';
+  h+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><span style="font-size:22px">🩺</span>';
+  h+='<div><div style="font-size:16px;font-weight:700;color:var(--txt);letter-spacing:-.2px">Cycle Doctor</div>';
+  h+='<div style="font-size:11px;color:var(--txt3);margin-top:1px">Pattern analysis & comparison</div></div></div>';
+  h+='<div style="font-size:11px;color:var(--txt2);line-height:1.5;padding-top:10px;border-top:1px solid rgba(0,0,0,.05)">Tracks your hormonal patterns and explains what your data means. <strong>Not medical advice</strong> — always discuss concerns with your GP.</div>';
   h+='</div></div>';
   
   // ===== THIS CYCLE ANALYSIS =====
@@ -3690,11 +3750,11 @@ function rInsights(){
   headlineBits.push({v:st.numCycles,l:'Cycles tracked',c:'var(--cobalt)'});
   if(st.avgLut)headlineBits.push({v:st.avgLut+'d',l:'Avg luteal',c:st.avgLut>=12?'var(--forest)':st.avgLut>=10?'var(--gold)':'var(--rose)'});
   if(reg)headlineBits.push({v:reg.score+'%',l:reg.lbl,c:reg.score>=70?'var(--forest)':reg.score>=50?'var(--gold)':'var(--burnt)'});
-  h+='<div class="section"><div class="card" style="padding:16px 14px;background:linear-gradient(135deg,var(--cob-bg),var(--cream))">';
-  h+='<div style="font-size:10px;font-weight:700;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Your Numbers</div>';
+  h+='<div class="section"><div class="card" style="padding:18px 18px;background:var(--butter-bg);border-left:3px solid var(--gold)">';
+  h+='<div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px">Your Numbers</div>';
   h+='<div style="display:grid;grid-template-columns:repeat('+headlineBits.length+',1fr);gap:10px">';
   headlineBits.forEach(function(b){
-    h+='<div style="text-align:center"><div style="font-size:22px;font-weight:800;color:'+b.c+'">'+b.v+'</div><div style="font-size:10px;font-weight:600;color:var(--txt3);margin-top:2px">'+b.l+'</div></div>';
+    h+='<div style="text-align:center"><div style="font-size:24px;font-weight:700;color:'+b.c+';letter-spacing:-.5px">'+b.v+'</div><div style="font-size:10px;font-weight:600;color:var(--txt3);margin-top:4px;text-transform:uppercase;letter-spacing:.3px">'+b.l+'</div></div>';
   });
   h+='</div></div></div>';
 
@@ -4638,7 +4698,7 @@ function exp(){
 }
 
 function sw(t){curTab=t;render()}
-function toggleDark(){D.darkMode=!D.darkMode;document.documentElement.classList.toggle('dark',D.darkMode);document.querySelector('meta[name=theme-color]').content=D.darkMode?'#1C1210':'#B25835';save();render()}
+function toggleDark(){D.darkMode=!D.darkMode;document.documentElement.classList.toggle('dark',D.darkMode);document.querySelector('meta[name=theme-color]').content=D.darkMode?'#1F1814':'#F5E5D6';save();render()}
 var _undoState=null;
 function saveUndo(){_undoState=JSON.stringify(D)}
 function undo(){if(!_undoState){flash("Nothing to undo");return}D=JSON.parse(_undoState);_undoState=null;save();render();flash("Undone")}
