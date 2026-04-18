@@ -419,8 +419,24 @@ function conceptionProb(ci){
       var hasFertile=dayCM.some(function(s){return s==='CM: Egg white'||s==='CM: Watery'});
       var hasCreamy=dayCM.some(function(s){return s==='CM: Creamy'});
       var hasDry=dayCM.some(function(s){return s==='CM: Dry'});
+      // Get max CM amount among fertile CM types on this day
+      var fertileAmt=null;
+      dayCM.forEach(function(cm){
+        if(cm==='CM: Egg white'||cm==='CM: Watery'){
+          var a=getCmAmt(cm,ds2);
+          if(a==='lots')fertileAmt='lots';
+          else if(a==='some'&&fertileAmt!=='lots')fertileAmt='some';
+          else if(a==='little'&&!fertileAmt)fertileAmt='little';
+        }
+      });
       var multiplier=1;
-      if(hasFertile){multiplier=1.25;cmBoosts++}
+      if(hasFertile){
+        // Scale boost by amount: lots = 1.4x, some = 1.25x, little = 1.1x, unspecified = 1.25x (legacy default)
+        if(fertileAmt==='lots')multiplier=1.4;
+        else if(fertileAmt==='little')multiplier=1.1;
+        else multiplier=1.25;
+        cmBoosts++;
+      }
       else if(hasCreamy){multiplier=1.0}
       else if(hasDry&&d3>=od-3){multiplier=0.6;cmPenalties++}  // dry on peak days is a real penalty
       // No CM logged — neutral
@@ -653,19 +669,38 @@ function cmScore(ci){
     if(r.day>=od-5&&r.day<=od){
       var syms=D.sym[r.date]||[];
       var cm=syms.filter(function(s){return s.indexOf("CM:")===0});
-      fertile.push({day:r.day,cm:cm})
+      fertile.push({day:r.day,date:r.date,cm:cm})
     }
   });
   if(!fertile.length)return null;
+  // Also include days with logged sex that have CM but no temp reading
+  var cStart=new Date(c.key+'T12:00:00');
+  for(var dd=od-5;dd<=od;dd++){
+    var dt=new Date(cStart);dt.setDate(dt.getDate()+dd-1);var ds=dt.toISOString().slice(0,10);
+    if(!fertile.find(function(f){return f.day===dd})){
+      var syms2=D.sym[ds]||[];var cm2=syms2.filter(function(s){return s.indexOf("CM:")===0});
+      if(cm2.length)fertile.push({day:dd,date:ds,cm:cm2});
+    }
+  }
   var score=0,max=0;
   fertile.forEach(function(f){
     max+=3;
     f.cm.forEach(function(c2){
-      if(c2==="CM: Egg white")score+=3;
-      else if(c2==="CM: Watery")score+=2;
-      else if(c2==="CM: Creamy")score+=1;
+      var base=0;
+      if(c2==="CM: Egg white")base=3;
+      else if(c2==="CM: Watery")base=2;
+      else if(c2==="CM: Creamy")base=1;
+      // Amount multiplier
+      var amt=getCmAmt(c2,f.date);
+      var mult=1.0;
+      if(amt==='lots')mult=1.25;
+      else if(amt==='little')mult=0.7;
+      // 'some' or no amount = 1.0
+      score+=base*mult;
     });
   });
+  // Cap per-day contribution so big boosts don't push past max
+  score=Math.min(score,max);
   var pct=max>0?Math.round(score/max*100):0;
   var lbl=pct>=70?"Excellent — peak fertility CM":pct>=40?"Good — some fertile CM":pct>=10?"Fair — mostly non-fertile CM":"Low — no fertile CM logged";
   return{pct:pct,lbl:lbl,logged:fertile.filter(function(f){return f.cm.length}).length,total:fertile.length}
@@ -709,6 +744,775 @@ function personalSymptomBaseline(excludeCi){
   return result;
 }
 
+/* The personal pattern engine — scans completed cycles and identifies strongest patterns
+   specific to this person. Returns array of {kind, strength, label, detail} sorted by strength. */
+function personalPatterns(){
+  var patterns=[];
+  // Need at least 2 completed cycles to find patterns
+  var completed=D.cycles.filter(function(c,i){return c.length&&!isExcl(i)});
+  if(completed.length<2)return patterns;
+
+  // Pattern 1: Cycle length consistency
+  var lens=completed.map(function(c){return c.length}).filter(function(l){return l<45});
+  if(lens.length>=3){
+    var avgLen=lens.reduce(function(a,b){return a+b},0)/lens.length;
+    var sd=Math.sqrt(lens.reduce(function(a,b){return a+(b-avgLen)*(b-avgLen)},0)/lens.length);
+    if(sd<=2)patterns.push({kind:'cycle-length',strength:90,label:'Highly regular cycles',detail:'Your cycles run '+Math.round(avgLen)+'d ±'+sd.toFixed(1)+'d. Predictions should be reliable.'});
+    else if(sd<=4)patterns.push({kind:'cycle-length',strength:60,label:'Reasonably regular cycles',detail:'Your cycles run '+Math.round(avgLen)+'d ±'+sd.toFixed(1)+'d.'});
+    else patterns.push({kind:'cycle-length',strength:40,label:'Variable cycle lengths',detail:'Your cycles range '+Math.min.apply(null,lens)+'-'+Math.max.apply(null,lens)+'d (avg '+Math.round(avgLen)+'d). Predictions are less reliable.'});
+  }
+
+  // Pattern 2: Luteal phase consistency
+  var luts=[];
+  completed.forEach(function(c){var od=ovDay(c);if(od)luts.push(c.length-od)});
+  if(luts.length>=3){
+    var avgLut=luts.reduce(function(a,b){return a+b},0)/luts.length;
+    var sdLut=Math.sqrt(luts.reduce(function(a,b){return a+(b-avgLut)*(b-avgLut)},0)/luts.length);
+    if(avgLut<10)patterns.push({kind:'luteal-short',strength:95,label:'Consistently short luteal phase',detail:'Your luteal phases average '+avgLut.toFixed(1)+'d (need 10+ for healthy implantation). Worth raising with GP.'});
+    else if(avgLut<12)patterns.push({kind:'luteal-borderline',strength:70,label:'Borderline luteal phase',detail:'Your luteal phases average '+avgLut.toFixed(1)+'d. Below 12 is borderline — track for trends.'});
+    else if(sdLut<=1)patterns.push({kind:'luteal-stable',strength:80,label:'Very stable luteal phase',detail:'Your luteal phases are consistently '+avgLut.toFixed(1)+'d ±'+sdLut.toFixed(1)+'d.'});
+    else patterns.push({kind:'luteal-stable',strength:50,label:'Healthy luteal phase',detail:'Your luteal phases average '+avgLut.toFixed(1)+'d.'});
+  }
+
+  // Pattern 3: Ovulation timing
+  var ovs=[];
+  completed.forEach(function(c){var od=ovDay(c);if(od)ovs.push(od)});
+  if(ovs.length>=3){
+    var avgOv=ovs.reduce(function(a,b){return a+b},0)/ovs.length;
+    var sdOv=Math.sqrt(ovs.reduce(function(a,b){return a+(b-avgOv)*(b-avgOv)},0)/ovs.length);
+    if(sdOv<=1)patterns.push({kind:'ov-stable',strength:75,label:'Predictable ovulation day',detail:'You typically ovulate around Day '+Math.round(avgOv)+' (±'+sdOv.toFixed(1)+'d). Strong fertile window predictability.'});
+    else if(sdOv>=4)patterns.push({kind:'ov-variable',strength:55,label:'Variable ovulation day',detail:'You ovulate Days '+Math.min.apply(null,ovs)+'-'+Math.max.apply(null,ovs)+' (±'+sdOv.toFixed(1)+'d). OPKs are essential for timing.'});
+  }
+
+  // Pattern 4: Fertile-CM patterns — when does egg-white CM typically appear?
+  var ewDays=[];
+  completed.forEach(function(c){
+    var od=ovDay(c);if(!od)return;
+    c.readings.forEach(function(r){
+      var sy=D.sym[r.date]||[];
+      if(sy.indexOf('CM: Egg white')>-1)ewDays.push(r.day-od);
+    });
+  });
+  if(ewDays.length>=3){
+    var avgEw=ewDays.reduce(function(a,b){return a+b},0)/ewDays.length;
+    if(avgEw<=-2)patterns.push({kind:'cm-early',strength:65,label:'Egg-white CM arrives early',detail:'You typically log egg-white CM '+Math.abs(Math.round(avgEw))+' days before OV. Watch for it as your peak signal.'});
+    else if(avgEw>=-1&&avgEw<=1)patterns.push({kind:'cm-onpoint',strength:75,label:'Egg-white CM aligns with OV',detail:'Your fertile CM and OV are well-synced (within ~1 day). Reliable timing signal.'});
+  }
+
+  // Pattern 5: Symptom timing patterns (e.g. cramps always on CD2)
+  var sumByCD={};  // 'symptom-cd' -> count
+  var totalC=completed.length;
+  completed.forEach(function(c){
+    var seen={};
+    c.readings.forEach(function(r){
+      (D.sym[r.date]||[]).forEach(function(s){
+        if(s.indexOf('CM:')===0)return;  // CM has its own pattern
+        var key=s+'|'+r.day;
+        if(!seen[key]){seen[key]=true;sumByCD[key]=(sumByCD[key]||0)+1}
+      });
+    });
+  });
+  // Find symptoms that appear on the same day in 60%+ of cycles
+  Object.keys(sumByCD).forEach(function(k){
+    var freq=sumByCD[k]/totalC;
+    if(freq>=0.6&&sumByCD[k]>=3){
+      var parts=k.split('|');
+      patterns.push({kind:'sym-timing',strength:50+Math.round(freq*30),label:parts[0]+' typically on Day '+parts[1],detail:'You logged '+parts[0].toLowerCase()+' on Day '+parts[1]+' in '+sumByCD[k]+'/'+totalC+' cycles.'});
+    }
+  });
+
+  // Pattern 6: Triphasic frequency
+  var triCount=0,triEval=0;
+  completed.forEach(function(c,idx){
+    var ci=D.cycles.indexOf(c);
+    var t=detectTriphasic(c,ci);
+    if(t){triEval++;if(t.found)triCount++}
+  });
+  if(triEval>=3){
+    var triFreq=triCount/triEval;
+    if(triFreq>=0.6)patterns.push({kind:'tri-common',strength:60,label:'Triphasic patterns are common for you',detail:triCount+'/'+triEval+' evaluable cycles showed triphasic — so this pattern alone isn\'t a strong pregnancy predictor for you.'});
+    else if(triFreq===0)patterns.push({kind:'tri-rare',strength:55,label:'Triphasic is rare for you',detail:'None of your '+triEval+' evaluable cycles showed triphasic — if it appears, that\'s a meaningful signal.'});
+  }
+
+  // Sort by strength descending
+  patterns.sort(function(a,b){return b.strength-a.strength});
+  return patterns;
+}
+
+/* Generate the morning briefing for a given cycle info — 3-5 sentences combining
+   focus, pattern observation, prediction, and unusual flag */
+function morningBriefing(info){
+  var c=info.c;var ci=info.ci;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
+  var todayR=c.readings.find(function(x){return x.date===td()});
+  var todaySy=D.sym[td()]||[];
+  var ph=phase(cd,info.av,info.ao,info.ho,info.od);
+  var cl=avgCL2();
+  var bits=[];
+
+  // ========== OPENER: where you are ==========
+  if(ph.n.indexOf('Menstrual')>-1){
+    bits.push('<strong>Day '+cd+' — period phase.</strong>');
+  }else if(ph.n.indexOf('Follicular')>-1){
+    var daysToOv=info.ao-cd;
+    if(daysToOv>0)bits.push('<strong>Day '+cd+' — '+daysToOv+' day'+(daysToOv>1?'s':'')+' until typical ovulation.</strong>');
+    else bits.push('<strong>Day '+cd+' — follicular phase.</strong>');
+  }else if(ph.n.indexOf('Ovulatory')>-1){
+    bits.push('<strong>Day '+cd+' — peak fertility window.</strong>');
+  }else if(dpo!=null){
+    bits.push('<strong>'+dpo+' DPO</strong> (Day '+cd+', luteal phase).');
+  }else{
+    bits.push('<strong>Day '+cd+'.</strong>');
+  }
+
+  // ========== TODAY'S TEMP: contextual reading ==========
+  if(todayR&&todayR.temp!=null&&cl){
+    var diff=todayR.temp-cl;
+    if(dpo!=null&&dpo>=1){
+      if(diff>=0.15)bits.push('Today\'s '+todayR.temp.toFixed(2)+'° is '+diff.toFixed(2)+'° above coverline — strong luteal hold.');
+      else if(diff>=0.05)bits.push('Today\'s '+todayR.temp.toFixed(2)+'° is solidly above coverline.');
+      else if(diff>=-0.05)bits.push('Today\'s '+todayR.temp.toFixed(2)+'° is right on coverline — watch tomorrow.');
+      else if(dpo>=10)bits.push('Today\'s '+todayR.temp.toFixed(2)+'° dropped below coverline — period may be 1-2 days away.');
+      else bits.push('Today\'s '+todayR.temp.toFixed(2)+'° dipped below coverline — could be a one-day blip.');
+    }else if(cd<=info.ao){
+      bits.push('Today\'s '+todayR.temp.toFixed(2)+'° logged.');
+    }
+  }else if(!todayR&&cd>=2){
+    bits.push('No temp logged yet today.');
+  }
+
+  // ========== ACTION: what matters today ==========
+  var fwStart=info.ao-5;
+  if(ph.n.indexOf('Menstrual')>-1&&cd<=2){
+    bits.push('Rest, hydrate, and start logging when you can.');
+  }else if(cd>=fwStart-2&&cd<fwStart&&!info.ho){
+    bits.push('Fertile window opens in '+(fwStart-cd)+' day'+(fwStart-cd>1?'s':'')+' — start daily OPKs.');
+  }else if(cd>=fwStart&&cd<=info.ao&&!info.ho){
+    bits.push('You\'re in the fertile window — prioritise intercourse'+(D.sex[td()]?'':' (none logged today)')+'.');
+  }else if(dpo!=null){
+    if(dpo>=6&&dpo<=9)bits.push('Implantation window — log any unusual symptoms but don\'t test yet.');
+    else if(dpo>=10&&dpo<=12){
+      var hasTest=D.ptests.some(function(p){return p.date===td()});
+      bits.push(hasTest?'Test logged — check Compare tab for the result history.':'Testing window open — FRER with first morning urine.');
+    }else if(dpo>=13)bits.push('Reliable test day — if not yet, test today.');
+    else if(dpo<=2)bits.push('Just past OV — too early for symptoms or testing. Just keep logging temps.');
+    else bits.push('Mid-TWW — keep logging temps, watch for patterns.');
+  }
+
+  // ========== PATTERN OBSERVATION ==========
+  var patterns=personalPatterns();
+  if(patterns.length){
+    // Pick most relevant pattern for current context
+    var relevant=null;
+    if(dpo!=null&&dpo>=8){
+      relevant=patterns.find(function(p){return p.kind==='luteal-stable'||p.kind==='luteal-short'||p.kind==='luteal-borderline'});
+    }else if(cd<=info.ao){
+      relevant=patterns.find(function(p){return p.kind==='ov-stable'||p.kind==='ov-variable'||p.kind==='cm-onpoint'||p.kind==='cm-early'});
+    }
+    if(!relevant)relevant=patterns[0];
+    bits.push('<em>Pattern: '+relevant.detail+'</em>');
+  }
+
+  // ========== PREDICTION ==========
+  if(dpo!=null&&dpo>=8){
+    // Predict period day based on personal avg luteal
+    var lutHist=[];
+    D.cycles.forEach(function(oc,oi){if(!isExcl(oi)){var od=ovDay(oc);if(od&&oc.length)lutHist.push(oc.length-od)}});
+    if(lutHist.length>=2){
+      var avgL=Math.round(lutHist.reduce(function(a,b){return a+b},0)/lutHist.length);
+      var daysOut=avgL-dpo;
+      if(daysOut>=1&&daysOut<=4){
+        var predDate=ad(td(),daysOut);
+        bits.push('<strong>Predicted:</strong> Period likely around '+fd(predDate)+' (your avg luteal is '+avgL+'d).');
+      }else if(daysOut===0){
+        bits.push('<strong>Predicted:</strong> Period due today based on your average luteal length.');
+      }else if(daysOut<0&&!c.length){
+        bits.push('<strong>Predicted:</strong> '+Math.abs(daysOut)+'d past your average luteal length — testing recommended.');
+      }
+    }
+  }else if(!info.ho&&cd>=info.ao-3&&cd<=info.ao+3){
+    // Approaching/at typical OV but not yet detected
+    var daysToOv2=info.ao-cd;
+    if(daysToOv2>0)bits.push('<strong>Predicted:</strong> Ovulation likely around '+fd(ad(td(),daysToOv2))+' based on your typical Day '+info.ao+'.');
+  }
+
+  // ========== UNUSUAL FLAG ==========
+  // Check if today's symptoms are unusual for this person
+  if(dpo!=null&&dpo>=6&&todaySy.length){
+    var symBase=personalSymptomBaseline(ci);
+    if(symBase){
+      var unusual=todaySy.filter(function(s){
+        return s.indexOf('CM:')!==0&&symBase[s]&&symBase[s].lutealFreq<=0.2;
+      });
+      if(unusual.length){
+        bits.push('<em>⚠️ Unusual for you: '+unusual.join(', ')+' — appeared in only '+(symBase[unusual[0]].cycles)+'/'+(symBase[unusual[0]].total)+' past luteal phases.</em>');
+      }
+    }
+  }
+
+  return bits.join(' ');
+}
+
+/* ===== ASK BOX ENGINE =====
+   Pattern-matches user questions against ~30 templates, each returning a personalized
+   answer using the user's actual data. Returns the best match or a fallback. */
+function handleAsk(){
+  var inputEl=document.getElementById('askInput');
+  if(!inputEl)return;
+  var q=inputEl.value.trim();
+  if(!q)return;
+  var qLower=q.toLowerCase();
+
+  // Try rules first
+  var ruleAnswer=answerQuestion(qLower);
+  var isFallback=ruleAnswer.indexOf("I can't answer that one yet")===0;
+
+  // If rules matched, use that answer immediately
+  if(!isFallback){
+    persistAskEntry(q,ruleAnswer,'rules');
+    inputEl.value='';
+    render();
+    return;
+  }
+
+  // Rules fell through — try Gemini if configured
+  if(D.aiCfg&&D.aiCfg.enabled&&D.aiCfg.url&&D.aiCfg.secret){
+    inputEl.value='';
+    // Show "thinking" state
+    window._lastAskQuestion=q;
+    window._lastAskAnswer='<em style="color:var(--cobalt)">🤔 Asking Gemini…</em>';
+    window._aiThinking=true;
+    render();
+    askGemini(q).then(function(aiAnswer){
+      window._aiThinking=false;
+      if(aiAnswer){
+        persistAskEntry(q,aiAnswer,'ai');
+      }else{
+        // Gemini failed — fall back to the rules' "I don't know" message
+        persistAskEntry(q,ruleAnswer+' <span style="color:var(--rose);font-size:10px">(Gemini call failed)</span>','rules');
+      }
+      render();
+    }).catch(function(err){
+      window._aiThinking=false;
+      persistAskEntry(q,ruleAnswer+' <span style="color:var(--rose);font-size:10px">(Gemini error: '+err.message+')</span>','rules');
+      render();
+    });
+    return;
+  }
+
+  // No AI configured, use the rules fallback
+  persistAskEntry(q,ruleAnswer,'rules');
+  inputEl.value='';
+  render();
+}
+
+/* Save a Q+A to the bank and to the live "last answer" display */
+function persistAskEntry(q,answer,source){
+  if(!D.askLog)D.askLog=[];
+  var entry={ts:new Date().toISOString(),q:q,a:answer,rating:null,note:'',source:source||'rules'};
+  D.askLog.unshift(entry);
+  if(D.askLog.length>200)D.askLog=D.askLog.slice(0,200);
+  save();
+  window._lastAskQuestion=q;
+  window._lastAskAnswer=answer;
+  window._lastAskSource=source||'rules';
+}
+
+/* Build a comprehensive context snapshot for Gemini — current cycle + last 3 cycles + patterns */
+function buildAIContext(){
+  var info=cInfo();var c=info.c;var ci=info.ci;
+  var ctx={
+    today:td(),
+    currentCycle:{
+      number:ci+1,
+      startDate:c.key,
+      currentDay:info.cd,
+      typicalCycleLength:info.av,
+      typicalOvDay:info.ao,
+      ovulationDetected:info.ho,
+      ovDay:info.od||null,
+      dpo:info.ho?(info.cd-info.od):null,
+      coverline:avgCL2()?avgCL2().toFixed(2):null,
+      isExcluded:isExcl(ci),
+    },
+    today_data:{
+      temp:null,wrist:null,sleep:null,sleepHours:null,
+      symptoms:D.sym[td()]||[],
+      mood:D.mood[td()]||[],
+      cmAmounts:D.cmAmt&&D.cmAmt[td()]||{},
+      sex:!!D.sex[td()],
+      opk:D.opks&&D.opks[td()]||null,
+    },
+    recentReadings:[],  // last 7 days of current cycle
+    pastCycles:[],  // up to 3 prior completed cycles
+    patterns:[],
+    luteralPhaseHistory:[],
+    cycleLengthHistory:[],
+  };
+
+  var todayR=c.readings.find(function(x){return x.date===td()});
+  if(todayR){ctx.today_data.temp=todayR.temp}
+  if(D.wrist&&D.wrist[td()])ctx.today_data.wrist=D.wrist[td()];
+  if(D.sleep&&D.sleep[td()])ctx.today_data.sleep=D.sleep[td()];
+  if(D.sleepHrs&&D.sleepHrs[td()])ctx.today_data.sleepHours=D.sleepHrs[td()];
+
+  // Last 7 days of readings
+  c.readings.slice(-7).forEach(function(r){
+    ctx.recentReadings.push({
+      day:r.day,
+      date:r.date,
+      temp:r.temp,
+      flow:r.flow||null,
+      lhPositive:!!r.ov,
+      symptoms:D.sym[r.date]||[],
+      mood:D.mood[r.date]||[],
+      cmAmounts:D.cmAmt&&D.cmAmt[r.date]||{},
+      sex:!!D.sex[r.date],
+    });
+  });
+
+  // Last 3 completed cycles (excluding current)
+  var pastIdx=[];
+  for(var i=ci-1;i>=0&&pastIdx.length<3;i--)pastIdx.push(i);
+  pastIdx.forEach(function(i){
+    var pc=D.cycles[i];var pod=ovDay(pc);
+    var temps=pc.readings.filter(function(r){return r.temp!=null}).map(function(r){return r.temp});
+    var avgT=temps.length?(temps.reduce(function(a,b){return a+b},0)/temps.length).toFixed(2):null;
+    var tri=detectTriphasic(pc,i);
+    ctx.pastCycles.push({
+      number:i+1,
+      length:pc.length,
+      ovDay:pod,
+      lutealLength:pod&&pc.length?(pc.length-pod):null,
+      avgTemp:avgT,
+      excluded:isExcl(i),
+      pregnancy:isExcl(i),
+      triphasic:tri?(tri.found?'yes':'no'):'insufficient_data',
+    });
+    if(pod&&pc.length)ctx.luteralPhaseHistory.push(pc.length-pod);
+    if(pc.length)ctx.cycleLengthHistory.push(pc.length);
+  });
+
+  // Patterns
+  var pp=personalPatterns();
+  if(pp&&pp.length)ctx.patterns=pp.slice(0,5).map(function(p){return{label:p.label,detail:p.detail}});
+
+  return ctx;
+}
+
+/* Call Gemini via the Cloudflare Worker. Returns a promise with the answer text or null on failure. */
+function askGemini(question){
+  if(!D.aiCfg||!D.aiCfg.enabled||!D.aiCfg.url||!D.aiCfg.secret){
+    return Promise.resolve(null);
+  }
+  var ctx=buildAIContext();
+  var systemPrompt='You are a friendly, knowledgeable fertility-tracking assistant integrated into the user\'s personal cycle-tracking app called CyTrack. Your job is to answer questions about their cycle data clearly and warmly.\n\nIMPORTANT GUIDELINES:\n- Be specific and reference their actual data when possible (today is '+ctx.today+').\n- Keep answers conversational, 2-5 sentences. NOT clinical or preachy.\n- Never give medical diagnoses. If something serious comes up, suggest they discuss with their GP.\n- Use UK spelling.\n- Don\'t restate the question.\n- Use simple HTML formatting if helpful: <strong>, <em>. No headings or lists unless specifically asked.\n- If the question is unrelated to fertility/cycles, politely redirect.\n- The user is actively trying to conceive (TTC).';
+  var userPrompt='Here is the user\'s current cycle context (JSON):\n\n'+JSON.stringify(ctx,null,2)+'\n\nUSER QUESTION: '+question;
+
+  return fetch(D.aiCfg.url,{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'X-App-Secret':D.aiCfg.secret,
+    },
+    body:JSON.stringify({
+      systemPrompt:systemPrompt,
+      prompt:userPrompt,
+      model:'gemini-2.5-flash',
+    }),
+  }).then(function(r){
+    if(!r.ok)return r.json().then(function(j){throw new Error(j.error||('HTTP '+r.status))});
+    return r.json();
+  }).then(function(data){
+    if(data.error)throw new Error(data.error);
+    return data.answer||null;
+  });
+}
+
+/* Save AI configuration from settings form */
+function saveAICfg(){
+  var url=document.getElementById('aiCfgUrl').value.trim();
+  var secret=document.getElementById('aiCfgSecret').value.trim();
+  var enabled=document.getElementById('aiCfgEnabled').checked;
+  if(enabled&&(!url||!secret)){flash('URL and secret are both required to enable');return}
+  D.aiCfg={url:url,secret:secret,enabled:enabled};
+  save();
+  flash(enabled?'Gemini enabled ✓':'Settings saved');
+  render();
+}
+
+/* Test the AI configuration with a simple ping */
+function testAICfg(){
+  var url=document.getElementById('aiCfgUrl').value.trim();
+  var secret=document.getElementById('aiCfgSecret').value.trim();
+  if(!url||!secret){flash('URL and secret required');return}
+  flash('Testing…');
+  fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-App-Secret':secret},
+    body:JSON.stringify({systemPrompt:'You are a test.',prompt:'Reply with just the word: WORKING'}),
+  }).then(function(r){
+    if(!r.ok)return r.json().then(function(j){throw new Error(j.error||('HTTP '+r.status))});
+    return r.json();
+  }).then(function(data){
+    if(data.error)flash('Failed: '+data.error);
+    else if(data.answer&&data.answer.toLowerCase().indexOf('working')>-1)flash('✓ Connected to Gemini!');
+    else flash('Got response: "'+data.answer.slice(0,40)+'"');
+  }).catch(function(err){
+    flash('Failed: '+err.message);
+  });
+}
+
+/* ===== ASK BANK FUNCTIONS ===== */
+
+/* Rate an answer in the bank. idx = position in D.askLog (0 = newest) */
+function rateAsk(idx,rating){
+  if(!D.askLog||!D.askLog[idx])return;
+  // Toggle off if same value tapped
+  if(D.askLog[idx].rating===rating)D.askLog[idx].rating=null;
+  else D.askLog[idx].rating=rating;
+  save();render();
+  flash(rating==='up'?'👍 Thanks':rating==='down'?'👎 Logged':'Cleared');
+}
+
+/* Edit the free-text note on an answer */
+function editAskNote(idx){
+  if(!D.askLog||!D.askLog[idx])return;
+  var current=D.askLog[idx].note||'';
+  var note=prompt('Note about this answer (e.g. "missed X", "wrong about Y"):',current);
+  if(note===null)return;  // cancelled
+  D.askLog[idx].note=note.trim();
+  save();render();
+}
+
+/* Delete a single bank entry */
+function deleteAskEntry(idx){
+  if(!D.askLog||!D.askLog[idx])return;
+  if(!confirm('Delete this question from the bank?'))return;
+  D.askLog.splice(idx,1);
+  save();render();
+  flash('Deleted');
+}
+
+/* Wipe the entire bank */
+function clearAskBank(){
+  if(!confirm('Clear the ENTIRE question bank? This cannot be undone.'))return;
+  D.askLog=[];save();render();flash('Bank cleared');
+}
+
+/* Export bank as plain text — easy to paste into chat */
+function exportAskBankText(){
+  var log=D.askLog||[];
+  var rated=log.filter(function(e){return e.rating||e.note});
+  var t='CYTRACK QUESTION BANK\nGenerated: '+fdf(td())+'\nTotal questions: '+log.length+(rated.length?' (rated: '+rated.length+')':'')+'\n\n';
+  log.forEach(function(e,i){
+    var d=new Date(e.ts);
+    var dateStr=d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    var ratingStr=e.rating==='up'?' 👍':e.rating==='down'?' 👎':'';
+    t+='━━━ #'+(i+1)+' · '+dateStr+ratingStr+' ━━━\n';
+    t+='Q: '+e.q+'\n';
+    // Strip HTML tags from answer for plain text
+    var aText=(e.a||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
+    t+='A: '+aText+'\n';
+    if(e.note)t+='Note: '+e.note+'\n';
+    t+='\n';
+  });
+  var blob=new Blob([t],{type:'text/plain'});
+  dlFB(blob,'cytrack_questions_'+td()+'.txt');
+}
+
+/* Export bank as JSON — includes everything for detailed analysis */
+function exportAskBankJSON(){
+  var log=D.askLog||[];
+  var json={
+    generated:new Date().toISOString(),
+    appVersion:'cytrack-v15',
+    totalQuestions:log.length,
+    ratedCount:log.filter(function(e){return e.rating}).length,
+    questions:log
+  };
+  var blob=new Blob([JSON.stringify(json,null,2)],{type:'application/json'});
+  dlFB(blob,'cytrack_questions_'+td()+'.json');
+}
+
+/* Render the Ask bank tab */
+function rAsk(){
+  var h='';
+  var info=cInfo();
+  var log=D.askLog||[];
+  var aiOn=D.aiCfg&&D.aiCfg.enabled&&D.aiCfg.url&&D.aiCfg.secret;
+
+  // Hero — big ask box
+  h+='<div class="section"><div class="card" style="padding:14px 16px;background:linear-gradient(135deg,var(--burnt-bg) 0%,var(--gold-bg) 100%);border-left:3px solid var(--burnt)">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+  h+='<span style="font-size:12px;font-weight:800;color:var(--burnt);text-transform:uppercase;letter-spacing:.6px">💬 Ask anything about your data</span>';
+  if(aiOn)h+='<span style="font-size:9px;font-weight:700;color:var(--forest);background:var(--forest-bg);padding:3px 7px;border-radius:6px">✨ AI ON</span>';
+  else h+='<span style="font-size:9px;font-weight:700;color:var(--txt4);background:var(--cream);padding:3px 7px;border-radius:6px">RULES ONLY</span>';
+  h+='</div>';
+  h+='<div style="display:flex;gap:6px">';
+  h+='<input type="text" id="askInput" placeholder="e.g. why is my temp low today?" onkeydown="if(event.key===\'Enter\')handleAsk()" style="flex:1;padding:11px 14px;border-radius:10px;border:1px solid var(--cream3);background:var(--card);font-size:13px;color:var(--txt);outline:none">';
+  h+='<button onclick="handleAsk()" style="padding:11px 18px;border-radius:10px;background:var(--burnt);color:#fff;font-size:12px;font-weight:700;border:none">Ask</button>';
+  h+='</div>';
+  if(aiOn){
+    h+='<div style="margin-top:8px;font-size:10px;color:var(--txt3);line-height:1.5">Tries built-in patterns first; falls through to Gemini AI for novel questions. All saved to your bank.</div>';
+  }else{
+    h+='<div style="margin-top:8px;font-size:10px;color:var(--txt3);line-height:1.5">Using built-in patterns only. Set up Gemini below for smarter answers to novel questions.</div>';
+  }
+  h+='</div></div>';
+
+  // ===== AI SETTINGS (collapsible) =====
+  var cfgOpen=collapsed['ai-settings']!==false;  // default closed unless user opened it
+  h+='<div class="section">'+colHdr('ai-settings','✨ Gemini AI Settings'+(aiOn?' · Connected':''));
+  h+=colBody('ai-settings');
+  h+='<div class="card" style="padding:14px 16px">';
+  h+='<div style="font-size:11px;color:var(--txt3);line-height:1.5;margin-bottom:10px">Gemini gives smarter answers when built-in patterns miss. Free to use (Google AI Studio + Cloudflare Worker, no card needed). See <code>cytrack-gemini-worker.js</code> for setup.</div>';
+  h+='<div class="fr"><div class="fl">Cloudflare Worker URL</div><input class="fi" type="text" id="aiCfgUrl" placeholder="https://cytrack-ai.your-subdomain.workers.dev" value="'+(D.aiCfg&&D.aiCfg.url||'')+'"></div>';
+  h+='<div class="fr"><div class="fl">Shared Secret (your APP_SECRET)</div><input class="fi" type="password" id="aiCfgSecret" placeholder="The random password you set in Cloudflare" value="'+(D.aiCfg&&D.aiCfg.secret||'')+'"></div>';
+  h+='<div class="fr"><div class="tr"><span class="tl">Enable Gemini AI</span><label style="display:flex;align-items:center"><input type="checkbox" id="aiCfgEnabled"'+(D.aiCfg&&D.aiCfg.enabled?' checked':'')+' style="width:18px;height:18px"></label></div></div>';
+  h+='<div style="display:flex;gap:6px;margin-top:10px">';
+  h+='<button onclick="saveAICfg()" style="flex:1;padding:9px;border-radius:10px;background:var(--cobalt);color:#fff;font-size:11px;font-weight:700;border:none">Save Settings</button>';
+  h+='<button onclick="testAICfg()" style="flex:1;padding:9px;border-radius:10px;background:var(--forest);color:#fff;font-size:11px;font-weight:700;border:none">🔌 Test Connection</button>';
+  h+='</div>';
+  h+='<div style="margin-top:10px;padding:8px 10px;background:var(--cream);border-radius:8px;font-size:10px;color:var(--txt3);line-height:1.5">';
+  h+='<strong>Privacy note:</strong> When AI is enabled, each unanswered question sends your current cycle data (temps, symptoms, dates, patterns) to Google\'s Gemini API via your private Worker. Your API key stays on Cloudflare. Disable anytime above.';
+  h+='</div>';
+  h+='</div>'+colEnd()+'</div>';
+
+  // Stats strip
+  if(log.length){
+    var ups=log.filter(function(e){return e.rating==='up'}).length;
+    var downs=log.filter(function(e){return e.rating==='down'}).length;
+    var unrated=log.length-ups-downs;
+    var withNotes=log.filter(function(e){return e.note}).length;
+    var aiCount=log.filter(function(e){return e.source==='ai'}).length;
+    h+='<div class="section"><div class="card" style="padding:10px 12px">';
+    h+='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center">';
+    h+='<div><div style="font-size:15px;font-weight:800;color:var(--txt)">'+log.length+'</div><div style="font-size:9px;font-weight:600;color:var(--txt4);text-transform:uppercase;letter-spacing:.4px">Total</div></div>';
+    h+='<div><div style="font-size:15px;font-weight:800;color:var(--forest)">'+ups+'</div><div style="font-size:9px;font-weight:600;color:var(--txt4);text-transform:uppercase;letter-spacing:.4px">👍</div></div>';
+    h+='<div><div style="font-size:15px;font-weight:800;color:var(--rose)">'+downs+'</div><div style="font-size:9px;font-weight:600;color:var(--txt4);text-transform:uppercase;letter-spacing:.4px">👎</div></div>';
+    h+='<div><div style="font-size:15px;font-weight:800;color:var(--cobalt)">'+withNotes+'</div><div style="font-size:9px;font-weight:600;color:var(--txt4);text-transform:uppercase;letter-spacing:.4px">📝</div></div>';
+    h+='<div><div style="font-size:15px;font-weight:800;color:var(--gold)">'+aiCount+'</div><div style="font-size:9px;font-weight:600;color:var(--txt4);text-transform:uppercase;letter-spacing:.4px">✨ AI</div></div>';
+    h+='</div></div></div>';
+  }
+
+  // Export buttons
+  if(log.length){
+    h+='<div class="section"><div class="card" style="padding:10px 12px;display:flex;gap:6px">';
+    h+='<button onclick="exportAskBankText()" style="flex:1;padding:9px 10px;border-radius:10px;background:var(--cobalt);color:#fff;font-size:11px;font-weight:700;border:none">📋 Export as Text</button>';
+    h+='<button onclick="exportAskBankJSON()" style="flex:1;padding:9px 10px;border-radius:10px;background:var(--plum);color:#fff;font-size:11px;font-weight:700;border:none">{ } Export JSON</button>';
+    h+='<button onclick="clearAskBank()" style="padding:9px 10px;border-radius:10px;background:var(--cream);color:var(--rose);font-size:11px;font-weight:700;border:none">🗑</button>';
+    h+='</div></div>';
+  }
+
+  // Filter chips
+  var filter=window._askFilter||'all';
+  if(log.length){
+    h+='<div class="section"><div style="display:flex;gap:6px;flex-wrap:wrap;padding:0 4px">';
+    [['all','All ('+log.length+')'],['up','👍 ('+log.filter(function(e){return e.rating==='up'}).length+')'],['down','👎 ('+log.filter(function(e){return e.rating==='down'}).length+')'],['unrated','Unrated ('+log.filter(function(e){return !e.rating}).length+')'],['notes','📝 ('+log.filter(function(e){return e.note}).length+')'],['ai','✨ AI ('+log.filter(function(e){return e.source==='ai'}).length+')']].forEach(function(f){
+      var active=filter===f[0];
+      h+='<button onclick="window._askFilter=\''+f[0]+'\';render()" style="padding:5px 11px;border-radius:14px;font-size:11px;font-weight:700;background:'+(active?'var(--cobalt)':'var(--cream)')+';color:'+(active?'#fff':'var(--txt3)')+';border:none">'+f[1]+'</button>';
+    });
+    h+='</div></div>';
+  }
+
+  // The bank list
+  if(!log.length){
+    h+='<div class="section"><div class="card" style="padding:30px 16px;text-align:center">';
+    h+='<div style="font-size:36px;margin-bottom:8px">💬</div>';
+    h+='<div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:4px">No questions yet</div>';
+    h+='<div style="font-size:11px;color:var(--txt3);line-height:1.5">Ask your first question above. Every question gets saved here automatically so you can review, rate, and share later.</div>';
+    h+='</div></div>';
+  }else{
+    var filtered=log.map(function(e,i){return{e:e,idx:i}}).filter(function(x){
+      if(filter==='all')return true;
+      if(filter==='up')return x.e.rating==='up';
+      if(filter==='down')return x.e.rating==='down';
+      if(filter==='unrated')return !x.e.rating;
+      if(filter==='notes')return !!x.e.note;
+      if(filter==='ai')return x.e.source==='ai';
+      return true;
+    });
+    if(!filtered.length){
+      h+='<div class="section"><div class="card" style="padding:20px 16px;text-align:center;color:var(--txt4);font-size:12px">No questions match this filter.</div></div>';
+    }else{
+      h+='<div class="section">';
+      filtered.forEach(function(x){
+        var e=x.e;var idx=x.idx;
+        var d=new Date(e.ts);
+        var dateStr=d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        var ratingBg=e.rating==='up'?'var(--forest)':e.rating==='down'?'var(--rose)':'transparent';
+        var border=e.rating==='up'?'2px solid var(--forest)':e.rating==='down'?'2px solid var(--rose)':'1px solid var(--cream3)';
+        h+='<div class="card" style="padding:12px 14px;margin-bottom:8px;border:'+border+'">';
+        // Header row
+        h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:6px">';
+        h+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+        h+='<span style="font-size:9px;color:var(--txt4);font-weight:600">'+dateStr+'</span>';
+        if(e.source==='ai')h+='<span style="font-size:8px;font-weight:700;color:var(--gold);background:var(--gold-bg);padding:2px 5px;border-radius:4px">✨ AI</span>';
+        else h+='<span style="font-size:8px;font-weight:700;color:var(--txt4);background:var(--cream);padding:2px 5px;border-radius:4px">RULES</span>';
+        h+='</div>';
+        h+='<button onclick="deleteAskEntry('+idx+')" style="font-size:11px;color:var(--txt4);background:none;padding:0">×</button>';
+        h+='</div>';
+        // Question
+        h+='<div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:6px">Q: '+e.q+'</div>';
+        // Answer
+        h+='<div style="font-size:11px;color:var(--txt2);line-height:1.5;padding:8px 10px;background:var(--cream);border-radius:8px">'+e.a+'</div>';
+        // Note (if any)
+        if(e.note){
+          h+='<div style="font-size:10px;color:var(--cobalt);margin-top:6px;font-style:italic;padding:6px 10px;background:var(--cob-bg);border-radius:6px">📝 '+e.note+'</div>';
+        }
+        // Action row
+        h+='<div style="display:flex;gap:4px;margin-top:8px;align-items:center">';
+        h+='<button onclick="rateAsk('+idx+',\'up\')" style="font-size:14px;background:'+(e.rating==='up'?'var(--forest-bg)':'transparent')+';padding:3px 8px;border-radius:6px;border:none">👍</button>';
+        h+='<button onclick="rateAsk('+idx+',\'down\')" style="font-size:14px;background:'+(e.rating==='down'?'var(--rose-bg)':'transparent')+';padding:3px 8px;border-radius:6px;border:none">👎</button>';
+        h+='<button onclick="editAskNote('+idx+')" style="font-size:10px;color:var(--cobalt);background:none;padding:3px 8px;font-weight:600">'+(e.note?'📝 Edit note':'+ Add note')+'</button>';
+        h+='</div>';
+        h+='</div>';
+      });
+      h+='</div>';
+    }
+  }
+  return h;
+}
+
+function answerQuestion(q){
+  var info=cInfo();var c=info.c;var ci=info.ci;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
+  var todayR=c.readings.find(function(x){return x.date===td()});
+  var cl=avgCL2();var ph=phase(cd,info.av,info.ao,info.ho,info.od);
+
+  // ===== Helper: build common stats =====
+  function lutHistory(){
+    var luts=[];D.cycles.forEach(function(oc,oi){if(!isExcl(oi)){var od=ovDay(oc);if(od&&oc.length)luts.push(oc.length-od)}});
+    return luts;
+  }
+  function avgLut(){var l=lutHistory();return l.length?l.reduce(function(a,b){return a+b},0)/l.length:null}
+
+  // ===== Question patterns — order matters (specific before general) =====
+
+  // TEMP / BBT questions
+  if(/why.*(temp|bbt).*(low|drop|down|fell|dipped)/.test(q)||/temp.*lower than (usual|normal)/.test(q)){
+    var ans='Temperature can drop for several reasons: ';
+    var causes=[];
+    if(dpo===null||dpo<=1)causes.push('pre-ovulation it\'s normal — temps run cooler in follicular phase');
+    if(dpo!=null&&dpo>=10&&todayR&&cl&&todayR.temp<cl)causes.push('a drop below coverline late in luteal usually signals period within 24-48h');
+    if(dpo!=null&&dpo>=6&&dpo<=10)causes.push('a one-day dip mid-luteal can be an "implantation dip" (not always pregnancy-related)');
+    causes.push('also: bad sleep, alcohol the night before, taking your temp later than usual, or mouth-breathing all lower readings');
+    ans+=causes.join('. ')+'.';
+    if(todayR)ans+=' Today\'s reading: '+todayR.temp.toFixed(2)+'°'+(cl?' (coverline '+cl.toFixed(2)+'°)':'')+'.';
+    return ans;
+  }
+  if(/why.*(temp|bbt).*(high|up|spike|rose|risen)/.test(q)){
+    var ans='Higher temps usually mean: ';
+    if(dpo!=null)ans+='you\'re post-ovulation (progesterone raises baseline by ~0.2-0.5°). ';
+    else ans+='ovulation may have happened — watch for sustained rise over next 2-3 days. ';
+    ans+='Other causes: illness, alcohol, fragmented sleep, taking temp later than usual.';
+    if(todayR&&cl)ans+=' Today: '+todayR.temp.toFixed(2)+'° vs coverline '+cl.toFixed(2)+'°.';
+    return ans;
+  }
+  if(/(what|where).*coverline/.test(q)||/^coverline$/.test(q)){
+    if(cl)return 'Your coverline is '+cl.toFixed(2)+'° — calculated as the average of pre-ovulation temps across your tracked cycles. Post-OV temps should sit above it; that\'s how you confirm ovulation happened.';
+    return 'Coverline is the line dividing your pre-OV temps from post-OV temps. You don\'t have enough data yet to calculate one — usually need 3+ cycles.';
+  }
+  if(/temp (today|this morning|now)/.test(q)){
+    if(todayR)return 'Today\'s temp: '+todayR.temp.toFixed(2)+'°'+(cl?' ('+(todayR.temp>=cl?(todayR.temp-cl).toFixed(2)+'° above':(cl-todayR.temp).toFixed(2)+'° below')+' coverline)':'')+'.';
+    return 'You haven\'t logged a temp today yet.';
+  }
+
+  // OVULATION questions
+  if(/when.*(ovulat|ov)/.test(q)||/when.*fertile/.test(q)){
+    if(info.ho)return 'You\'ve already ovulated this cycle — Day '+info.od+' (you\'re '+dpo+' DPO now).';
+    var daysOut=info.ao-cd;
+    if(daysOut>0)return 'Based on your typical Day '+info.ao+' ovulation, you\'re probably ovulating in ~'+daysOut+' day'+(daysOut>1?'s':'')+' (around '+fd(ad(td(),daysOut))+'). Fertile window is the 5 days before plus OV day itself.';
+    if(daysOut===0)return 'Today is your typical ovulation day — watch for LH+ on an OPK to confirm.';
+    return 'You\'re past your typical OV day ('+info.ao+') — '+Math.abs(daysOut)+' day'+(Math.abs(daysOut)>1?'s':'')+' late. OV may have been delayed or already happened without confirmation.';
+  }
+  if(/did i ovulate/.test(q)){
+    if(info.ho)return 'Yes — ovulation detected on Day '+info.od+'.';
+    if(cd>=info.ao+5)return 'Not yet confirmed. You\'re past your typical OV day. Without LH+ or a clear temp shift, ovulation isn\'t verified for this cycle.';
+    return 'Not yet — still waiting for LH+ or a sustained temp shift. Typical OV for you is around Day '+info.ao+'.';
+  }
+
+  // PERIOD questions
+  if(/when.*(period|af|menstru|bleed)/.test(q)){
+    if(dpo===null)return 'Without confirmed ovulation, hard to predict precisely. Your average cycle is '+info.av+' days, so based on Day 1 of this cycle, period would land around '+fd(ad(c.key,info.av-1))+'.';
+    var aL=avgLut();
+    if(aL){
+      var daysOut=Math.round(aL)-dpo;
+      if(daysOut>0)return 'Based on your average luteal length ('+aL.toFixed(1)+'d), period likely arrives in ~'+daysOut+' day'+(daysOut>1?'s':'')+' (around '+fd(ad(td(),daysOut))+').';
+      if(daysOut===0)return 'Period due today based on your average luteal length.';
+      return 'You\'re '+Math.abs(daysOut)+'d past your average luteal length — testing strongly recommended if you haven\'t.';
+    }
+    return 'Need more cycle data to predict precisely. You\'re currently '+dpo+' DPO.';
+  }
+  if(/am i late/.test(q)||/late.*period/.test(q)){
+    var late=amILate(info);
+    if(late)return late;
+    return 'Not late — based on your historical luteal phase, you\'re still within normal range.';
+  }
+
+  // TESTING questions
+  if(/when.*(test|frer|hpt)/.test(q)||/should i test/.test(q)){
+    if(dpo===null)return 'Pregnancy tests need 10+ DPO for reliability. You haven\'t confirmed ovulation this cycle yet.';
+    if(dpo<7)return 'Too early — at '+dpo+' DPO, hCG is almost certainly too low to detect. Wait until at least 10 DPO, ideally 12+.';
+    if(dpo>=7&&dpo<10)return 'Possible but unreliable. At '+dpo+' DPO some FRERs can pick up faint positives but negatives mean nothing. Wait 2-3 more days for more confidence.';
+    if(dpo>=10&&dpo<13)return 'Reasonable to test — FRER with first morning urine. A negative isn\'t definitive yet (some women don\'t show until 13-14 DPO).';
+    return 'Yes, test now. At '+dpo+' DPO, a negative is much more reliable.';
+  }
+  if(/why.*(negative|bfn)/.test(q)){
+    if(dpo===null)return 'Without confirmed ovulation, a negative test doesn\'t tell you much.';
+    if(dpo<10)return 'At '+dpo+' DPO it\'s often too early — hCG hasn\'t built up enough. Statistically only about 25% of pregnancies are detectable at 10 DPO.';
+    if(dpo<14)return 'At '+dpo+' DPO a negative is meaningful but not definitive. Late implanters can still test positive at 14+ DPO. If period doesn\'t arrive, retest in 2 days.';
+    return 'At '+dpo+' DPO a negative is highly reliable — not pregnant this cycle. Sorry. 💜';
+  }
+
+  // LUTEAL PHASE questions
+  if(/luteal.*(phase|short|long|healthy|normal)/.test(q)||/healthy.*luteal/.test(q)){
+    var aL=avgLut();
+    if(!aL)return 'Need more data to assess your luteal phase. Healthy ranges are 12-16 days; below 10 is a concern.';
+    var ans='Your average luteal phase is '+aL.toFixed(1)+'d. ';
+    if(aL>=12)ans+='That\'s healthy — well above the 10d threshold for healthy implantation.';
+    else if(aL>=10)ans+='That\'s borderline — above the 10d threshold but worth tracking. Mention to GP if consistent.';
+    else ans+='That\'s short — below 10d can make implantation difficult. Worth raising with your GP for progesterone support.';
+    return ans;
+  }
+
+  // TRIPHASIC questions
+  if(/(what|why).*triphasic/.test(q)||/^triphasic/.test(q)){
+    return 'Triphasic = a third temperature rise in the luteal phase, usually 7-10 DPO. The theory is that hCG from implantation triggers a secondary progesterone surge. It\'s talked about as a pregnancy sign but isn\'t reliable on its own — many cycles show triphasic without pregnancy, and many pregnancies don\'t show it. Look at your Cycle tab to see whether each of your cycles was triphasic.';
+  }
+
+  // CM questions
+  if(/(what|why).*(egg white|ewcm|fertile cm)/.test(q)){
+    return 'Egg-white CM (stretchy, clear, lubricative) is your most fertile mucus. It usually appears 1-3 days before ovulation and means oestrogen is peaking. Sperm can survive in it for up to 5 days. Any logged egg-white CM = prioritise intercourse window.';
+  }
+  if(/dry.*cm/.test(q)){
+    return 'Dry CM in the fertile window is suboptimal — sperm needs fluid to survive. If this is a pattern, try: more water (2.5L+/day), Evening Primrose Oil in follicular phase only (stop at OV), or Preseed lubricant during sex.';
+  }
+
+  // PATTERNS / PERSONAL questions
+  if(/pattern|trend|what.*notic/.test(q)){
+    var pp=personalPatterns();
+    if(!pp.length)return 'Not enough completed cycles to spot patterns yet. Need 3+ tracked cycles for meaningful pattern detection.';
+    var top=pp.slice(0,3);
+    return 'Top patterns from your data: '+top.map(function(p){return p.label+' — '+p.detail}).join(' || ');
+  }
+  if(/(am i|is this|is my|are my).*(normal|healthy|ok|okay)/.test(q)){
+    var pp=personalPatterns();
+    if(!pp.length)return 'Need more cycle data to assess. Once you have 3+ completed cycles I can compare against your personal baseline.';
+    var concerning=pp.filter(function(p){return p.kind==='luteal-short'||p.kind==='cycle-length'&&p.strength<=40});
+    if(concerning.length)return 'Mostly normal, but worth flagging: '+concerning.map(function(p){return p.detail}).join(' ');
+    return 'Based on your data, your cycles look healthy. '+pp[0].detail;
+  }
+
+  // CYCLE info
+  if(/what (day|cd)/.test(q)||/^day$/.test(q)||/where am i/.test(q)){
+    return 'You\'re on Day '+cd+(dpo!==null?' ('+dpo+' DPO)':'')+' of cycle '+(ci+1)+'. Phase: '+ph.n+'.';
+  }
+
+  // FALLBACK
+  return 'I can\'t answer that one yet. I\'m good at questions about: <strong>your temp</strong> (why it\'s low/high, coverline), <strong>ovulation timing</strong> (when, did I), <strong>period prediction</strong> (when, am I late), <strong>pregnancy testing</strong> (when, why negative), <strong>luteal phase</strong> health, <strong>CM</strong> meaning, <strong>triphasic</strong>, and <strong>your personal patterns</strong>. Try rephrasing or pick from those.';
+}
+
+
+
 function ttcReport(ci){
   var c=D.cycles[ci];var od=effOv(ci);var len=c.length;
   var r={good:[],improve:[]};
@@ -749,6 +1553,9 @@ function load(){
   if(!D.excl)D.excl={11:true};if(!D.ptests)D.ptests=[];if(!D.meds)D.meds={};if(!D.myOv)D.myOv={};
   if(!D.appts)D.appts=[];if(!D.journal)D.journal={};if(!D.checks)D.checks={};if(!D.opks)D.opks={};if(!D.tqual)D.tqual={};if(!D.opkPhotos)D.opkPhotos={};
   if(!D.wrist)D.wrist={};if(typeof SEED_WRIST!=='undefined'&&Object.keys(D.wrist).length<10){Object.keys(SEED_WRIST).forEach(function(d){if(!D.wrist[d])D.wrist[d]=SEED_WRIST[d]})}if(!D.sleep)D.sleep={};if(!D.darkMode)D.darkMode=false;if(!D.ttime)D.ttime={};if(!D.sleepHrs)D.sleepHrs={};if(!D.bedtime)D.bedtime='22:30';if(!D.waketime)D.waketime='06:30';if(!D.sleepTimes)D.sleepTimes={};
+  if(!D.cmAmt)D.cmAmt={};  // Per-day, per-CM-type amount: {date: {"CM: Egg white": "lots"|"some"|"little"}}
+  if(!D.askLog)D.askLog=[];  // Question bank: [{ts, q, a, rating: 'up'|'down'|null, note: '', source: 'rules'|'ai'}]
+  if(!D.aiCfg)D.aiCfg={url:'',secret:'',enabled:false};  // Gemini Worker config
   var validSyms=["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting","CM: Egg white","CM: Watery","CM: Creamy","CM: Sticky","CM: Dry"];
   var validMoods=["Happy","Calm","Energetic","Tired","Irritable","Anxious","Sad","Emotional"];
   Object.keys(D.sym||{}).forEach(function(d){if(D.sym[d])D.sym[d]=D.sym[d].filter(function(s){return validSyms.indexOf(s)>-1})});
@@ -957,12 +1764,13 @@ function render(){
   }
   // Tabs at top
   h+='<div class="tabs">';
-  ["today","overlay","cycle","compare","doctor","insights"].forEach(function(t){
+  ["today","ask","overlay","cycle","compare","doctor","insights"].forEach(function(t){
     h+='<button class="tab'+(curTab===t?' on':'')+'" onclick="sw(\''+t+'\')">'+t[0].toUpperCase()+t.slice(1)+'</button>';
   });
   h+='</div></div>';
   h+='<div class="content">';
   if(curTab==="today")h+=rToday(info);
+  else if(curTab==="ask")h+=rAsk();
   else if(curTab==="overlay")h+=rOverlay();
   else if(curTab==="cycle")h+=rCycle();
   else if(curTab==="compare")h+=rCompare();
@@ -983,6 +1791,47 @@ function rToday(info){  var h='';
   var todaySy=D.sym[td()]||[];var todayMo=D.mood[td()]||[];
   var streak=getStreak();
 
+  // ===== MORNING BRIEFING (new top card) =====
+  var briefing=morningBriefing(info);
+  if(briefing){
+    h+='<div class="section"><div class="card" style="padding:14px 16px;background:linear-gradient(135deg,var(--cob-bg) 0%,var(--gold-bg) 100%);border-left:3px solid var(--cobalt)">';
+    h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">';
+    h+='<span style="font-size:10px;font-weight:800;color:var(--cobalt);text-transform:uppercase;letter-spacing:.6px">✨ Today\'s Briefing</span>';
+    h+='</div>';
+    h+='<div style="font-size:13px;color:var(--txt);line-height:1.55">'+briefing+'</div>';
+    h+='</div></div>';
+  }
+
+  // ===== ASK ANYTHING BOX =====
+  h+='<div class="section"><div class="card" style="padding:12px 14px">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+  h+='<span style="font-size:10px;font-weight:800;color:var(--burnt);text-transform:uppercase;letter-spacing:.6px">💬 Ask anything</span>';
+  var bankN=(D.askLog||[]).length;
+  if(bankN)h+='<button onclick="sw(\'ask\')" style="font-size:10px;font-weight:600;color:var(--cobalt);background:none;padding:2px 0">View bank ('+bankN+') ›</button>';
+  h+='</div>';
+  h+='<div style="display:flex;gap:6px">';
+  h+='<input type="text" id="askInput" placeholder="e.g. why is my temp low?" onkeydown="if(event.key===\'Enter\')handleAsk()" style="flex:1;padding:9px 12px;border-radius:10px;border:1px solid var(--cream3);background:var(--card);font-size:12px;color:var(--txt);outline:none">';
+  h+='<button onclick="handleAsk()" style="padding:9px 14px;border-radius:10px;background:var(--burnt);color:#fff;font-size:11px;font-weight:700;border:none">Ask</button>';
+  h+='</div>';
+  if(window._lastAskAnswer){
+    h+='<div style="margin-top:10px;padding:10px 12px;background:var(--cream);border-radius:10px;border-left:2px solid var(--burnt)">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:6px">';
+    h+='<div style="font-size:10px;color:var(--txt4);font-style:italic;flex:1">You asked: "'+window._lastAskQuestion+'"</div>';
+    if(window._lastAskSource==='ai')h+='<span style="font-size:8px;font-weight:700;color:var(--gold);background:var(--gold-bg);padding:2px 5px;border-radius:4px;flex-shrink:0">✨ AI</span>';
+    h+='</div>';
+    h+='<div style="font-size:12px;color:var(--txt);line-height:1.5">'+window._lastAskAnswer+'</div>';
+    if(!window._aiThinking){
+      h+='<div style="display:flex;gap:6px;margin-top:8px;align-items:center">';
+      h+='<button onclick="rateAsk(0,\'up\')" style="font-size:14px;background:none;padding:2px 6px">👍</button>';
+      h+='<button onclick="rateAsk(0,\'down\')" style="font-size:14px;background:none;padding:2px 6px">👎</button>';
+      h+='<button onclick="window._lastAskAnswer=null;window._lastAskQuestion=null;render()" style="margin-left:auto;font-size:10px;color:var(--txt4);background:none;padding:2px 0">× Clear</button>';
+      h+='</div>';
+    }
+    h+='</div>';
+  }else{
+    h+='<div style="margin-top:6px;font-size:10px;color:var(--txt4);font-style:italic">Try: "when should I test", "is my luteal phase healthy", "what does triphasic mean"</div>';
+  }
+  h+='</div></div>';
 
   // HERO CARD — DPO + Biology + Ring + Phase + Tips
   var pct=Math.min(1,info.cd/info.av);var r2=34,circ=2*Math.PI*r2,off=circ*(1-pct);
@@ -1177,7 +2026,26 @@ function rToday(info){  var h='';
     var on=todaySy.indexOf(s)>-1;
     h+='<button class="qs-chip'+(on?' on on-c':'')+'" onclick="qSym(\''+s+'\')">'+s.replace("CM: ","")+'</button>';
   });
-  h+='</div></div>';
+  h+='</div>';
+  // Amount pickers for any active CM types (excluding Dry which doesn't need amount)
+  var activeCMs=todaySy.filter(function(s){return s.indexOf('CM:')===0&&s!=='CM: Dry'});
+  if(activeCMs.length){
+    h+='<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">';
+    activeCMs.forEach(function(s){
+      var cmLbl=s.replace('CM: ','');
+      var cur=getCmAmt(s,td());
+      h+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+      h+='<span style="font-size:11px;font-weight:600;color:var(--txt3);min-width:72px">'+cmLbl+'</span>';
+      ['little','some','lots'].forEach(function(amt){
+        var active=cur===amt;
+        var lbl=amt==='lots'?'A lot':amt==='some'?'Some':'A little';
+        h+='<button onclick="setCmAmt(\''+s+'\','+(active?'null':'\''+amt+'\'')+')" style="padding:4px 10px;border-radius:14px;font-size:10px;font-weight:700;background:'+(active?'var(--gold)':'var(--cream)')+';color:'+(active?'#fff':'var(--txt3)')+';border:none;cursor:pointer">'+lbl+'</button>';
+      });
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  h+='</div>';
   h+='<div style="margin-top:10px"><div class="fl">Symptoms</div>';
   h+='<div class="qs-chips">';
   ["Cramps","Bloating","Headache","Fatigue","Nausea","Breast tenderness","Backache","Spotting","Acne","Insomnia"].forEach(function(s){
@@ -1618,9 +2486,22 @@ function gamePlan(info){
 
 function getStreak(){var c=D.cycles[D.cycles.length-1];var streak=0;var d=td();for(var i=0;i<60;i++){if(c.readings.some(function(r){return r.date===d})){streak++;d=ad(d,-1)}else break}return streak}
 
-function qSym(s){saveUndo();var date=td();var sy=D.sym[date]||[];var idx=sy.indexOf(s);if(idx>-1)sy.splice(idx,1);else sy.push(s);if(sy.length)D.sym[date]=sy;else delete D.sym[date];save();render()}
+function qSym(s){saveUndo();var date=td();var sy=D.sym[date]||[];var idx=sy.indexOf(s);if(idx>-1){sy.splice(idx,1);if(s.indexOf('CM:')===0&&D.cmAmt&&D.cmAmt[date]){delete D.cmAmt[date][s];if(!Object.keys(D.cmAmt[date]).length)delete D.cmAmt[date]}}else sy.push(s);if(sy.length)D.sym[date]=sy;else delete D.sym[date];save();render()}
 function qMood(m){saveUndo();var date=td();var mo=D.mood[date]||[];var idx=mo.indexOf(m);if(idx>-1)mo.splice(idx,1);else mo.push(m);if(mo.length)D.mood[date]=mo;else delete D.mood[date];save();render()}
 function qSex(){saveUndo();var date=td();if(D.sex[date])delete D.sex[date];else D.sex[date]=1;save();render()}
+/* Set CM amount for a given CM type on a date. amt = 'lots' | 'some' | 'little' or null to clear */
+function setCmAmt(cmType,amt,date){saveUndo();date=date||td();if(!D.cmAmt)D.cmAmt={};if(!D.cmAmt[date])D.cmAmt[date]={};if(amt)D.cmAmt[date][cmType]=amt;else delete D.cmAmt[date][cmType];if(!Object.keys(D.cmAmt[date]).length)delete D.cmAmt[date];save();render()}
+function getCmAmt(cmType,date){if(!D.cmAmt||!D.cmAmt[date])return null;return D.cmAmt[date][cmType]||null}
+/* Format CM symptom with amount for display. Returns "Egg white" or "Egg white (a lot)" */
+function fmtCM(sym,date){
+  if(!sym||sym.indexOf('CM:')!==0)return sym;
+  var base=sym.replace('CM: ','');
+  if(sym==='CM: Dry')return base;  // Dry doesn't have amount
+  var amt=getCmAmt(sym,date);
+  if(!amt)return base;
+  var amtLbl=amt==='lots'?'a lot':amt==='some'?'some':'a little';
+  return base+' ('+amtLbl+')';
+}
 function toggleCheck(idx){if(!D.checks)D.checks={};if(!D.checks[td()])D.checks[td()]={};D.checks[td()][idx]=!D.checks[td()][idx];save();render()}
 function cycleOPK(){openOPKModal()}
 function openOPKModal(){
@@ -1904,7 +2785,7 @@ function showTip(canvasId,hits,ex,ey){
   if(best.tqual)tags.push('⚠️ '+best.tqual);
   if(tags.length)lines.push(tags.join(' '));
   var syms=(D.sym[best.date]||[]).concat(D.mood[best.date]||[]);
-  if(syms.length)lines.push(syms.slice(0,3).map(function(s){return s.replace('CM: ','')}).join(', '));
+  if(syms.length)lines.push(syms.slice(0,3).map(function(s){return fmtCM(s,best.date)}).join(', '));
   tip.innerHTML=lines.join('<br>');
   var parent=cv.parentElement;parent.style.position='relative';
   tip.style.left=Math.max(10,Math.min(cx-60,parent.offsetWidth-140))+'px';
@@ -2051,7 +2932,12 @@ function rCycle(){
     if(r.ov)h+='<span class="rdg-tag" style="background:var(--gold-bg);color:var(--gold)">OV</span>';
     if(r.flow)h+='<span class="rdg-tag" style="background:var(--rose-bg);color:var(--rose)">'+r.flow+'</span>';
     mo.forEach(function(m){h+='<span class="rdg-tag" style="background:var(--cob-bg);color:var(--cobalt)">'+m+'</span>'});
-    sy.forEach(function(s){h+='<span class="rdg-tag" style="background:var(--burnt-bg);color:var(--burnt)">'+s+'</span>'});
+    sy.forEach(function(s){
+      var isCM=s.indexOf('CM:')===0;
+      var bg=isCM?'var(--gold-bg)':'var(--burnt-bg)';
+      var col=isCM?'var(--gold)':'var(--burnt)';
+      h+='<span class="rdg-tag" style="background:'+bg+';color:'+col+'">'+fmtCM(s,r.date)+'</span>';
+    });
     md.forEach(function(m){h+='<span class="rdg-tag" style="background:var(--forest-bg);color:var(--forest)">💊'+m+'</span>'});
     if(nt)h+='<span class="rdg-tag" style="background:var(--plum-bg);color:var(--plum)">📝</span>';
     h+='</div></div><div style="display:flex;gap:4px;align-items:center">';
@@ -2255,7 +3141,7 @@ function rCompare(){
           var isCM=s.indexOf('CM:')===0;var isMood=d.moods.indexOf(s)>-1;
           var bg=isCM?'var(--gold-bg)':isMood?'var(--cob-bg)':'var(--burnt-bg)';
           var col=isCM?'var(--gold)':isMood?'var(--cobalt)':'var(--burnt)';
-          h+='<span style="font-size:9px;padding:2px 7px;border-radius:8px;background:'+bg+';color:'+col+';font-weight:600">'+s.replace('CM: ','')+'</span>';
+          h+='<span style="font-size:9px;padding:2px 7px;border-radius:8px;background:'+bg+';color:'+col+';font-weight:600">'+fmtCM(s,d.date)+'</span>';
         });
         h+='</div>';
       }
@@ -2302,7 +3188,7 @@ function rCompare(){
         h+='<div><span style="font-size:12px;font-weight:600;color:'+PAL[d.i%7]+'">C'+(d.i+1)+'</span>';
         h+='<span style="font-size:10px;color:var(--txt3);margin-left:6px">'+fd(d.date)+'</span>';
         var tags2=[];if(d.sex)tags2.push('💙');
-        d.syms.concat(d.mood).slice(0,2).forEach(function(s){tags2.push(s.replace('CM: ',''))});
+        d.syms.concat(d.mood).slice(0,2).forEach(function(s){tags2.push(fmtCM(s,d.date))});
         if(tags2.length)h+='<span style="font-size:9px;color:var(--txt4);margin-left:6px">'+tags2.join(' · ')+'</span>';
         h+='</div>';
         h+='<div style="text-align:right"><span style="font-size:14px;font-weight:700;color:var(--txt)">'+d.temp.toFixed(2)+'°</span>';
@@ -3132,6 +4018,29 @@ function rInsights(){
 }
 function getPhaseTips(pn,info){
   var t=[];var dpo=info.ho?(info.cd-info.od):null;
+  // ===== PERSONAL PATTERN TIPS — prepended to standard tips when relevant =====
+  var pp=personalPatterns();
+  if(pp&&pp.length){
+    // Find a pattern that's contextually relevant to the current phase
+    var contextTip=null;
+    if(pn.indexOf('Follicular')>-1){
+      var ovp=pp.find(function(p){return p.kind==='ov-stable'||p.kind==='ov-variable'});
+      if(ovp&&ovp.kind==='ov-stable')contextTip={icon:'🎯',text:'You typically ovulate around Day '+info.ao+' — fertile window opens ~Day '+(info.ao-5)+'. Mark the calendar.'};
+      else if(ovp&&ovp.kind==='ov-variable')contextTip={icon:'⚠️',text:'Your OV day varies '+ovp.detail.match(/Days (\d+-\d+)/)[1]+' — OPKs are essential, don\'t rely on calendar dates alone.'};
+      var cmp=pp.find(function(p){return p.kind==='cm-onpoint'||p.kind==='cm-early'});
+      if(!contextTip&&cmp&&cmp.kind==='cm-early')contextTip={icon:'💧',text:'Your egg-white CM tends to arrive early — check daily from Day '+(info.ao-5)+' onwards.'};
+    }else if(pn.indexOf('Luteal')>-1){
+      var lp=pp.find(function(p){return p.kind==='luteal-short'||p.kind==='luteal-borderline'||p.kind==='luteal-stable'});
+      if(lp&&lp.kind==='luteal-short')contextTip={icon:'⚠️',text:'Your luteal phase averages '+lp.detail.match(/(\d+\.\d+)d/)[1]+'d — discuss progesterone with your GP if not already.'};
+      else if(lp&&lp.kind==='luteal-borderline')contextTip={icon:'📋',text:'Borderline luteal phase ('+lp.detail.match(/(\d+\.\d+)d/)[1]+'d avg) — track this cycle\'s length when period arrives.'};
+      else if(lp&&lp.kind==='luteal-stable'&&dpo)contextTip={icon:'⏳',text:'Your luteal is stable around '+lp.detail.match(/(\d+\.\d+)d/)[1]+'d — that puts your period around '+(Math.round(parseFloat(lp.detail.match(/(\d+\.\d+)d/)[1]))-dpo)+'d from now.'};
+    }else if(pn.indexOf('Ovulatory')>-1){
+      var cmp2=pp.find(function(p){return p.kind==='cm-onpoint'||p.kind==='cm-early'});
+      if(cmp2)contextTip={icon:'💧',text:cmp2.label+' — '+cmp2.detail};
+    }
+    if(contextTip)t.push(contextTip);
+  }
+
   if(pn.indexOf('Menstrual')>-1){t.push({icon:'\ud83e\udecb',text:'Warm drinks and iron-rich foods \u2014 your body is losing iron.'});t.push({icon:'\ud83d\udc8a',text:'Take your prenatal. Iron absorbs best with vitamin C.'});t.push({icon:'\ud83d\udecf\ufe0f',text:'Rest is productive. Your body is resetting.'});if(info.cd<=2)t.push({icon:'\ud83c\udf21\ufe0f',text:'Still log your temp \u2014 period temps build your baseline.'})}
   else if(pn.indexOf('Follicular')>-1){t.push({icon:'\ud83d\udca7',text:'Hydrate well \u2014 water directly affects CM quality.'});t.push({icon:'\ud83c\udfc3\u200d\u2640\ufe0f',text:'Energy peaks now. Great time for exercise.'});if(info.cd>=info.ao-7)t.push({icon:'\ud83e\uddea',text:'Start OPK testing daily \u2014 your surge could come soon.'});t.push({icon:'\ud83e\udd57',text:'Leafy greens support follicle development.'})}
   else if(pn.indexOf('Ovulatory')>-1){t.push({icon:'\ud83d\udd25',text:'Peak fertility! Prioritise intercourse today and tomorrow.'});t.push({icon:'\ud83e\uddea',text:'Take an OPK \u2014 watch for that strong positive.'});t.push({icon:'\ud83d\udc40',text:'Check CM \u2014 egg white means peak fertility.'});t.push({icon:'\ud83d\udc91',text:'Every other day is as effective as every day.'})}
@@ -3309,7 +4218,12 @@ function openDayView(date,ci){
   if(slT)tags.push('<span style="color:var(--txt3)">'+slT.asleep+' → '+slT.woke+'</span>');
   if(tags.length)h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:11px;font-weight:600">'+tags.join('')+'</div>';
   if(sy.length||mo.length){h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">';
-    sy.forEach(function(s){h+='<span class="rdg-tag" style="background:var(--burnt-bg);color:var(--burnt);font-size:10px;padding:3px 8px;border-radius:8px">'+s+'</span>'});
+    sy.forEach(function(s){
+      var isCM=s.indexOf('CM:')===0;
+      var bg=isCM?'var(--gold-bg)':'var(--burnt-bg)';
+      var col=isCM?'var(--gold)':'var(--burnt)';
+      h+='<span class="rdg-tag" style="background:'+bg+';color:'+col+';font-size:10px;padding:3px 8px;border-radius:8px">'+fmtCM(s,date)+'</span>';
+    });
     mo.forEach(function(m){h+='<span class="rdg-tag" style="background:var(--cob-bg);color:var(--cobalt);font-size:10px;padding:3px 8px;border-radius:8px">'+m+'</span>'});
   h+='</div>'}
   if(nt)h+='<div style="margin-top:8px;font-size:12px;color:var(--txt2);line-height:1.5;font-style:italic">📝 '+nt+'</div>';
@@ -3321,8 +4235,42 @@ function openDayView(date,ci){
 function fabAction(){if(curTab!=='today'){sw('today');setTimeout(function(){var el=document.getElementById('qlT')||document.getElementById('mornT');if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.focus()}},150)}else{var el=document.getElementById('qlT')||document.getElementById('mornT');if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.focus()}else{openAdd()}}}
 function openAdd(){editDate=null;showM(td(),null)}
 function openEdit(d,ci2){editDate=d;var c=D.cycles[ci2];var r=c.readings.find(function(x){return x.date===d});showM(d,r,ci2)}
+function setModalCmAmt(cmType,amt){
+  if(!window._modalCmAmt)window._modalCmAmt={};
+  // Toggle off if same value tapped again
+  if(window._modalCmAmt[cmType]===amt)delete window._modalCmAmt[cmType];
+  else window._modalCmAmt[cmType]=amt;
+  renderCMAmounts();
+}
+function renderCMAmounts(){
+  var container=document.getElementById('mCMamounts');if(!container)return;
+  var chips=document.querySelectorAll('#mCMchips .chip-s.on');
+  var activeCMs=[];
+  chips.forEach(function(c){var cm=c.dataset.cm;if(cm&&cm!=='CM: Dry')activeCMs.push(cm)});
+  if(!activeCMs.length){container.innerHTML='';return}
+  var h='<div style="display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--cream);border-radius:10px">';
+  h+='<div style="font-size:9px;font-weight:700;color:var(--txt4);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Amount</div>';
+  activeCMs.forEach(function(s){
+    var cmLbl=s.replace('CM: ','');
+    var cur=window._modalCmAmt&&window._modalCmAmt[s]||null;
+    h+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+    h+='<span style="font-size:11px;font-weight:600;color:var(--txt2);min-width:72px">'+cmLbl+'</span>';
+    ['little','some','lots'].forEach(function(amt){
+      var active=cur===amt;
+      var lbl=amt==='lots'?'A lot':amt==='some'?'Some':'A little';
+      h+='<button type="button" onclick="setModalCmAmt(\''+s+'\',\''+amt+'\')" style="padding:4px 10px;border-radius:14px;font-size:10px;font-weight:700;background:'+(active?'var(--gold)':'var(--card)')+';color:'+(active?'#fff':'var(--txt3)')+';border:none;cursor:pointer">'+lbl+'</button>';
+    });
+    h+='</div>';
+  });
+  h+='</div>';
+  container.innerHTML=h;
+}
+
 function showM(date,r,ci2){
   var sy=D.sym[date]||[];var mo=D.mood[date]||[];var sx=!!D.sex[date];var nt=D.notes[date]||'';var ph=D.photos[date]||'';var md=D.meds[date]||[];
+  // Stage CM amounts — initialized from saved state, edited via _modalCmAmt, persisted on Save
+  window._modalCmAmt={};
+  if(D.cmAmt&&D.cmAmt[date])Object.keys(D.cmAmt[date]).forEach(function(k){window._modalCmAmt[k]=D.cmAmt[date][k]});
   var h='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl"><div class="mt">'+(r?'Edit':'New')+' Reading</div>';
   h+='<div class="fr"><div class="fl">Date</div><input class="fi" type="date" id="mD" value="'+date+'"></div>';
   h+='<div class="fr"><div class="fl">Temperature (°C)</div><input class="fi" type="number" step="0.01" id="mT" value="'+(r&&r.temp!=null?r.temp.toFixed(2):'')+'"></div>';
@@ -3344,8 +4292,11 @@ function showM(date,r,ci2){
   ["Happy","Calm","Energetic","Tired","Irritable","Anxious","Sad","Emotional"].forEach(function(m){h+='<button class="chip chip-m'+(mo.indexOf(m)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+m+'</button>'});h+='</div></div>';
   h+='<div class="fr"><div class="fl">Symptoms</div><div class="chips" style="max-height:none">';
   ["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+s+'</button>'});h+='</div></div>';
-  h+='<div class="fr"><div class="fl">CM</div><div class="chips" style="max-height:none">';
-  ["CM: Egg white","CM: Watery","CM: Creamy","CM: Sticky","CM: Dry"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+s.replace("CM: ","")+'</button>'});h+='</div></div>';
+  h+='<div class="fr"><div class="fl">CM</div><div class="chips" id="mCMchips" style="max-height:none">';
+  ["CM: Egg white","CM: Watery","CM: Creamy","CM: Sticky","CM: Dry"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" data-cm="'+s+'" onclick="this.classList.toggle(\'on\');renderCMAmounts(\''+date+'\')" style="font-size:10px;padding:5px 9px">'+s.replace("CM: ","")+'</button>'});h+='</div>';
+  // CM amount picker — populated dynamically based on which CM types are active
+  h+='<div id="mCMamounts" style="margin-top:8px"></div>';
+  h+='</div>';
   h+='<div class="fr"><div class="fl">Medications</div><input class="fi" id="mMd" placeholder="e.g. Prenatal, Progesterone" value="'+md.join(', ')+'"></div>';
   h+='<div class="fr"><div class="fl">Notes</div><textarea class="fi" id="mN" placeholder="OPK result, how you feel...">'+nt+'</textarea></div>';
   h+='<div class="fr"><div class="fl">Test Photo</div>';
@@ -3354,6 +4305,8 @@ function showM(date,r,ci2){
   h+='</div><div class="br"><button class="cb" onclick="closeM()">Cancel</button><button class="sb" onclick="saveR()">Save</button></div>';
   if(r)h+='<button class="db" onclick="delR(\''+date+'\','+(ci2||0)+')">Delete Reading</button>';
   h+='</div></div>';var div=document.createElement('div');div.id='mdl';div.innerHTML=h;document.body.appendChild(div);
+  // Initial render of CM amount pickers based on currently active CM chips
+  setTimeout(function(){if(typeof renderCMAmounts==='function')renderCMAmounts()},10);
 }
 function closeM(){var m=document.getElementById('mdl');if(m)m.remove()}
 function pF(el){el.parentElement.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on')});el.classList.add('on')}
@@ -3393,9 +4346,20 @@ function saveR(){saveUndo();
   // Time
   if(!D.ttime)D.ttime={};var mTimeEl=document.getElementById('mTime');
   if(mTimeEl&&mTimeEl.value)D.ttime[date]=mTimeEl.value;else delete D.ttime[date];
+  // CM amounts — persist staged values from window._modalCmAmt (only for currently active CM types)
+  if(!D.cmAmt)D.cmAmt={};
+  delete D.cmAmt[date];
+  if(window._modalCmAmt){
+    var amts={};
+    Object.keys(window._modalCmAmt).forEach(function(cmType){
+      // Only persist if the CM type is still selected in symptoms
+      if(sy.indexOf(cmType)>-1&&cmType!=='CM: Dry')amts[cmType]=window._modalCmAmt[cmType];
+    });
+    if(Object.keys(amts).length)D.cmAmt[date]=amts;
+  }
   save();closeM();render();flash("Saved ✓");
 }
-function delR(date,ci2){if(!confirm("Delete?"))return;D.cycles[ci2].readings=D.cycles[ci2].readings.filter(function(r){return r.date!==date});delete D.sym[date];delete D.mood[date];delete D.sex[date];delete D.notes[date];delete D.photos[date];delete D.meds[date];save();closeM();render();flash("Deleted")}
+function delR(date,ci2){if(!confirm("Delete?"))return;D.cycles[ci2].readings=D.cycles[ci2].readings.filter(function(r){return r.date!==date});delete D.sym[date];delete D.mood[date];delete D.sex[date];delete D.notes[date];delete D.photos[date];delete D.meds[date];if(D.cmAmt)delete D.cmAmt[date];save();closeM();render();flash("Deleted")}
 
 function openPT(){
   var h='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl"><div class="mt">Log Pregnancy Test</div>';
@@ -3626,7 +4590,7 @@ function exportDayByDay(targetCi){
     if(rdg&&rdg.ov)r+='OPK: Positive (LH surge)\n';
     else if(opk)r+='OPK: '+(opk==='pos'?'Positive':'Negative')+'\n';
     if(sx)r+='Intimacy: Yes\n';
-    if(sy.length)r+='Symptoms: '+sy.join(', ')+'\n';
+    if(sy.length)r+='Symptoms: '+sy.map(function(s){return fmtCM(s,dt)}).join(', ')+'\n';
     if(mo.length)r+='Mood: '+mo.join(', ')+'\n';
     if(sl)r+='Sleep quality: '+sl+'\n';
     if(slT)r+='Sleep: '+slT.asleep+' → '+slT.woke+(slH?' ('+slH+'h)':'')+'\n';
