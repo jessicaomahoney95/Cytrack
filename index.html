@@ -982,8 +982,10 @@ function handleAsk(){
   // If rules matched, use that answer immediately
   if(!isFallback){
     persistAskEntry(q,ruleAnswer,'rules');
-    // Rules answers don't feed into AI conversation history
-    window._aiConvo=[];
+    // Rules-answered questions also get added to the conversation for UI continuity
+    if(!D.aiConvo)D.aiConvo=[];
+    D.aiConvo.push({q:q,a:ruleAnswer,source:'rules',ts:Date.now()});
+    save();
     inputEl.value='';
     render();
     return;
@@ -992,28 +994,38 @@ function handleAsk(){
   // Rules fell through — try Gemini if configured
   if(D.aiCfg&&D.aiCfg.enabled&&D.aiCfg.url&&D.aiCfg.secret){
     inputEl.value='';
-    // Show "thinking" state
-    window._lastAskQuestion=q;
-    window._lastAskAnswer='<em style="color:var(--cobalt)">🤔 Asking Gemini…</em>';
-    window._aiThinking=true;
+    // Add question to convo immediately with "thinking" placeholder
+    if(!D.aiConvo)D.aiConvo=[];
+    D.aiConvo.push({q:q,a:'🤔 Asking Gemini…',source:'ai',ts:Date.now(),pending:true});
+    save();
     render();
-    // Pass conversation history if this is a follow-up
-    var history=window._aiConvo||[];
+    // Pass previous exchanges as history (excluding the pending one)
+    var history=D.aiConvo.slice(0,-1).filter(function(p){return p.source==='ai'});
     askGemini(q,history).then(function(aiAnswer){
-      window._aiThinking=false;
-      if(aiAnswer){
-        persistAskEntry(q,aiAnswer,'ai');
-        // Track this exchange for follow-ups (keep last 3 pairs)
-        if(!window._aiConvo)window._aiConvo=[];
-        window._aiConvo.push({q:q,a:aiAnswer});
-        if(window._aiConvo.length>3)window._aiConvo=window._aiConvo.slice(-3);
-      }else{
-        persistAskEntry(q,ruleAnswer+' <span style="color:var(--rose);font-size:10px">(Gemini call failed)</span>','rules');
+      var last=D.aiConvo[D.aiConvo.length-1];
+      if(last&&last.pending){
+        if(aiAnswer){
+          last.a=aiAnswer;
+          last.pending=false;
+          persistAskEntry(q,aiAnswer,'ai');
+        }else{
+          last.a=ruleAnswer+' <span style="color:var(--rose);font-size:10px">(Gemini call failed)</span>';
+          last.source='rules';
+          last.pending=false;
+          persistAskEntry(q,last.a,'rules');
+        }
       }
+      save();
       render();
     }).catch(function(err){
-      window._aiThinking=false;
-      persistAskEntry(q,ruleAnswer+' <span style="color:var(--rose);font-size:10px">(Gemini error: '+err.message+')</span>','rules');
+      var last=D.aiConvo[D.aiConvo.length-1];
+      if(last&&last.pending){
+        last.a=ruleAnswer+' <span style="color:var(--rose);font-size:10px">(Gemini error: '+err.message+')</span>';
+        last.source='rules';
+        last.pending=false;
+        persistAskEntry(q,last.a,'rules');
+      }
+      save();
       render();
     });
     return;
@@ -1021,18 +1033,18 @@ function handleAsk(){
 
   // No AI configured, use the rules fallback
   persistAskEntry(q,ruleAnswer,'rules');
-  window._aiConvo=[];
+  if(!D.aiConvo)D.aiConvo=[];
+  D.aiConvo.push({q:q,a:ruleAnswer,source:'rules',ts:Date.now()});
+  save();
   inputEl.value='';
   render();
 }
 /* Clear the conversation history (starts a fresh AI convo) */
 function clearAiConvo(){
-  window._aiConvo=[];
-  window._lastAskAnswer=null;
-  window._lastAskQuestion=null;
-  window._lastAskSource=null;
+  D.aiConvo=[];
+  save();
   render();
-  flash('Conversation cleared');
+  flash('New conversation started');
 }
 
 /* Save a Q+A to the bank and to the live "last answer" display */
@@ -1190,9 +1202,9 @@ function askGemini(question,history){
   // Build conversation history if present
   var convoSection='';
   if(history&&history.length){
-    convoSection='\n\n=== PREVIOUS EXCHANGE ===\n';
-    history.forEach(function(pair){
-      convoSection+='SHE ASKED: '+pair.q+'\nYOU SAID: '+pair.a.replace(/<[^>]*>/g,'')+'\n\n';
+    convoSection='\n\n=== PREVIOUS EXCHANGES (most recent last) ===\n';
+    history.slice(-3).forEach(function(pair){
+      convoSection+='SHE ASKED: '+pair.q+'\nYOU SAID: '+(pair.a||'').replace(/<[^>]*>/g,'')+'\n\n';
     });
   }
   var userPrompt='Her cycle data as JSON:\n\n'+JSON.stringify(ctx,null,2)+convoSection+'\n\n=== NEW QUESTION ===\n'+question;
@@ -1647,6 +1659,7 @@ function load(){
   if(!D.outcomes)D.outcomes={};  // Per-cycle outcome: {cycleIdx: {result, notes, loggedAt}}
   if(!D.periodPain)D.periodPain={};  // Per-day pain: {date: 'mild'|'moderate'|'severe'}
   if(!D.periodProducts)D.periodProducts={};  // Per-day product counts: {date: {tampons, pads, cup, liners}}
+  if(!D.aiConvo)D.aiConvo=[];  // Active AI conversation: [{q, a, source, ts}, ...]
   if(!D.askLog)D.askLog=[];  // Question bank: [{ts, q, a, rating: 'up'|'down'|null, note: '', source: 'rules'|'ai'}]
   if(!D.aiCfg)D.aiCfg={url:'',secret:'',enabled:false};  // Gemini Worker config
   var validSyms=["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting","CM: Egg white","CM: Watery","CM: Creamy","CM: Sticky","CM: Dry"];
@@ -1973,29 +1986,44 @@ function rToday(info){  var h='';
   var bankN=(D.askLog||[]).length;
   if(bankN)h+='<button onclick="sw(\'ask\')" style="font-size:10px;font-weight:600;color:var(--cobalt);background:none;padding:2px 0;border:none;cursor:pointer">View bank ('+bankN+') ›</button>';
   h+='</div>';
-  var hasConvo=window._aiConvo&&window._aiConvo.length>0;
+  var convo=D.aiConvo||[];
+  var hasConvo=convo.length>0;
+  // Render conversation thread
+  if(hasConvo){
+    h+='<div style="max-height:400px;overflow-y:auto;padding:6px;background:var(--cream);border-radius:10px;margin-bottom:10px;border:1px solid var(--cream2)">';
+    convo.forEach(function(pair,idx){
+      // Question bubble (right-aligned, cobalt)
+      h+='<div style="display:flex;justify-content:flex-end;margin-bottom:6px">';
+      h+='<div style="max-width:82%;padding:8px 12px;background:var(--cobalt);color:#fff;border-radius:14px 14px 2px 14px;font-size:12px;line-height:1.45">'+pair.q+'</div>';
+      h+='</div>';
+      // Answer bubble (left-aligned)
+      var bubbleBg=pair.source==='ai'?'var(--lavender-bg)':'var(--card)';
+      var bubbleBorder=pair.source==='ai'?'var(--plum)':'var(--cream3)';
+      h+='<div style="display:flex;justify-content:flex-start;margin-bottom:10px">';
+      h+='<div style="max-width:88%;padding:10px 12px;background:'+bubbleBg+';border:1px solid '+bubbleBorder+';border-radius:14px 14px 14px 2px;font-size:12px;line-height:1.5;color:var(--txt)">';
+      if(pair.source==='ai'&&!pair.pending)h+='<div style="font-size:8px;font-weight:700;color:var(--plum);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">✨ AI</div>';
+      h+=pair.a;
+      if(!pair.pending&&idx===convo.length-1){
+        h+='<div style="display:flex;gap:4px;margin-top:6px;align-items:center">';
+        h+='<button onclick="rateAsk(0,\'up\')" style="font-size:12px;background:none;padding:2px 4px;border:none;cursor:pointer">👍</button>';
+        h+='<button onclick="rateAsk(0,\'down\')" style="font-size:12px;background:none;padding:2px 4px;border:none;cursor:pointer">👎</button>';
+        h+='</div>';
+      }
+      h+='</div></div>';
+    });
+    h+='</div>';
+    // New conversation button
+    h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px">';
+    h+='<button onclick="clearAiConvo()" style="font-size:10px;color:var(--txt3);background:none;padding:3px 8px;border:1px solid var(--cream3);border-radius:10px;cursor:pointer">+ New conversation</button>';
+    h+='</div>';
+  }
+  // Input + ask
   h+='<div style="display:flex;gap:6px">';
-  h+='<input type="text" id="askInput" placeholder="'+(hasConvo?'Follow up on this conversation…':'e.g. why is my temp low?')+'" onkeydown="if(event.key===\'Enter\')handleAsk()" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--cream3);background:var(--card);font-size:12px;color:var(--txt);outline:none">';
+  h+='<input type="text" id="askInput" placeholder="'+(hasConvo?'Follow up…':'e.g. why is my temp low?')+'" onkeydown="if(event.key===\'Enter\')handleAsk()" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--cream3);background:var(--card);font-size:12px;color:var(--txt);outline:none">';
   h+='<button onclick="handleAsk()" style="padding:10px 16px;border-radius:10px;background:var(--cobalt);color:#fff;font-size:11px;font-weight:700;border:none;cursor:pointer">Ask</button>';
   h+='</div>';
-  if(window._lastAskAnswer){
-    h+='<div style="margin-top:12px;padding:12px 14px;background:var(--cream);border-radius:10px;border-left:2px solid var(--cobalt)">';
-    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:6px">';
-    h+='<div style="font-size:10px;color:var(--txt4);font-style:italic;flex:1">You asked: "'+window._lastAskQuestion+'"</div>';
-    if(window._lastAskSource==='ai')h+='<span style="font-size:8px;font-weight:700;color:var(--gold);background:var(--gold-bg);padding:2px 6px;border-radius:4px;flex-shrink:0">AI</span>';
-    h+='</div>';
-    h+='<div style="font-size:12px;color:var(--txt);line-height:1.5">'+window._lastAskAnswer+'</div>';
-    if(!window._aiThinking){
-      h+='<div style="display:flex;gap:6px;margin-top:10px;align-items:center">';
-      h+='<button onclick="rateAsk(0,\'up\')" style="font-size:14px;background:none;padding:3px 6px;border:none;cursor:pointer">👍</button>';
-      h+='<button onclick="rateAsk(0,\'down\')" style="font-size:14px;background:none;padding:3px 6px;border:none;cursor:pointer">👎</button>';
-      if(hasConvo)h+='<span style="font-size:9px;color:var(--plum);margin-left:auto;font-weight:600">💭 '+window._aiConvo.length+' in convo</span>';
-      h+='<button onclick="clearAiConvo()" style="'+(hasConvo?'':'margin-left:auto;')+'font-size:10px;color:var(--txt4);background:none;padding:2px 0;border:none;cursor:pointer">× Clear</button>';
-      h+='</div>';
-    }
-    h+='</div>';
-  }else{
-    // Suggest questions based on cycle phase (Feature 6 — context-aware suggestions)
+  if(!hasConvo){
+    // Suggest questions based on cycle phase
     var dpoSug=info.ho?(info.cd-info.od):null;
     var suggs=[];
     if(dpoSug!=null&&dpoSug>=10){
