@@ -1645,6 +1645,8 @@ function load(){
   if(!D.cmAmt)D.cmAmt={};  // Per-day, per-CM-type amount: {date: {"CM: Egg white": "lots"|"some"|"little"}}
   if(!D.symTime)D.symTime={};  // Per-day, per-symptom time: {date: {"Cramps": "14:30"}}
   if(!D.outcomes)D.outcomes={};  // Per-cycle outcome: {cycleIdx: {result, notes, loggedAt}}
+  if(!D.periodPain)D.periodPain={};  // Per-day pain: {date: 'mild'|'moderate'|'severe'}
+  if(!D.periodProducts)D.periodProducts={};  // Per-day product counts: {date: {tampons, pads, cup, liners}}
   if(!D.askLog)D.askLog=[];  // Question bank: [{ts, q, a, rating: 'up'|'down'|null, note: '', source: 'rules'|'ai'}]
   if(!D.aiCfg)D.aiCfg={url:'',secret:'',enabled:false};  // Gemini Worker config
   var validSyms=["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting","CM: Egg white","CM: Watery","CM: Creamy","CM: Sticky","CM: Dry"];
@@ -1882,6 +1884,43 @@ function quickLog3(){saveUndo();var inp=document.getElementById('mornT');var raw
 function rToday(info){  var h='';
   var todaySy=D.sym[td()]||[];var todayMo=D.mood[td()]||[];
   var streak=getStreak();
+
+  // ===== ACTIVE PERIOD CARD =====
+  // Count consecutive flow days from today backwards within current cycle to get "Day X of period"
+  var activePeriodDay=null;
+  var todayFlow2=info.c.readings.find(function(x){return x.date===td()});
+  if(todayFlow2&&todayFlow2.flow&&todayFlow2.flow!=='spotting'){
+    // Walk backwards from today in current cycle to count consecutive flow days
+    var sorted=info.c.readings.slice().sort(function(a,b){return a.date<b.date?1:-1});
+    var count=0;var lastD=td();
+    for(var ii=0;ii<sorted.length;ii++){
+      var rr=sorted[ii];
+      if(!rr.flow||rr.flow==='spotting')break;
+      if(rr.date>td())continue;
+      // Check date is consecutive (within 1 day of lastD)
+      if(count===0||db(rr.date,lastD)<=1){count++;lastD=rr.date}
+      else break;
+    }
+    activePeriodDay=count;
+  }
+  if(activePeriodDay){
+    var todayPainNow=D.periodPain&&D.periodPain[td()];
+    var todayProdNow=D.periodProducts&&D.periodProducts[td()]||{};
+    var totalProd=Object.values(todayProdNow).reduce(function(a,b){return a+(b||0)},0);
+    var painCol=todayPainNow==='severe'?'var(--rose)':todayPainNow==='moderate'?'var(--gold)':todayPainNow==='mild'?'var(--forest)':'var(--txt4)';
+    var flowEmoji={light:'💧',medium:'💧💧',heavy:'💧💧💧',spotting:'·'}[todayFlow2.flow]||'🩸';
+    h+='<div class="section"><div class="card" style="padding:14px 16px;background:var(--rose-bg);border-left:3px solid var(--rose)">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    h+='<span style="font-size:10px;font-weight:700;color:var(--rose);text-transform:uppercase;letter-spacing:.8px">🩸 Period · Day '+activePeriodDay+'</span>';
+    h+='<button onclick="openPeriodModal()" style="font-size:10px;color:var(--rose);background:none;border:none;cursor:pointer;text-decoration:underline">Update</button>';
+    h+='</div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">';
+    h+='<div style="text-align:center;padding:8px;background:var(--card);border-radius:8px"><div style="font-size:14px;font-weight:700;color:var(--rose)">'+flowEmoji+'</div><div style="font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">'+todayFlow2.flow+'</div></div>';
+    h+='<div style="text-align:center;padding:8px;background:var(--card);border-radius:8px"><div style="font-size:14px;font-weight:700;color:'+painCol+'">'+(todayPainNow?todayPainNow.charAt(0).toUpperCase()+todayPainNow.slice(1):'—')+'</div><div style="font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">Pain</div></div>';
+    h+='<div style="text-align:center;padding:8px;background:var(--card);border-radius:8px"><div style="font-size:14px;font-weight:700;color:var(--txt)">'+totalProd+'</div><div style="font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">Products</div></div>';
+    h+='</div>';
+    h+='</div></div>';
+  }
 
   // ===== CYCLE OUTCOME PROMPT =====
   // If previous cycle completed but has no outcome logged yet, prompt
@@ -2231,8 +2270,16 @@ function rToday(info){  var h='';
   var todayOPKRes=getOpkResult(td());var todayOPKInt=getOpkIntensity(td());
   h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px;'+(todayOPKRes==='pos'?'background:var(--gold);color:#fff':todayOPKRes==='neg'?'background:var(--cream3);color:var(--txt3)':'')+'" onclick="cycleOPK()">OPK'+(todayOPKInt?' '+todayOPKInt+'/5':'')+'</button>';
   h+='</div>';
+  // Period / flow button
+  var todayRCheck=cInfo().c.readings.find(function(x){return x.date===td()});
+  var todayFlow=todayRCheck?todayRCheck.flow:null;
+  var flowLbl=todayFlow?{light:'Light',medium:'Medium',heavy:'Heavy',spotting:'Spotting'}[todayFlow]||todayFlow:'';
+  var flowBg=todayFlow?'background:var(--rose);color:#fff':'';
   h+='<div style="display:flex;gap:6px;margin-top:6px">';
+  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px;'+flowBg+'" onclick="openPeriodModal()">🩸 '+(todayFlow?'Period ('+flowLbl+')':'Log period')+'</button>';
   h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px" onclick="openPT()">Pregnancy test</button>';
+  h+='</div>';
+  h+='<div style="display:flex;gap:6px;margin-top:6px">';
   h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px" onclick="openAdd()">Edit past date</button>';
   h+='</div>';
   h+='</div></div>';
@@ -2823,6 +2870,160 @@ function prePeriodSignal(){
 }
 function toggleCheck(idx){if(!D.checks)D.checks={};if(!D.checks[td()])D.checks[td()]={};D.checks[td()][idx]=!D.checks[td()][idx];save();render()}
 function cycleOPK(){openOPKModal()}
+
+/* Open period logging modal — allows logging flow today or starting new cycle */
+function openPeriodModal(){
+  var info=cInfo();var c=info.c;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
+  var today=td();
+  var todayR=c.readings.find(function(x){return x.date===today});
+  var todayFlow=todayR?todayR.flow:null;
+  var todayPain=D.periodPain&&D.periodPain[today]||null;
+  var todayProd=D.periodProducts&&D.periodProducts[today]||{tampons:0,pads:0,cup:0,liners:0};
+  // Decide if this could be a new cycle starting
+  var luts=[];D.cycles.forEach(function(oc,oi){if(!isExcl(oi)){var od2=ovDay(oc);if(od2&&oc.length)luts.push(oc.length-od2)}});
+  var avgLut=luts.length?Math.round(luts.reduce(function(a,b){return a+b},0)/luts.length):null;
+  var looksLikeNewCycle=info.ho&&dpo!=null&&dpo>=8&&!todayFlow;  // Only prompt if no flow logged yet
+  var h='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl" style="max-height:85vh;overflow-y:auto">';
+  h+='<div class="mt">🩸 Log Period — '+fd(today)+'</div>';
+  // Flow
+  h+='<div class="fr"><div class="fl">Flow</div><div class="chips">';
+  ['light','medium','heavy','spotting'].forEach(function(f){
+    var on=todayFlow===f;
+    var lbl=f.charAt(0).toUpperCase()+f.slice(1);
+    h+='<button class="chip chip-f'+(on?' on':'')+'" data-f="'+f+'" onclick="pF(this)">'+lbl+'</button>';
+  });
+  h+='</div></div>';
+  // Pain level
+  h+='<div class="fr"><div class="fl">Pain level</div><div style="display:flex;gap:4px">';
+  [{k:'mild',lbl:'Mild',col:'var(--forest)'},{k:'moderate',lbl:'Moderate',col:'var(--gold)'},{k:'severe',lbl:'Severe',col:'var(--rose)'}].forEach(function(p){
+    var on=todayPain===p.k;
+    h+='<button data-pain="'+p.k+'" onclick="pPain(this)" style="flex:1;padding:9px;border-radius:10px;font-size:11px;font-weight:700;background:'+(on?p.col:'var(--cream)')+';color:'+(on?'#fff':p.col)+';border:1px solid '+(on?p.col:'var(--cream3)')+';cursor:pointer">'+p.lbl+'</button>';
+  });
+  h+='</div></div>';
+  // Product counts with +/- steppers
+  h+='<div class="fr"><div class="fl">Products used today</div>';
+  [['tampons','Tampons','🩸'],['pads','Pads','🩹'],['cup','Cup changes','🥤'],['liners','Liners','📄']].forEach(function(pr){
+    var count=todayProd[pr[0]]||0;
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--cream2)">';
+    h+='<div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px">'+pr[2]+'</span><span style="font-size:12px;color:var(--txt);font-weight:500">'+pr[1]+'</span></div>';
+    h+='<div style="display:flex;align-items:center;gap:8px">';
+    h+='<button onclick="adjProd(\''+pr[0]+'\',-1)" style="width:30px;height:30px;border-radius:50%;background:var(--cream2);border:none;font-size:16px;font-weight:700;color:var(--txt3);cursor:pointer">−</button>';
+    h+='<span id="prodCount-'+pr[0]+'" style="min-width:24px;text-align:center;font-size:14px;font-weight:700;color:var(--txt)">'+count+'</span>';
+    h+='<button onclick="adjProd(\''+pr[0]+'\',1)" style="width:30px;height:30px;border-radius:50%;background:var(--burnt);border:none;font-size:16px;font-weight:700;color:#fff;cursor:pointer">+</button>';
+    h+='</div></div>';
+  });
+  h+='</div>';
+  if(looksLikeNewCycle){
+    h+='<div style="padding:10px 12px;background:var(--peach-bg);border-radius:10px;margin:6px 0 12px;font-size:11px;color:var(--txt2);line-height:1.5">';
+    h+='<strong style="color:var(--burnt)">Is this period Day 1?</strong> You\'re '+dpo+' DPO and your typical luteal is '+(avgLut||'~13')+'d. If this is a new cycle starting today, check below.';
+    h+='</div>';
+    h+='<div class="fr"><label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 0">';
+    h+='<input type="checkbox" id="pNewCyc" checked style="width:20px;height:20px;accent-color:var(--burnt)">';
+    h+='<span style="font-size:12px;font-weight:600;color:var(--txt)">Start new cycle from today</span></label></div>';
+  }
+  h+='<div class="br"><button class="cb" onclick="closeM()">Cancel</button><button class="sb" onclick="savePeriod()">Save</button></div>';
+  if(todayFlow||todayPain||Object.values(todayProd).some(function(v){return v>0})){
+    h+='<button class="db" onclick="clearPeriodToday()">Clear all for today</button>';
+  }
+  h+='</div></div>';
+  var div=document.createElement('div');div.id='mdl';div.innerHTML=h;document.body.appendChild(div);
+  // Store pending values on window for the save
+  window._pendingProd={tampons:todayProd.tampons||0,pads:todayProd.pads||0,cup:todayProd.cup||0,liners:todayProd.liners||0};
+  window._pendingPain=todayPain;
+}
+/* Pain picker helper */
+function pPain(el){
+  var all=el.parentElement.querySelectorAll('[data-pain]');
+  var clicked=el.dataset.pain;
+  var cur=window._pendingPain;
+  // Toggle: if already active, deselect
+  if(cur===clicked){
+    window._pendingPain=null;
+    all.forEach(function(b){
+      var col=b.dataset.pain==='mild'?'var(--forest)':b.dataset.pain==='moderate'?'var(--gold)':'var(--rose)';
+      b.style.background='var(--cream)';b.style.color=col;b.style.borderColor='var(--cream3)';
+    });
+  }else{
+    window._pendingPain=clicked;
+    all.forEach(function(b){
+      var col=b.dataset.pain==='mild'?'var(--forest)':b.dataset.pain==='moderate'?'var(--gold)':'var(--rose)';
+      var on=b.dataset.pain===clicked;
+      b.style.background=on?col:'var(--cream)';b.style.color=on?'#fff':col;b.style.borderColor=on?col:'var(--cream3)';
+    });
+  }
+}
+/* Product stepper */
+function adjProd(key,delta){
+  if(!window._pendingProd)window._pendingProd={tampons:0,pads:0,cup:0,liners:0};
+  window._pendingProd[key]=Math.max(0,(window._pendingProd[key]||0)+delta);
+  var el=document.getElementById('prodCount-'+key);
+  if(el)el.textContent=window._pendingProd[key];
+}
+function savePeriod(){
+  var fe=document.querySelector('#mdl .chip-f.on');
+  var pendingPain=window._pendingPain;
+  var pendingProd=window._pendingProd||{};
+  var anyProd=Object.values(pendingProd).some(function(v){return v>0});
+  // At least one of flow/pain/products must be set
+  if(!fe&&!pendingPain&&!anyProd){flash('Log flow, pain, or products');return}
+  saveUndo();
+  var flow=fe?fe.dataset.f:null;
+  var today=td();
+  var shouldCreateNew=!!document.getElementById('pNewCyc')&&document.getElementById('pNewCyc').checked&&flow;
+  // Save pain
+  if(pendingPain){D.periodPain[today]=pendingPain}else{delete D.periodPain[today]}
+  // Save products
+  if(anyProd){D.periodProducts[today]=pendingProd}else{delete D.periodProducts[today]}
+  if(shouldCreateNew){
+    var info=cInfo();var prevC=info.c;
+    prevC.length=db(prevC.key,today);
+    var carryOver=prevC.readings.filter(function(r){return r.date>=today});
+    prevC.readings=prevC.readings.filter(function(r){return r.date<today});
+    var newCycle={
+      key:today,
+      label:fd(today).split(' ').slice(0,2).join(' '),
+      readings:[]
+    };
+    carryOver.forEach(function(r){
+      var newDay=db(today,r.date)+1;
+      r.day=newDay;
+      newCycle.readings.push(r);
+    });
+    var todayReading=newCycle.readings.find(function(r){return r.date===today});
+    if(todayReading){todayReading.flow=flow;todayReading.day=1}
+    else{newCycle.readings.push({day:1,date:today,flow:flow})}
+    D.cycles.push(newCycle);
+    save();closeM();render();
+    flash('🩸 New cycle started — Day 1');
+  }else if(flow){
+    var info2=cInfo();var c2=info2.c;
+    var existing=c2.readings.find(function(r){return r.date===today});
+    if(existing){existing.flow=flow}
+    else{
+      var day=db(c2.key,today)+1;
+      c2.readings.push({day:day,date:today,flow:flow});
+      c2.readings.sort(function(a,b){return a.day-b.day});
+    }
+    save();closeM();render();
+    flash('🩸 Period logged');
+  }else{
+    // Just pain/products logged, no flow change
+    save();closeM();render();
+    flash('Saved');
+  }
+}
+function clearPeriodToday(){
+  saveUndo();
+  var today=td();
+  var info=cInfo();var c=info.c;
+  var r=c.readings.find(function(x){return x.date===today});
+  if(r){delete r.flow}
+  if(D.periodPain)delete D.periodPain[today];
+  if(D.periodProducts)delete D.periodProducts[today];
+  save();closeM();render();
+  flash('Cleared');
+}
+
 function openOPKModal(){
   var curInt=getOpkIntensity(td())||0;var curRes=getOpkResult(td())||'';
   var curPh=D.opkPhotos&&D.opkPhotos[td()]||'';
@@ -4517,6 +4718,88 @@ function rInsights(){
       }
     }
     h+=colEnd()+'</div>';
+  }
+
+  // ========== PERIOD PATTERNS ==========
+  var periodStats=[];
+  D.cycles.forEach(function(oc,oi){
+    if(isExcl(oi))return;
+    var flowDays=oc.readings.filter(function(r){return r.flow&&r.flow!=='spotting'&&r.flow!=='none'});
+    if(!flowDays.length)return;
+    var heavyCount=flowDays.filter(function(r){return r.flow==='heavy'}).length;
+    var medCount=flowDays.filter(function(r){return r.flow==='medium'}).length;
+    var lightCount=flowDays.filter(function(r){return r.flow==='light'}).length;
+    var painDays=flowDays.filter(function(r){return D.periodPain&&D.periodPain[r.date]});
+    var severeCount=painDays.filter(function(r){return D.periodPain[r.date]==='severe'}).length;
+    var totalProducts=0;
+    flowDays.forEach(function(r){
+      var p=D.periodProducts&&D.periodProducts[r.date];
+      if(p)totalProducts+=(p.tampons||0)+(p.pads||0)+(p.cup||0)+(p.liners||0);
+    });
+    periodStats.push({
+      ci:oi,key:oc.key,
+      totalDays:flowDays.length,
+      heavy:heavyCount,medium:medCount,light:lightCount,
+      severe:severeCount,painDays:painDays.length,
+      products:totalProducts,
+    });
+  });
+  if(periodStats.length>=2){
+    h+='<div class="section">'+colHdr('i-periods','Period Patterns');
+    h+=colBody('i-periods');
+    h+='<div class="card" style="padding:14px 16px">';
+    var avgLen=periodStats.reduce(function(a,b){return a+b.totalDays},0)/periodStats.length;
+    var avgHeavy=periodStats.reduce(function(a,b){return a+b.heavy},0)/periodStats.length;
+    var totalWithPain=periodStats.filter(function(p){return p.painDays>0}).length;
+    var totalProducts=periodStats.reduce(function(a,b){return a+b.products},0);
+    h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">';
+    h+='<div style="padding:10px;background:var(--rose-bg);border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--rose)">'+avgLen.toFixed(1)+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">Avg days</div></div>';
+    h+='<div style="padding:10px;background:var(--burnt-bg);border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--burnt)">'+avgHeavy.toFixed(1)+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">Avg heavy d</div></div>';
+    h+='<div style="padding:10px;background:var(--butter-bg);border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--gold)">'+totalWithPain+'/'+periodStats.length+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">W/ pain</div></div>';
+    h+='</div>';
+    h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Per cycle — length & flow</div>';
+    periodStats.slice(-8).forEach(function(p){
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:6px 0">';
+      h+='<div style="width:38px;flex-shrink:0;font-size:10px;font-weight:700;color:var(--txt3)">C'+(p.ci+1)+'</div>';
+      h+='<div style="flex:1;display:flex;height:14px;border-radius:4px;overflow:hidden;background:var(--cream2)">';
+      if(p.heavy)h+='<div style="flex:'+p.heavy+';background:var(--rose)"></div>';
+      if(p.medium)h+='<div style="flex:'+p.medium+';background:var(--burnt)"></div>';
+      if(p.light)h+='<div style="flex:'+p.light+';background:var(--peach)"></div>';
+      h+='</div>';
+      h+='<div style="width:36px;text-align:right;font-size:10px;color:var(--txt3);font-weight:600">'+p.totalDays+'d</div>';
+      h+='</div>';
+    });
+    h+='<div style="display:flex;gap:10px;justify-content:center;font-size:9px;color:var(--txt3);margin-top:10px;flex-wrap:wrap">';
+    h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--rose);border-radius:2px"></span> Heavy</span>';
+    h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--burnt);border-radius:2px"></span> Medium</span>';
+    h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--peach);border-radius:2px"></span> Light</span>';
+    h+='</div>';
+    if(totalWithPain>0||totalProducts>0){
+      h+='<div style="margin-top:12px;padding:10px;background:var(--cream);border-radius:8px;font-size:11px;color:var(--txt2);line-height:1.6">';
+      if(totalWithPain>0){
+        var severeCount2=periodStats.reduce(function(a,b){return a+b.severe},0);
+        h+='<div><strong>'+totalWithPain+'</strong> cycle'+(totalWithPain>1?'s':'')+' with logged pain';
+        if(severeCount2>0)h+=' · <strong>'+severeCount2+'</strong> severe day'+(severeCount2>1?'s':'');
+        h+='</div>';
+      }
+      if(totalProducts>0)h+='<div><strong>'+totalProducts+'</strong> products logged across all cycles</div>';
+      h+='</div>';
+    }
+    var flags=[];
+    if(avgLen>7)flags.push('Average period length '+avgLen.toFixed(1)+'d is on the longer side. Typical is 3-7d.');
+    if(avgLen<2)flags.push('Average period length '+avgLen.toFixed(1)+'d is short. Can sometimes indicate low oestrogen.');
+    if(avgHeavy>=3)flags.push(avgHeavy.toFixed(1)+' heavy days on average is high. Worth mentioning to GP if it\'s affecting daily life.');
+    var lens2=periodStats.map(function(p){return p.totalDays});
+    var meanL=lens2.reduce(function(a,b){return a+b},0)/lens2.length;
+    var sd2=Math.sqrt(lens2.reduce(function(a,b){return a+(b-meanL)*(b-meanL)},0)/lens2.length);
+    if(sd2>2)flags.push('Period length varies a lot cycle-to-cycle (±'+sd2.toFixed(1)+'d).');
+    if(flags.length){
+      h+='<div style="margin-top:10px;padding:10px;background:var(--peach-bg);border-radius:8px;font-size:11px;color:var(--txt2);line-height:1.5">';
+      h+='<div style="font-size:9px;font-weight:700;color:var(--burnt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Worth noting</div>';
+      flags.forEach(function(f){h+='<div style="padding:3px 0">• '+f+'</div>'});
+      h+='</div>';
+    }
+    h+='</div>'+colEnd()+'</div>';
   }
 
   // ========== OUTCOMES HISTORY ==========
