@@ -1870,12 +1870,13 @@ function render(){
   }
   // Tabs at top
   h+='<div class="tabs">';
-  ["today","ask","overlay","cycle","compare","doctor","insights","partner"].forEach(function(t){
+  ["today","fertile","ask","overlay","cycle","compare","doctor","insights","partner"].forEach(function(t){
     h+='<button class="tab'+(curTab===t?' on':'')+'" onclick="sw(\''+t+'\')">'+t[0].toUpperCase()+t.slice(1)+'</button>';
   });
   h+='</div></div>';
   h+='<div class="content">';
   if(curTab==="today")h+=rToday(info);
+  else if(curTab==="fertile")h+=rFertile(info);
   else if(curTab==="ask")h+=rAsk();
   else if(curTab==="overlay")h+=rOverlay();
   else if(curTab==="cycle")h+=rCycle();
@@ -1898,8 +1899,24 @@ function rToday(info){  var h='';
   var todaySy=D.sym[td()]||[];var todayMo=D.mood[td()]||[];
   var streak=getStreak();
 
+  // ===== FERTILE WINDOW BANNER (when in/near window) =====
+  var fwa2=fertileWindowAnalysis();
+  if(fwa2.status==='peak'||fwa2.status==='window'||(fwa2.status==='pre-window'&&fwa2.daysToWindow<=2)){
+    var bannerCol=fwa2.status==='peak'?'var(--burnt)':fwa2.status==='window'?'var(--gold)':'var(--plum)';
+    var bannerBg=fwa2.status==='peak'?'var(--burnt-bg)':fwa2.status==='window'?'var(--peach-bg)':'var(--lavender-bg)';
+    var bannerEmoji=fwa2.status==='peak'?'🔥':fwa2.status==='window'?'💕':'📅';
+    var bannerTitle=fwa2.status==='peak'?'PEAK FERTILITY TODAY':fwa2.status==='window'?'IN FERTILE WINDOW':'WINDOW OPENS SOON';
+    h+='<div class="section"><div class="card" style="padding:14px 16px;background:'+bannerBg+';border-left:3px solid '+bannerCol+'" onclick="sw(\'fertile\')">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+    h+='<span style="font-size:10px;font-weight:700;color:'+bannerCol+';text-transform:uppercase;letter-spacing:.8px">'+bannerEmoji+' '+bannerTitle+'</span>';
+    h+='<span style="font-size:10px;color:'+bannerCol+';font-weight:700">View ›</span>';
+    h+='</div>';
+    if(fwa2.windowDayLabel)h+='<div style="font-size:11px;color:var(--txt2);margin-bottom:4px">'+fwa2.windowDayLabel+'</div>';
+    h+='<div style="font-size:12px;color:var(--txt);line-height:1.5">'+fwa2.recommendation+'</div>';
+    h+='</div></div>';
+  }
+
   // ===== ACTIVE PERIOD CARD =====
-  // Count consecutive flow days from today backwards within current cycle to get "Day X of period"
   var activePeriodDay=null;
   var todayFlow2=info.c.readings.find(function(x){return x.date===td()});
   if(todayFlow2&&todayFlow2.flow&&todayFlow2.flow!=='spotting'){
@@ -2835,7 +2852,165 @@ function setOpk(date,result,intensity){
   if(!result&&intensity!=null)result=intensity>=4?'pos':'neg';
   D.opks[date]={result:result,intensity:intensity||(result==='pos'?4:1)};
 }
-/* Pre-period warning detector — returns {likely, strength, signals, eta} or null */
+/* Comprehensive fertile window analysis using live signals (CM, OPK, temp) + historical pattern.
+   Returns {status, confidence, peakDay, daysToOV, daysToWindow, signals, isToday, recommendation} */
+function fertileWindowAnalysis(){
+  var info=cInfo();var c=info.c;var cd=info.cd;var today=td();
+  var fwStart=info.ao-5;var fwEnd=info.ao;
+  var dpo=info.ho?(cd-info.od):null;
+  var result={
+    status:'unknown',          // 'pre-window'|'window'|'peak'|'post-OV'|'luteal'|'menstrual'|'unknown'
+    confidence:'low',          // 'low'|'medium'|'high'
+    daysToWindow:null,
+    daysToOV:null,
+    daysIntoWindow:null,
+    windowDayLabel:null,       // "Day 3 of 6"
+    peakDay:null,              // estimated peak day (cycle day)
+    signals:[],                // array of {label, strength, source}
+    todayActions:[],           // array of {icon, text}
+    recommendation:'',         // "Have sex tonight", etc.
+    cycleDay:cd,
+  };
+
+  // Already ovulated (luteal phase)
+  if(info.ho){
+    result.status=dpo<=2?'post-OV':'luteal';
+    result.confidence='high';
+    result.daysSinceOV=dpo;
+    if(dpo<=1){
+      result.recommendation='Last chance — sex today still counts (sperm can fertilise an egg released ~12-24h ago).';
+      result.todayActions.push({icon:'💕',text:'Sex today still helps'});
+      result.todayActions.push({icon:'🛌',text:'Rest after — implantation begins around 6-10 DPO'});
+    }else{
+      result.recommendation='Two-week wait. Window is closed for this cycle. Now you wait.';
+      result.todayActions.push({icon:'💊',text:'Keep taking your prenatal'});
+      result.todayActions.push({icon:'🧘',text:'Avoid heavy alcohol just in case'});
+    }
+    return result;
+  }
+
+  // Menstrual phase
+  if(cd<=5){
+    result.status='menstrual';
+    result.daysToWindow=fwStart-cd;
+    result.recommendation='Period phase. Fertile window opens in ~'+result.daysToWindow+' days.';
+    return result;
+  }
+
+  // Pre-window
+  if(cd<fwStart){
+    result.status='pre-window';
+    result.daysToWindow=fwStart-cd;
+    result.confidence='medium';
+    if(result.daysToWindow<=2){
+      result.todayActions.push({icon:'📅',text:'Fertile window opens in '+result.daysToWindow+' day'+(result.daysToWindow===1?'':'s')});
+      result.todayActions.push({icon:'🍷',text:'Reduce alcohol — start now'});
+      result.todayActions.push({icon:'💤',text:'Prioritise sleep this week'});
+      result.recommendation='Window opens in '+result.daysToWindow+' days. Get ready — start OPKs tomorrow if you haven\'t already.';
+    }else{
+      result.todayActions.push({icon:'🌿',text:'Relax mode — no TTC pressure yet'});
+      result.todayActions.push({icon:'💪',text:'Maintain healthy habits'});
+      result.recommendation='Pre-fertile. '+result.daysToWindow+' days until your window opens.';
+    }
+    return result;
+  }
+
+  // In or past expected fertile window
+  result.daysIntoWindow=cd-fwStart+1;
+  var totalWindowDays=fwEnd-fwStart+1;
+  result.windowDayLabel='Day '+result.daysIntoWindow+' of '+totalWindowDays;
+  result.daysToOV=Math.max(0,info.ao-cd);
+  result.peakDay=info.ao;
+
+  // Live signal analysis
+  var todayCM=(D.sym[today]||[]).filter(function(s){return s.indexOf('CM:')===0});
+  var todayOPK=getOpkIntensity(today);
+  var todayR=c.readings.find(function(x){return x.date===today});
+  var hasEggWhite=todayCM.indexOf('CM: Egg white')>-1;
+  var hasWatery=todayCM.indexOf('CM: Watery')>-1;
+  var hasCreamy=todayCM.indexOf('CM: Creamy')>-1;
+
+  // OPK signal
+  if(todayOPK!=null){
+    if(todayOPK>=4){result.signals.push({label:'OPK '+todayOPK+'/5 — LH SURGE',strength:'high',source:'opk'})}
+    else if(todayOPK===3){result.signals.push({label:'OPK '+todayOPK+'/5 — rising',strength:'medium',source:'opk'})}
+    else{result.signals.push({label:'OPK '+todayOPK+'/5 — low',strength:'low',source:'opk'})}
+  }
+  // Recent OPK trend (last 3 days)
+  var recentOPK=[];
+  for(var i=0;i<5;i++){
+    var d=ad(today,-i);
+    var inten=getOpkIntensity(d);
+    if(inten!=null)recentOPK.push({date:d,inten:inten,daysAgo:i});
+  }
+  var risingOPK=false;
+  if(recentOPK.length>=2){
+    var sorted=recentOPK.slice().sort(function(a,b){return a.daysAgo-b.daysAgo});
+    if(sorted[0].inten>sorted[sorted.length-1].inten)risingOPK=true;
+  }
+
+  // CM signal
+  if(hasEggWhite){result.signals.push({label:'Egg white CM — PEAK fertility',strength:'high',source:'cm'})}
+  else if(hasWatery){result.signals.push({label:'Watery CM — fertile',strength:'medium',source:'cm'})}
+  else if(hasCreamy){result.signals.push({label:'Creamy CM — approaching fertile',strength:'low',source:'cm'})}
+
+  // Temp signal — looking for the rise that confirms ovulation
+  if(todayR&&todayR.temp!=null){
+    var cl=avgCL2();
+    var yest=ad(today,-1);
+    var yestR=c.readings.find(function(x){return x.date===yest});
+    if(cl&&todayR.temp>cl+0.1){
+      result.signals.push({label:'Temp above coverline — possible OV confirmation',strength:'high',source:'temp'});
+    }else if(yestR&&yestR.temp!=null&&todayR.temp>yestR.temp+0.15){
+      result.signals.push({label:'Temp jumped +'+(todayR.temp-yestR.temp).toFixed(2)+'° — possible shift',strength:'medium',source:'temp'});
+    }
+  }
+
+  // Decide overall status
+  var highSignalCount=result.signals.filter(function(s){return s.strength==='high'}).length;
+  var hasOPKPos=todayOPK!=null&&todayOPK>=4;
+  var hasEW=hasEggWhite;
+
+  if(hasOPKPos||hasEW){
+    result.status='peak';
+    result.confidence='high';
+    result.recommendation='🔥 PEAK FERTILITY TODAY. Have sex today (and tomorrow if possible). Egg likely releasing in 12-36h.';
+    result.todayActions.push({icon:'🔥',text:'Sex tonight — top priority'});
+    result.todayActions.push({icon:'⏰',text:'Sex again in 24-48h to cover OV release'});
+    result.todayActions.push({icon:'🥗',text:'Eat well — your body needs the energy'});
+  }else if(risingOPK||hasWatery||cd===info.ao-1){
+    result.status='peak';
+    result.confidence='medium';
+    result.recommendation='Approaching peak. Sex today is high-value — OV likely in 24-48h.';
+    result.todayActions.push({icon:'🔥',text:'Sex today — window heating up'});
+    result.todayActions.push({icon:'🩸',text:'Test again with OPK in 12h'});
+  }else if(cd>=fwStart&&cd<=fwEnd){
+    result.status='window';
+    result.confidence='medium';
+    result.recommendation='Inside fertile window. Sex every other day is ideal — every day is fine if you can.';
+    result.todayActions.push({icon:'💕',text:'Sex tonight (or tomorrow at latest)'});
+    result.todayActions.push({icon:'🚫',text:'Skip alcohol, hot tubs, tight underwear'});
+    result.todayActions.push({icon:'🩸',text:'Take OPK if you haven\'t today'});
+  }else{
+    // Past expected OV but no confirmation — late window
+    result.status='window';
+    result.confidence='low';
+    result.daysIntoWindow=cd-fwStart+1;
+    result.recommendation='Past your typical OV day with no clear confirmation. Still possible — keep going.';
+    result.todayActions.push({icon:'🤞',text:'OV may be delayed — keep having sex'});
+    result.todayActions.push({icon:'🩸',text:'Daily OPK to catch the surge'});
+  }
+
+  // Has sex been logged in the last 2 days?
+  var sexD0=!!D.sex[today];
+  var sexD1=!!D.sex[ad(today,-1)];
+  var sexD2=!!D.sex[ad(today,-2)];
+  if(!sexD0&&!sexD1&&!sexD2&&result.status!=='post-OV'){
+    result.todayActions.unshift({icon:'⚠️',text:'No sex logged in 3 days — do not miss tonight'});
+  }
+
+  return result;
+}
 function prePeriodSignal(){
   var info=cInfo();var c=info.c;var dpo=info.ho?(info.cd-info.od):null;
   if(dpo===null||dpo<8)return null;  // Only meaningful from 8+ DPO
@@ -4331,6 +4506,187 @@ function rDoctor(info){
   h+='<button onclick="exportDayByDay()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--burnt);color:#fff">📅 Current Cycle Day-by-Day</button>';
   h+='</div></div>';
   
+  return h;
+}
+
+/* Fertile tab — comprehensive fertile window tracker for TTC */
+function rFertile(info){
+  var h='';
+  var fwa=fertileWindowAnalysis();
+  var c=info.c;var cd=info.cd;
+
+  // ===== HERO STATUS CARD =====
+  var heroBg,heroBorder,heroTitle,heroEmoji,heroSub;
+  if(fwa.status==='peak'){
+    heroBg='var(--burnt-bg)';heroBorder='var(--burnt)';heroEmoji='🔥';
+    heroTitle='PEAK FERTILITY';
+    heroSub=fwa.windowDayLabel?'Fertile window — '+fwa.windowDayLabel:'OV imminent';
+  }else if(fwa.status==='window'){
+    heroBg='var(--peach-bg)';heroBorder='var(--gold)';heroEmoji='💕';
+    heroTitle='IN FERTILE WINDOW';
+    heroSub=fwa.windowDayLabel||'Window open';
+  }else if(fwa.status==='pre-window'){
+    heroBg='var(--lavender-bg)';heroBorder='var(--plum)';heroEmoji='📅';
+    heroTitle='PRE-WINDOW';
+    heroSub='Window opens in '+fwa.daysToWindow+' day'+(fwa.daysToWindow===1?'':'s');
+  }else if(fwa.status==='post-OV'){
+    heroBg='var(--cob-bg)';heroBorder='var(--cobalt)';heroEmoji='💫';
+    heroTitle='JUST OVULATED';
+    heroSub=fwa.daysSinceOV+' day'+(fwa.daysSinceOV===1?'':'s')+' past OV';
+  }else if(fwa.status==='luteal'){
+    heroBg='var(--plum-bg)';heroBorder='var(--plum)';heroEmoji='⏳';
+    heroTitle='TWO-WEEK WAIT';
+    heroSub=fwa.daysSinceOV+' DPO — window closed for this cycle';
+  }else if(fwa.status==='menstrual'){
+    heroBg='var(--rose-bg)';heroBorder='var(--rose)';heroEmoji='🌙';
+    heroTitle='PERIOD';
+    heroSub='Window opens in '+fwa.daysToWindow+' days';
+  }else{
+    heroBg='var(--cream)';heroBorder='var(--txt4)';heroEmoji='📊';
+    heroTitle='Day '+cd;heroSub='Status unclear';
+  }
+
+  h+='<div class="section"><div class="card" style="padding:20px 18px;background:'+heroBg+';border-left:4px solid '+heroBorder+'">';
+  h+='<div style="font-size:10px;font-weight:700;color:'+heroBorder+';text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Fertile Window</div>';
+  h+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:10px">';
+  h+='<span style="font-size:42px;flex-shrink:0">'+heroEmoji+'</span>';
+  h+='<div style="flex:1"><div style="font-size:18px;font-weight:800;color:var(--txt);letter-spacing:-.3px;line-height:1.2">'+heroTitle+'</div>';
+  h+='<div style="font-size:12px;color:var(--txt2);margin-top:3px">'+heroSub+'</div></div>';
+  if(fwa.confidence==='high')h+='<span style="font-size:9px;font-weight:700;color:var(--forest);background:var(--sage-bg);padding:4px 8px;border-radius:6px;flex-shrink:0">HIGH<br>CONFIDENCE</span>';
+  else if(fwa.confidence==='medium')h+='<span style="font-size:9px;font-weight:700;color:var(--gold);background:var(--butter-bg);padding:4px 8px;border-radius:6px;flex-shrink:0">MEDIUM</span>';
+  h+='</div>';
+  h+='<div style="font-size:13px;color:var(--txt);line-height:1.6;margin-top:10px">'+fwa.recommendation+'</div>';
+  h+='</div></div>';
+
+  // ===== TODAY ACTIONS =====
+  if(fwa.todayActions&&fwa.todayActions.length){
+    h+='<div class="section"><div class="card" style="padding:14px 16px">';
+    h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">What to do today</div>';
+    fwa.todayActions.forEach(function(a){
+      h+='<div style="display:flex;gap:10px;padding:8px 0;font-size:12px;color:var(--txt);line-height:1.5;border-bottom:1px solid var(--cream2)"><span style="flex-shrink:0;font-size:16px">'+a.icon+'</span><span>'+a.text+'</span></div>';
+    });
+    h+='</div></div>';
+  }
+
+  // ===== LIVE SIGNALS =====
+  if(fwa.signals&&fwa.signals.length){
+    h+='<div class="section"><div class="card" style="padding:14px 16px">';
+    h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Live signals from your data</div>';
+    fwa.signals.forEach(function(s){
+      var col=s.strength==='high'?'var(--burnt)':s.strength==='medium'?'var(--gold)':'var(--txt3)';
+      var bg=s.strength==='high'?'var(--burnt-bg)':s.strength==='medium'?'var(--butter-bg)':'var(--cream)';
+      var icon=s.source==='cm'?'💧':s.source==='opk'?'🩸':s.source==='temp'?'🌡️':'•';
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:'+bg+';border-radius:8px;margin-bottom:6px">';
+      h+='<span style="font-size:14px">'+icon+'</span>';
+      h+='<span style="flex:1;font-size:11px;color:var(--txt);font-weight:600">'+s.label+'</span>';
+      h+='<span style="font-size:9px;font-weight:700;color:'+col+';text-transform:uppercase;letter-spacing:.3px">'+s.strength+'</span>';
+      h+='</div>';
+    });
+    h+='</div></div>';
+  }
+
+  // ===== THIS CYCLE TIMELINE =====
+  h+='<div class="section"><div class="card" style="padding:14px 16px">';
+  h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">This cycle\'s window</div>';
+  var fwStart=info.ao-5,fwEnd=info.ao;
+  // Build day-by-day strip from Day 1 to expected period
+  var endDay=Math.min(info.av+2,Math.max(cd+2,info.ao+5));
+  var startDay=Math.max(1,fwStart-3);
+  h+='<div style="display:flex;gap:2px;align-items:flex-end;padding:6px 0;overflow-x:auto">';
+  for(var d=startDay;d<=endDay;d++){
+    var dDate=ad(c.key,d-1);
+    var dRdg=c.readings.find(function(r){return r.date===dDate});
+    var dInWindow=d>=fwStart&&d<=fwEnd;
+    var dIsPeak=d===info.ao;
+    var dSex=!!D.sex[dDate];
+    var dCM=(D.sym[dDate]||[]).filter(function(s){return s.indexOf('CM:')===0});
+    var dHasFertileCM=dCM.indexOf('CM: Egg white')>-1||dCM.indexOf('CM: Watery')>-1;
+    var dOPK=getOpkIntensity(dDate);
+    var dIsToday=d===cd;
+    var bgCol=dIsPeak?'var(--burnt)':dInWindow?'var(--peach)':'var(--cream2)';
+    if(dIsToday)bgCol='var(--cobalt)';
+    h+='<div style="flex:0 0 auto;min-width:32px;display:flex;flex-direction:column;align-items:center;gap:2px">';
+    h+='<div style="font-size:8px;color:var(--txt4);font-weight:600;height:10px;display:flex;align-items:center;gap:2px">';
+    if(dHasFertileCM)h+='<span style="color:var(--forest)">💧</span>';
+    if(dOPK!=null&&dOPK>=4)h+='<span style="color:var(--burnt)">🩸</span>';
+    if(dSex)h+='<span style="color:var(--cobalt)">💕</span>';
+    h+='</div>';
+    h+='<div style="width:28px;height:36px;background:'+bgCol+';border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:'+(dIsToday||dIsPeak?'800':'600')+';color:'+(dIsToday||dIsPeak?'#fff':'var(--txt2)')+(dIsToday?';box-shadow:0 0 0 2px var(--cobalt-bg,rgba(122,139,168,0.3))':'')+'">'+d+'</div>';
+    if(dIsToday)h+='<div style="font-size:7px;font-weight:700;color:var(--cobalt);text-transform:uppercase">Today</div>';
+    else if(dIsPeak)h+='<div style="font-size:7px;font-weight:700;color:var(--burnt);text-transform:uppercase">OV</div>';
+    else h+='<div style="height:8px"></div>';
+    h+='</div>';
+  }
+  h+='</div>';
+  h+='<div style="display:flex;gap:8px;justify-content:center;font-size:9px;color:var(--txt3);margin-top:10px;flex-wrap:wrap">';
+  h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--peach);border-radius:2px"></span> Window</span>';
+  h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--burnt);border-radius:2px"></span> Peak (OV)</span>';
+  h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--cobalt);border-radius:2px"></span> Today</span>';
+  h+='<span>💕 Sex · 💧 Fertile CM · 🩸 OPK+</span>';
+  h+='</div>';
+  h+='</div></div>';
+
+  // ===== HISTORICAL ACCURACY =====
+  if(D.cycles.length>=3){
+    var ovHist=[];
+    D.cycles.forEach(function(oc,oi){
+      if(isExcl(oi))return;
+      var od=ovDay(oc);
+      if(od)ovHist.push({ci:oi,od:od,len:oc.length||null});
+    });
+    if(ovHist.length>=3){
+      var ovs=ovHist.map(function(o){return o.od});
+      var minOv=Math.min.apply(null,ovs);
+      var maxOv=Math.max.apply(null,ovs);
+      var avgOv=Math.round(ovs.reduce(function(a,b){return a+b},0)/ovs.length);
+      var sd=Math.sqrt(ovs.reduce(function(a,b){return a+(b-avgOv)*(b-avgOv)},0)/ovs.length);
+      var predictability=sd<=1.5?'Very predictable':sd<=2.5?'Predictable':sd<=4?'Variable':'Unpredictable';
+      var predCol=sd<=1.5?'var(--forest)':sd<=2.5?'var(--gold)':sd<=4?'var(--burnt)':'var(--rose)';
+
+      h+='<div class="section"><div class="card" style="padding:14px 16px">';
+      h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Your fertile pattern</div>';
+      h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">';
+      h+='<div style="padding:10px;background:var(--cream);border-radius:10px;text-align:center"><div style="font-size:18px;font-weight:700;color:var(--cobalt)">Day '+avgOv+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">Avg OV</div></div>';
+      h+='<div style="padding:10px;background:var(--cream);border-radius:10px;text-align:center"><div style="font-size:18px;font-weight:700;color:var(--gold)">'+minOv+'-'+maxOv+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">Range</div></div>';
+      h+='<div style="padding:10px;background:var(--cream);border-radius:10px;text-align:center"><div style="font-size:14px;font-weight:700;color:'+predCol+'">'+predictability+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">SD ±'+sd.toFixed(1)+'d</div></div>';
+      h+='</div>';
+
+      // Per-cycle bars showing OV day
+      h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Recent cycles</div>';
+      ovHist.slice(-8).forEach(function(o){
+        var oc=D.cycles[o.ci];
+        var sexInWindow=0,sexCount=0;
+        var fwS=o.od-5,fwE=o.od;
+        oc.readings.forEach(function(r){
+          if(D.sex[r.date]){
+            sexCount++;
+            if(r.day>=fwS&&r.day<=fwE)sexInWindow++;
+          }
+        });
+        h+='<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--cream2)">';
+        h+='<div style="width:38px;flex-shrink:0;font-size:10px;font-weight:700;color:var(--txt3)">C'+(o.ci+1)+'</div>';
+        h+='<div style="flex:1;font-size:11px;color:var(--txt2)">OV Day '+o.od+(o.len?' / '+o.len+'d cycle':'')+'</div>';
+        var sexCol=sexInWindow>=2?'var(--forest)':sexInWindow===1?'var(--gold)':'var(--rose)';
+        h+='<div style="font-size:11px;font-weight:700;color:'+sexCol+'">'+sexInWindow+'/'+sexCount+' sex</div>';
+        h+='</div>';
+      });
+
+      // Insight summary
+      var goodCycles=ovHist.filter(function(o){
+        var oc=D.cycles[o.ci];var fwS=o.od-5,fwE=o.od;
+        var sexInW=0;
+        oc.readings.forEach(function(r){if(D.sex[r.date]&&r.day>=fwS&&r.day<=fwE)sexInW++});
+        return sexInW>=2;
+      }).length;
+      h+='<div style="margin-top:12px;padding:10px;background:var(--cream);border-radius:8px;font-size:11px;color:var(--txt2);line-height:1.5">';
+      h+='<strong>'+goodCycles+'/'+ovHist.length+'</strong> recent cycle'+(ovHist.length===1?'':'s')+' had 2+ sex days in fertile window. ';
+      if(goodCycles<ovHist.length/2)h+='Aim for 2+ days inside the window for best chances.';
+      else h+='Good timing pattern overall.';
+      h+='</div>';
+      h+='</div></div>';
+    }
+  }
+
   return h;
 }
 
