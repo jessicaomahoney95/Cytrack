@@ -858,7 +858,7 @@ function morningBriefing(info){
   var c=info.c;var ci=info.ci;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
   var todayR=c.readings.find(function(x){return x.date===td()});
   var todaySy=D.sym[td()]||[];
-  var ph=phase(cd,info.av,info.ao,info.ho,info.od);
+  var ph=phase(cd,info.av,info.ao,info.ho,info.od,info.c);
   var cl=avgCL2();
   var bits=[];
 
@@ -1477,7 +1477,7 @@ function rAsk(){
 function answerQuestion(q){
   var info=cInfo();var c=info.c;var ci=info.ci;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
   var todayR=c.readings.find(function(x){return x.date===td()});
-  var cl=avgCL2();var ph=phase(cd,info.av,info.ao,info.ho,info.od);
+  var cl=avgCL2();var ph=phase(cd,info.av,info.ao,info.ho,info.od,info.c);
 
   // ===== Helper: build common stats =====
   function lutHistory(){
@@ -1659,6 +1659,7 @@ function load(){
   if(!D.outcomes)D.outcomes={};  // Per-cycle outcome: {cycleIdx: {result, notes, loggedAt}}
   if(!D.periodPain)D.periodPain={};  // Per-day pain: {date: 'mild'|'moderate'|'severe'}
   if(!D.periodProducts)D.periodProducts={};  // Per-day product counts: {date: {tampons, pads, cup, liners}}
+  if(!D.periodEndDates)D.periodEndDates={};  // Per-cycle explicit period-end marker: {cycleKey: endDate}
   if(!D.aiConvo)D.aiConvo=[];  // Active AI conversation: [{q, a, source, ts}, ...]
   if(!D.askLog)D.askLog=[];  // Question bank: [{ts, q, a, rating: 'up'|'down'|null, note: '', source: 'rules'|'ai'}]
   if(!D.aiCfg)D.aiCfg={url:'',secret:'',enabled:false};  // Gemini Worker config
@@ -1685,7 +1686,51 @@ function atVar(){var m={};D.cycles.forEach(function(c,i){if(!isExcl(i)){c.readin
 function cInfo(){var ci=D.cycles.length-1;var c=D.cycles[ci];var cd=db(c.key,td())+1;var av=acl(),ao=aod();var dtp=Math.max(0,av-cd+1);var opk=ovDay(c);var eov=effOv(ci);return{c:c,ci:ci,cd:cd,av:av,ao:ao,dtp:dtp,opk:opk,od:eov,ho:!!eov}}
 function coverline(c){var oi=-1;c.readings.forEach(function(r,i){if(r.ov&&(oi<0||i<oi))oi=i});if(oi<0)return null;var pre=[];for(var i=Math.max(0,oi-6);i<oi;i++)if(c.readings[i].temp!=null)pre.push(c.readings[i].temp);if(pre.length<3)return null;pre.sort(function(a,b){return a-b});var med=pre.length%2===0?(pre[pre.length/2-1]+pre[pre.length/2])/2:pre[Math.floor(pre.length/2)];return Math.round((med+0.05)*100)/100}
 function avgCL2(){var cls=[];D.cycles.forEach(function(c,i){if(!isExcl(i)){var cl=coverline(c);if(cl)cls.push(cl)}});return cls.length?Math.round(cls.reduce(function(a,b){return a+b},0)/cls.length*100)/100:null}
-function phase(cd,av,ao,ho,od){if(cd<=5)return{n:"Menstrual",c:"var(--rose)",bg:"var(--rose-bg)",d:"Period phase — shedding the uterine lining."};var eo=ho?od:ao;if(cd<eo-1)return{n:"Follicular",c:"var(--forest)",bg:"var(--forest-bg)",d:"Building to ovulation — estrogen rising."};if(cd>=eo-1&&cd<=eo+1)return{n:ho?"Ovulatory":"Ovulatory (est.)",c:"var(--gold)",bg:"var(--gold-bg)",d:"Peak fertility around ovulation."};return{n:ho?"Luteal":"Luteal (est.)",c:"var(--plum)",bg:"var(--plum-bg)",d:"Post-ovulation — progesterone keeps temps up."}}
+/* Calculate avg period length from completed past cycles. Returns count or null. */
+function avgPeriodLength(){
+  // User can manually set their typical period length in D.periodAvgManual
+  if(D.periodAvgManual)return D.periodAvgManual;
+  var lengths=[];
+  D.cycles.forEach(function(oc,oi){
+    if(isExcl(oi))return;
+    if(!oc.length)return;
+    var flowDays=0;
+    var sortedReadings=oc.readings.slice().sort(function(a,b){return a.day-b.day});
+    for(var i=0;i<sortedReadings.length;i++){
+      var r=sortedReadings[i];
+      if(r.day>10)break;
+      if(r.flow&&r.flow!=='spotting'&&r.flow!=='none')flowDays=r.day;
+      else if(r.day>flowDays+1)break;
+    }
+    if(flowDays>0)lengths.push(flowDays);
+  });
+  if(!lengths.length)return null;
+  return Math.round(lengths.reduce(function(a,b){return a+b},0)/lengths.length);
+}
+
+/* Period is active ONLY if flow logged today. Explicit end marker overrides everything.
+   If you forgot to log today but you're still bleeding, tap Log Period to backfill. */
+function isPeriodActive(cd,c){
+  if(cd>10)return false;
+  if(!c||!c.readings)return false;
+  if(D.periodEndDates&&D.periodEndDates[c.key]){
+    return td()<D.periodEndDates[c.key];
+  }
+  var today=td();
+  var todayR=c.readings.find(function(r){return r.date===today});
+  if(todayR&&todayR.flow&&todayR.flow!=='spotting')return true;
+  return false;
+}
+
+function phase(cd,av,ao,ho,od,c){
+  // If c (cycle) is passed, check actual flow; else fall back to calendar
+  var menstrual=c?isPeriodActive(cd,c):(cd<=5);
+  if(menstrual)return{n:"Menstrual",c:"var(--rose)",bg:"var(--rose-bg)",d:"Period phase — shedding the uterine lining."};
+  var eo=ho?od:ao;
+  if(cd<eo-1)return{n:"Follicular",c:"var(--forest)",bg:"var(--forest-bg)",d:"Building to ovulation — estrogen rising."};
+  if(cd>=eo-1&&cd<=eo+1)return{n:ho?"Ovulatory":"Ovulatory (est.)",c:"var(--gold)",bg:"var(--gold-bg)",d:"Peak fertility around ovulation."};
+  return{n:ho?"Luteal":"Luteal (est.)",c:"var(--plum)",bg:"var(--plum-bg)",d:"Post-ovulation — progesterone keeps temps up."};
+}
 function pats(){var f={},l={};D.cycles.forEach(function(c,i){if(!isExcl(i)){var od2=ovDay(c)||aod();c.readings.forEach(function(r){var all=(D.sym[r.date]||[]).concat(D.mood[r.date]||[]);var b=r.day<=od2?f:l;all.forEach(function(s){b[s]=(b[s]||0)+1})})}});return{f:f,l:l}}
 function timeline(){var n=[];Object.keys(D.notes).forEach(function(d){if(!D.notes[d])return;var cy=null,cd=null;D.cycles.forEach(function(c,i){var end=D.cycles[i+1]?D.cycles[i+1].key:"9999";if(d>=c.key&&d<end){cy=i+1;cd=db(c.key,d)+1}});n.push({d:d,cy:cy,cd:cd,t:D.notes[d]})});return n.sort(function(a,b){return b.d.localeCompare(a.d)})}
 function togExcl(i){if(!D.excl)D.excl={};if(D.excl[i])delete D.excl[i];else D.excl[i]=true;save();render()}
@@ -1824,7 +1869,7 @@ function render(){
   var app=document.getElementById('app');var info=cInfo();
   var todayR=info.c.readings.find(function(x){return x.date===td()});
   var showMorning=!todayR&&curTab==='today';
-  var ph=phase(info.cd,info.av,info.ao,info.ho,info.od);
+  var ph=phase(info.cd,info.av,info.ao,info.ho,info.od,info.c);
 
   var h='<div class="hdr">';
   if(showMorning){
@@ -1838,7 +1883,7 @@ function render(){
     else if(dpo&&dpo<=5){morningMsg=''+dpo+' DPO — it\'s genuinely too early for anything to be happening that you\'d feel. Just log your temp and carry on with your day.';}
     else if(!info.ho){var fw2=info.ao-5;if(info.cd>=fw2&&info.cd<=info.ao){morningMsg='You\'re in your fertile window right now. If you can, today\'s a good day.';}
     else if(info.cd>=fw2-2){morningMsg='Fertile window opens in '+(fw2-info.cd)+' day'+(fw2-info.cd>1?'s':'')+'. Your body is getting ready — start OPK testing if you haven\'t.';}
-    else if(info.cd<=5){morningMsg='Period day '+info.cd+'. Be kind to yourself today. Rest if you need to — your body\'s resetting for the next round.';}
+    else if(isPeriodActive(info.cd,info.c)){morningMsg='Period day '+info.cd+'. Be kind to yourself today. Rest if you need to — your body\'s resetting for the next round.';}
     else{morningMsg='Follicular phase — your body is quietly building towards ovulation. Oestrogen\'s rising, energy should be good.';}}
   } else {
     // Welcome back message — they've already logged today
@@ -1941,7 +1986,9 @@ function rToday(info){  var h='';
     var flowEmoji={light:'💧',medium:'💧💧',heavy:'💧💧💧',spotting:'·'}[todayFlow2.flow]||'🩸';
     h+='<div class="section"><div class="card" style="padding:14px 16px;background:var(--rose-bg);border-left:3px solid var(--rose)">';
     h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-    h+='<span style="font-size:10px;font-weight:700;color:var(--rose);text-transform:uppercase;letter-spacing:.8px">🩸 Period · Day '+activePeriodDay+'</span>';
+    var avgPeriod=avgPeriodLength();
+    var dayLbl='🩸 Period · Day '+activePeriodDay+(avgPeriod?' of ~'+avgPeriod:'');
+    h+='<span style="font-size:10px;font-weight:700;color:var(--rose);text-transform:uppercase;letter-spacing:.8px">'+dayLbl+'</span>';
     h+='<button onclick="openPeriodModal()" style="font-size:10px;color:var(--rose);background:none;border:none;cursor:pointer;text-decoration:underline">Update</button>';
     h+='</div>';
     h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">';
@@ -1950,6 +1997,50 @@ function rToday(info){  var h='';
     h+='<div style="text-align:center;padding:8px;background:var(--card);border-radius:8px"><div style="font-size:14px;font-weight:700;color:var(--txt)">'+totalProd+'</div><div style="font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">Products</div></div>';
     h+='</div>';
     h+='</div></div>';
+  }
+
+  // ===== NEXT PERIOD PREDICTION =====
+  // Show this if not currently in period (so you know when the next one is expected)
+  if(!activePeriodDay){
+    var avgPdLen=avgPeriodLength()||4;
+    var cycLens=D.cycles.filter(function(oc,oi){return oc.length&&!isExcl(oi)}).map(function(oc){return oc.length});
+    var avgCycLen=cycLens.length?Math.round(cycLens.reduce(function(a,b){return a+b},0)/cycLens.length):28;
+    var daysToNextPeriod=null;var nextPeriodDate=null;
+    if(info.ho){
+      // Use luteal-based prediction if ovulated
+      var luts=[];D.cycles.forEach(function(oc,oi){if(!isExcl(oi)){var od2=ovDay(oc);if(od2&&oc.length)luts.push(oc.length-od2)}});
+      if(luts.length){
+        var avgLut=Math.round(luts.reduce(function(a,b){return a+b},0)/luts.length);
+        var dpo=info.cd-info.od;
+        daysToNextPeriod=avgLut-dpo;
+      }
+    }else{
+      // Use cycle-length prediction
+      daysToNextPeriod=avgCycLen-info.cd;
+    }
+    if(daysToNextPeriod!=null&&daysToNextPeriod>0&&daysToNextPeriod<=35){
+      nextPeriodDate=ad(td(),daysToNextPeriod);
+      var periodEndDate=ad(nextPeriodDate,avgPdLen-1);
+      h+='<div class="section"><div class="card" style="padding:14px 16px">';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+      h+='<span style="font-size:10px;font-weight:700;color:var(--rose);text-transform:uppercase;letter-spacing:.8px">🩸 Next Period</span>';
+      h+='<span style="font-size:10px;color:var(--txt4);font-weight:600">'+(info.ho?'from luteal':'from cycle avg')+'</span>';
+      h+='</div>';
+      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+      h+='<div style="padding:10px;background:var(--rose-bg);border-radius:10px;text-align:center">';
+      h+='<div style="font-size:18px;font-weight:800;color:var(--rose);line-height:1.1">'+fd(nextPeriodDate).split(' ').slice(0,2).join(' ')+'</div>';
+      h+='<div style="font-size:10px;color:var(--txt3);margin-top:3px">in <strong>'+daysToNextPeriod+'</strong> day'+(daysToNextPeriod===1?'':'s')+'</div>';
+      h+='</div>';
+      h+='<div style="padding:10px;background:var(--peach-bg);border-radius:10px;text-align:center">';
+      h+='<div style="font-size:18px;font-weight:800;color:var(--burnt);line-height:1.1">~'+avgPdLen+' d</div>';
+      h+='<div style="font-size:10px;color:var(--txt3);margin-top:3px">ends ~<strong>'+fd(periodEndDate).split(' ').slice(0,2).join(' ')+'</strong></div>';
+      h+='</div>';
+      h+='</div>';
+      if(!D.periodAvgManual){
+        h+='<div style="margin-top:8px;font-size:10px;color:var(--txt4);font-style:italic;text-align:center">Tap Log period → Set manually to fix period length</div>';
+      }
+      h+='</div></div>';
+    }
   }
 
   // ===== CYCLE OUTCOME PROMPT =====
@@ -2068,7 +2159,7 @@ function rToday(info){  var h='';
 
   // HERO CARD — DPO + Biology + Ring + Phase + Tips
   var pct=Math.min(1,info.cd/info.av);var r2=34,circ=2*Math.PI*r2,off=circ*(1-pct);
-  var ph=phase(info.cd,info.av,info.ao,info.ho,info.od);
+  var ph=phase(info.cd,info.av,info.ao,info.ho,info.od,info.c);
   var bio=getBiology(info);
   var dpo=info.ho?(info.cd-info.od):null;
 
@@ -2714,8 +2805,9 @@ function getBiology(info){
     if(dpoBio[dpo])return dpoBio[dpo];
     if(dpo>14)return{icon:"⏳",title:dpo+" DPO",body:"Past typical 14-day luteal phase. Retest in 2 days if negative."};
   }
-  if(cd<=2)return{icon:"🔴",title:"Menstruation — Day "+cd,body:"Progesterone and oestrogen at lowest. Endometrium shedding. FSH already recruiting follicles."};
-  if(cd<=5)return{icon:"🔴",title:"Late period — Day "+cd,body:"Flow tapering. One follicle winning dominance. Oestrogen starting to rise."};
+  var inPeriod=isPeriodActive(cd,info.c);
+  if(inPeriod&&cd<=2)return{icon:"🔴",title:"Menstruation — Day "+cd,body:"Progesterone and oestrogen at lowest. Endometrium shedding. FSH already recruiting follicles."};
+  if(inPeriod&&cd<=5)return{icon:"🔴",title:"Late period — Day "+cd,body:"Flow tapering. One follicle winning dominance. Oestrogen starting to rise."};
   if(cd<=8)return{icon:"🌱",title:"Early follicular — Day "+cd,body:"Dominant follicle growing 1-2mm/day. Oestrogen thickening the lining."};
   if(cd<=12)return{icon:"🌿",title:"Mid follicular — Day "+cd,body:"Oestrogen accelerating. Follicle ~14-18mm. CM transitioning towards fertile."};
   if(cd<=info.ao-2)return{icon:"🔥",title:"Pre-ovulatory — Day "+cd,body:"Oestrogen peaks, triggering LH surge. Follicle ~20-24mm. Peak CM."};
@@ -2731,7 +2823,7 @@ function gamePlan(info){
   var fw=info.ao-5;var dpo=info.ho?(info.cd-info.od):null;
   var todayR=info.c.readings.find(function(x){return x.date===td()});
   var todaySy=D.sym[td()]||[];var todayCM=todaySy.filter(function(s){return s.indexOf("CM:")===0});
-  if(info.cd<=5){gp.title="Period day "+info.cd;gp.color="var(--rose)";gp.sub="Rest up. Your body is resetting.";gp.actions=[{txt:"Log temp",done:!!todayR},{txt:"Take prenatal vitamin",done:false},{txt:"Rest & hydrate",done:false}]}
+  if(isPeriodActive(info.cd,info.c)){gp.title="Period day "+info.cd;gp.color="var(--rose)";gp.sub="Rest up. Your body is resetting.";gp.actions=[{txt:"Log temp",done:!!todayR},{txt:"Take prenatal vitamin",done:false},{txt:"Rest & hydrate",done:false}]}
   else if(!info.ho&&info.cd>=fw-2&&info.cd<fw){gp.title="Fertile window in "+(fw-info.cd)+" days";gp.color="var(--gold)";gp.sub="Almost time. Start OPK testing daily.";gp.actions=[{txt:"Log temp",done:!!todayR},{txt:"Take OPK test",done:!!D.opks[td()]},{txt:"Log CM",done:todayCM.length>0},{txt:"Have sex tonight or tomorrow",done:!!D.sex[td()]}]}
   else if(!info.ho&&info.cd>=fw&&info.cd<=info.ao){gp.title="Fertile window — GO TIME";gp.color="var(--burnt)";gp.sub="Best chance this cycle. Prioritise intercourse.";gp.actions=[{txt:"Log temp",done:!!todayR},{txt:"Take OPK test",done:!!D.opks[td()]},{txt:"Log CM",done:todayCM.length>0},{txt:"Have sex today",done:!!D.sex[td()]}]}
   else if(info.ho&&dpo<=5){gp.title=dpo+" DPO — early TWW";gp.color="var(--plum)";gp.sub="Too early to know. Just keep logging temps.";gp.actions=[{txt:"Log temp",done:!!todayR},{txt:"Take prenatal",done:false}]}
@@ -2889,8 +2981,8 @@ function fertileWindowAnalysis(){
     return result;
   }
 
-  // Menstrual phase
-  if(cd<=5){
+  // Menstrual phase — use real flow data, not just calendar
+  if(isPeriodActive(cd,c)){
     result.status='menstrual';
     result.daysToWindow=fwStart-cd;
     result.recommendation='Period phase. Fertile window opens in ~'+result.daysToWindow+' days.';
@@ -3125,6 +3217,26 @@ function openPeriodModal(){
     h+='<span style="font-size:12px;font-weight:600;color:var(--txt)">Start new cycle from today</span></label></div>';
   }
   h+='<div class="br"><button class="cb" onclick="closeM()">Cancel</button><button class="sb" onclick="savePeriod()">Save</button></div>';
+  // End period button — shows if within first 10 days of cycle
+  if(info.cd<=10&&!looksLikeNewCycle){
+    h+='<button onclick="endPeriodToday()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--sage-bg);color:var(--forest);border:1px solid var(--forest);font-size:12px;font-weight:700;cursor:pointer">✓ Period has ended</button>';
+  }
+  // Typical period length setter
+  var curAvg=avgPeriodLength();
+  var manualSet=!!D.periodAvgManual;
+  h+='<div style="margin-top:14px;padding:10px 12px;background:var(--cream);border-radius:8px;font-size:11px;color:var(--txt2)">';
+  h+='<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Your typical period length</div>';
+  if(manualSet){
+    h+='<div style="display:flex;align-items:center;gap:8px"><span style="flex:1"><strong>'+curAvg+' days</strong> (you set this)</span>';
+    h+='<button onclick="promptPeriodAvg()" style="font-size:10px;color:var(--cobalt);background:none;border:none;cursor:pointer;text-decoration:underline">Change</button>';
+    h+='<button onclick="setPeriodAvg(null)" style="font-size:10px;color:var(--rose);background:none;border:none;cursor:pointer;text-decoration:underline">Clear</button>';
+    h+='</div>';
+  }else{
+    h+='<div style="display:flex;align-items:center;gap:8px"><span style="flex:1">'+(curAvg?'~'+curAvg+' days (estimated from your data)':'Not enough data — using default 4d')+'</span>';
+    h+='<button onclick="promptPeriodAvg()" style="font-size:10px;color:var(--cobalt);background:none;border:none;cursor:pointer;text-decoration:underline">Set manually</button>';
+    h+='</div>';
+  }
+  h+='</div>';
   if(todayFlow||todayPain||Object.values(todayProd).some(function(v){return v>0})){
     h+='<button class="db" onclick="clearPeriodToday()">Clear all for today</button>';
   }
@@ -3225,6 +3337,36 @@ function clearPeriodToday(){
   if(D.periodProducts)delete D.periodProducts[today];
   save();closeM();render();
   flash('Cleared');
+}
+/* Explicitly mark period as ended today. Stores date in D.periodEndDates so phase() knows. */
+function endPeriodToday(){
+  saveUndo();
+  var today=td();
+  if(!D.periodEndDates)D.periodEndDates={};
+  // Find which cycle this is — attach to current cycle key
+  var info=cInfo();
+  D.periodEndDates[info.c.key]=today;
+  save();closeM();render();
+  flash('✓ Period ended — moving to follicular phase');
+}
+/* Manually set typical period length */
+function setPeriodAvg(val){
+  if(val===null||val===''){
+    delete D.periodAvgManual;
+    save();closeM();openPeriodModal();
+    flash('Reset to auto-detected');
+    return;
+  }
+  var n=parseInt(val,10);
+  if(isNaN(n)||n<1||n>14){flash('Enter 1-14');return}
+  D.periodAvgManual=n;
+  save();closeM();openPeriodModal();
+  flash('Set to '+n+' days');
+}
+function promptPeriodAvg(){
+  var cur=avgPeriodLength()||4;
+  var val=prompt('Typical period length in days (1-14):',cur);
+  if(val!==null)setPeriodAvg(val);
 }
 
 function openOPKModal(){
@@ -4694,7 +4836,7 @@ function rFertile(info){
 function rPartner(info){
   var h='';
   var c=info.c;var ci=info.ci;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
-  var ph=phase(cd,info.av,info.ao,info.ho,info.od);
+  var ph=phase(cd,info.av,info.ao,info.ho,info.od,info.c);
   var fwStart=info.ao-5;var fwEnd=info.ao;
   var today=td();
   var sexLoggedToday=!!D.sex[today];
@@ -4839,7 +4981,7 @@ function rPartner(info){
 /* Build quick personal "where am I today" clipboard summary — terse, factual */
 function buildQuickStatus(){
   var info=cInfo();var c=info.c;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
-  var ph=phase(cd,info.av,info.ao,info.ho,info.od);
+  var ph=phase(cd,info.av,info.ao,info.ho,info.od,info.c);
   var today=td();
   var todayR=c.readings.find(function(x){return x.date===today});
   var cl=avgCL2();
@@ -4884,7 +5026,7 @@ function copyQuickStatus(){
 /* Build plain-text partner summary — used by copy/share buttons */
 function buildPartnerText(){
   var info=cInfo();var c=info.c;var cd=info.cd;var dpo=info.ho?(cd-info.od):null;
-  var ph=phase(cd,info.av,info.ao,info.ho,info.od);
+  var ph=phase(cd,info.av,info.ao,info.ho,info.od,info.c);
   var fwStart=info.ao-5;var fwEnd=info.ao;
   var lines=[];
 
@@ -6118,7 +6260,7 @@ function exportDoctorReport(){
   r+='CURRENT CYCLE STATUS\n';
   r+='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
   r+='Cycle day: '+info.cd+'\n';
-  r+='Phase: '+phase(info.cd,info.av,info.ao,info.ho,info.od).n+'\n';
+  r+='Phase: '+phase(info.cd,info.av,info.ao,info.ho,info.od,info.c).n+'\n';
   if(info.ho)r+='DPO: '+(info.cd-info.od)+'\n';
   r+='Period expected: ~'+fd(ad(info.c.key,info.av-1))+'\n';
   var op=ovProb(info.c,info.ci);if(op)r+='Ovulation confirmation: '+op.pct+'% — '+op.lbl+'\n';
