@@ -1182,6 +1182,148 @@ function buildAIContext(){
 }
 
 /* Call Gemini via the Cloudflare Worker. Returns a promise with the answer text or null on failure. */
+/* ===== OPK VISION ANALYSIS ===== */
+
+/* Convert selected image file to a base64 data URL. Resizes to ≤1024px to stay under 4MB. */
+function fileToBase64Resized(file){
+  return new Promise(function(resolve,reject){
+    var reader=new FileReader();
+    reader.onerror=function(){reject(new Error('Failed to read file'))};
+    reader.onload=function(e){
+      var img=new Image();
+      img.onerror=function(){reject(new Error('Failed to load image'))};
+      img.onload=function(){
+        var maxDim=1024;
+        var w=img.width;var hgt=img.height;
+        if(w>maxDim||hgt>maxDim){
+          var scale=maxDim/Math.max(w,hgt);
+          w=Math.round(w*scale);hgt=Math.round(hgt*scale);
+        }
+        var canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=hgt;
+        var ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,w,hgt);
+        var dataUrl=canvas.toDataURL('image/jpeg',0.85);
+        resolve(dataUrl);
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* Send image + prompt to the vision worker. Returns parsed analysis object. */
+function analyseOpkImage(dataUrl){
+  if(!D.aiCfg||!D.aiCfg.enabled||!D.aiCfg.url||!D.aiCfg.secret){
+    return Promise.reject(new Error('AI is not configured'));
+  }
+  var prompt='You are analysing an ovulation predictor kit (OPK) test strip image. Look at the two lines: the CONTROL line (always visible, top or left) and the TEST line (below or right of control).\n\n'+
+    'In OPKs, a POSITIVE result is when the test line is AS DARK AS OR DARKER THAN the control line. This indicates an LH surge and ovulation typically follows within 12-36 hours.\n\n'+
+    'Rate the test line intensity on a 1-5 scale:\n'+
+    '• 1 = Negative / no line or very faint\n'+
+    '• 2 = Faint line, clearly lighter than control\n'+
+    '• 3 = Medium line, about half the control darkness\n'+
+    '• 4 = Strong line, almost as dark as control (nearly positive)\n'+
+    '• 5 = Positive — test line is equal to or darker than control (LH SURGE)\n\n'+
+    'Return ONLY a JSON object with this exact structure, no other text:\n'+
+    '{\n'+
+    '  "intensity": <1-5 integer>,\n'+
+    '  "result": "<negative|low|medium|high|peak>",\n'+
+    '  "interpretation": "<1-2 sentence plain-English reading of what you see>",\n'+
+    '  "confidence": "<low|medium|high>",\n'+
+    '  "advice": "<1 sentence of actionable advice based on the result>"\n'+
+    '}\n\n'+
+    'If the image is NOT an OPK test (e.g. blurry, wrong object), return: {"intensity":0,"result":"unclear","interpretation":"Could not analyse","confidence":"low","advice":"Retake the photo with good lighting and a clear view of both lines"}';
+  return fetch(D.aiCfg.url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-App-Secret':D.aiCfg.secret},
+    body:JSON.stringify({prompt:prompt,image:dataUrl,jsonMode:true}),
+  }).then(function(r){
+    if(!r.ok)return r.json().then(function(j){throw new Error(j.error||('HTTP '+r.status))});
+    return r.json();
+  }).then(function(data){
+    if(data.error)throw new Error(data.error);
+    var txt=data.text||data.answer||'';
+    // Extract JSON from response (may have wrapping)
+    var jsonMatch=txt.match(/\{[\s\S]*\}/);
+    if(!jsonMatch)throw new Error('Could not parse AI response');
+    try{return JSON.parse(jsonMatch[0])}
+    catch(e){throw new Error('Invalid JSON from AI')}
+  });
+}
+
+/* Handle file selection from the OPK input */
+function handleOpkFile(input){
+  if(!input.files||!input.files[0])return;
+  var file=input.files[0];
+  if(file.size>10*1024*1024){flash('Image too large — keep under 10MB');return}
+  flash('Processing image…');
+  fileToBase64Resized(file).then(function(dataUrl){
+    // Store temporarily for preview
+    window._pendingOpkImage=dataUrl;
+    render();
+  }).catch(function(err){
+    flash('Error: '+err.message);
+  });
+}
+
+/* Trigger vision analysis on the pending image */
+function runOpkAnalysis(){
+  if(!window._pendingOpkImage){flash('No image selected');return}
+  var btn=document.getElementById('opkAnalyseBtn');
+  if(btn){btn.disabled=true;btn.textContent='🔍 Analysing…'}
+  analyseOpkImage(window._pendingOpkImage).then(function(result){
+    if(btn){btn.disabled=false;btn.textContent='🔍 Analyse OPK'}
+    window._opkAnalysisResult=result;
+    // Auto-log to today's OPK intensity if result is usable
+    if(result.intensity>=1&&result.intensity<=5){
+      saveUndo();
+      var today=td();
+      if(!D.sym[today])D.sym[today]=[];
+      // Map intensity to existing OPK symptom format
+      var opkLabel='OPK '+result.intensity+'/5';
+      // Remove any existing OPK logs from today
+      D.sym[today]=D.sym[today].filter(function(s){return s.indexOf('OPK ')!==0});
+      D.sym[today].push(opkLabel);
+      // Also set OPK positive flag if intensity >= 4
+      if(result.intensity>=4){
+        var info=cInfo();var c=info.c;
+        var todayR=c.readings.find(function(r){return r.date===today});
+        if(todayR)todayR.ov=true;
+        else{
+          var day=db(c.key,today)+1;
+          c.readings.push({day:day,date:today,ov:true});
+          c.readings.sort(function(a,b){return a.day-b.day});
+        }
+      }
+      // Store the photo (lightweight — just most recent 14 days)
+      D.opkPhotos[today]={
+        intensity:result.intensity,
+        result:result.result,
+        interpretation:result.interpretation,
+        loggedAt:Date.now(),
+      };
+      // Keep only last 14 days of photos to save storage
+      var cutoff=ad(today,-14);
+      Object.keys(D.opkPhotos).forEach(function(d){
+        if(d<cutoff)delete D.opkPhotos[d];
+      });
+      save();
+      flash('✓ Logged OPK '+result.intensity+'/5');
+    }
+    render();
+  }).catch(function(err){
+    if(btn){btn.disabled=false;btn.textContent='🔍 Analyse OPK'}
+    flash('Analysis failed: '+err.message);
+  });
+}
+
+function clearOpkImage(){
+  delete window._pendingOpkImage;
+  delete window._opkAnalysisResult;
+  render();
+}
+
 function askGemini(question,history){
   if(!D.aiCfg||!D.aiCfg.enabled||!D.aiCfg.url||!D.aiCfg.secret){
     return Promise.resolve(null);
@@ -1663,6 +1805,7 @@ function load(){
   if(!D.periodPain)D.periodPain={};  // Per-day pain: {date: 'mild'|'moderate'|'severe'}
   if(!D.periodProducts)D.periodProducts={};  // Per-day product counts: {date: {tampons, pads, cup, liners}}
   if(!D.periodEndDates)D.periodEndDates={};  // Per-cycle explicit period-end marker: {cycleKey: endDate}
+  if(!D.opkPhotos)D.opkPhotos={};  // OPK photo log: {date: {imageData, analysis, intensity, loggedAt}}
   if(!D.aiConvo)D.aiConvo=[];  // Active AI conversation: [{q, a, source, ts}, ...]
   if(!D.askLog)D.askLog=[];  // Question bank: [{ts, q, a, rating: 'up'|'down'|null, note: '', source: 'rules'|'ai'}]
   if(!D.aiCfg)D.aiCfg={url:'',secret:'',enabled:false};  // Gemini Worker config
@@ -4718,17 +4861,77 @@ function rFertile(info){
     h+='<div class="section"><div class="card" style="padding:14px 16px">';
     h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Live signals from your data</div>';
     fwa.signals.forEach(function(s){
-      var col=s.strength==='high'?'var(--burnt)':s.strength==='medium'?'var(--gold)':'var(--txt3)';
-      var bg=s.strength==='high'?'var(--burnt-bg)':s.strength==='medium'?'var(--butter-bg)':'var(--cream)';
+      // Color by source family (CM=blue, OPK=plum, temp=forest) with strength intensity
+      var srcCol,srcBg,srcBorder;
+      if(s.source==='cm'){srcCol='var(--cobalt)';srcBg='var(--cob-bg)';srcBorder='var(--cobalt)'}
+      else if(s.source==='opk'){srcCol='var(--plum)';srcBg='var(--lavender-bg)';srcBorder='var(--plum)'}
+      else if(s.source==='temp'){srcCol='var(--forest)';srcBg='var(--sage-bg)';srcBorder='var(--forest)'}
+      else{srcCol='var(--txt3)';srcBg='var(--cream)';srcBorder='var(--cream3)'}
+      var strengthCol=s.strength==='high'?'var(--burnt)':s.strength==='medium'?'var(--gold)':'var(--txt4)';
+      var strengthBg=s.strength==='high'?'var(--burnt-bg)':s.strength==='medium'?'var(--butter-bg)':'var(--cream2)';
+      var borderStyle=s.strength==='high'?'2px solid '+srcBorder:'1px solid '+srcBorder;
       var icon=s.source==='cm'?'💧':s.source==='opk'?'🩸':s.source==='temp'?'🌡️':'•';
-      h+='<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:'+bg+';border-radius:8px;margin-bottom:6px">';
-      h+='<span style="font-size:14px">'+icon+'</span>';
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:'+srcBg+';border-radius:10px;margin-bottom:6px;border-left:'+borderStyle+'">';
+      h+='<span style="font-size:16px">'+icon+'</span>';
       h+='<span style="flex:1;font-size:11px;color:var(--txt);font-weight:600">'+s.label+'</span>';
-      h+='<span style="font-size:9px;font-weight:700;color:'+col+';text-transform:uppercase;letter-spacing:.3px">'+s.strength+'</span>';
+      h+='<span style="font-size:9px;font-weight:700;color:'+strengthCol+';background:'+strengthBg+';padding:3px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:.3px">'+s.strength+'</span>';
       h+='</div>';
     });
     h+='</div></div>';
   }
+
+  // ===== OPK PHOTO ANALYSIS =====
+  h+='<div class="section"><div class="card" style="padding:14px 16px">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+  h+='<span style="font-size:10px;font-weight:700;color:var(--plum);text-transform:uppercase;letter-spacing:.6px">📷 OPK Photo Analysis</span>';
+  if(window._pendingOpkImage||window._opkAnalysisResult){
+    h+='<button onclick="clearOpkImage()" style="font-size:10px;color:var(--rose);background:none;border:none;cursor:pointer;text-decoration:underline">Clear</button>';
+  }
+  h+='</div>';
+  if(!window._pendingOpkImage&&!window._opkAnalysisResult){
+    // Upload / camera entry point
+    h+='<div style="padding:14px;background:var(--lavender-bg);border-radius:10px;text-align:center;border:1px dashed var(--plum)">';
+    h+='<div style="font-size:12px;color:var(--txt);margin-bottom:10px;line-height:1.4">Take or upload a photo of your OPK test strip. AI will read the line intensity and log it automatically.</div>';
+    h+='<input type="file" accept="image/*" capture="environment" id="opkFileInput" onchange="handleOpkFile(this)" style="display:none">';
+    h+='<button onclick="document.getElementById(\'opkFileInput\').click()" style="padding:12px 24px;background:var(--plum);color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">📸 Take or upload photo</button>';
+    h+='</div>';
+    // Show today's previously analysed photo if exists
+    var todayPhoto=D.opkPhotos&&D.opkPhotos[td()];
+    if(todayPhoto){
+      var intCol=todayPhoto.intensity>=4?'var(--burnt)':todayPhoto.intensity===3?'var(--gold)':'var(--txt3)';
+      h+='<div style="margin-top:10px;padding:10px;background:var(--cream);border-radius:8px;font-size:11px;color:var(--txt2)">';
+      h+='<strong>Today\'s analysed result:</strong> <span style="color:'+intCol+';font-weight:700">'+todayPhoto.intensity+'/5 ('+todayPhoto.result+')</span>';
+      h+='<div style="font-size:10px;color:var(--txt4);margin-top:3px">'+(todayPhoto.interpretation||'')+'</div>';
+      h+='</div>';
+    }
+  }else if(window._pendingOpkImage&&!window._opkAnalysisResult){
+    // Preview + analyse button
+    h+='<div style="text-align:center">';
+    h+='<img src="'+window._pendingOpkImage+'" style="max-width:100%;max-height:220px;border-radius:10px;border:2px solid var(--plum);margin-bottom:10px">';
+    h+='<button id="opkAnalyseBtn" onclick="runOpkAnalysis()" style="width:100%;padding:12px;background:var(--plum);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🔍 Analyse OPK</button>';
+    h+='<div style="font-size:10px;color:var(--txt4);margin-top:6px;font-style:italic">Uses one AI call. Will auto-log the result to today.</div>';
+    h+='</div>';
+  }else if(window._opkAnalysisResult){
+    // Show result
+    var r=window._opkAnalysisResult;
+    var resCol=r.intensity>=4?'var(--burnt)':r.intensity===3?'var(--gold)':r.intensity>=1?'var(--txt3)':'var(--rose)';
+    var resBg=r.intensity>=4?'var(--burnt-bg)':r.intensity===3?'var(--butter-bg)':r.intensity>=1?'var(--cream)':'var(--rose-bg)';
+    var resEmoji=r.intensity>=5?'🔥':r.intensity===4?'🌡️':r.intensity===3?'📈':r.intensity>=1?'💧':'❓';
+    h+='<div style="padding:16px;background:'+resBg+';border-radius:12px;border-left:3px solid '+resCol+'">';
+    h+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">';
+    h+='<span style="font-size:36px;flex-shrink:0">'+resEmoji+'</span>';
+    h+='<div style="flex:1">';
+    h+='<div style="font-size:16px;font-weight:800;color:'+resCol+';letter-spacing:-.2px">'+(r.intensity>=1?r.intensity+'/5':'?')+' — '+(r.result||'').toUpperCase()+'</div>';
+    h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px">Confidence: '+(r.confidence||'medium')+'</div>';
+    h+='</div></div>';
+    if(r.interpretation)h+='<div style="font-size:12px;color:var(--txt);line-height:1.5;margin-bottom:8px">'+r.interpretation+'</div>';
+    if(r.advice)h+='<div style="font-size:11px;color:var(--txt2);line-height:1.5;padding:8px 10px;background:var(--card);border-radius:8px;font-style:italic">💡 '+r.advice+'</div>';
+    h+='</div>';
+    h+='<div style="display:flex;gap:6px;margin-top:10px">';
+    h+='<button onclick="clearOpkImage()" style="flex:1;padding:10px;background:var(--cream);color:var(--txt);border:1px solid var(--cream3);border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">Take another</button>';
+    h+='</div>';
+  }
+  h+='</div></div>';
 
   // ===== THIS CYCLE TIMELINE =====
   h+='<div class="section"><div class="card" style="padding:14px 16px">';
@@ -4748,24 +4951,24 @@ function rFertile(info){
     var dHasFertileCM=dCM.indexOf('CM: Egg white')>-1||dCM.indexOf('CM: Watery')>-1;
     var dOPK=getOpkIntensity(dDate);
     var dIsToday=d===cd;
-    var bgCol=dIsPeak?'var(--burnt)':dInWindow?'var(--peach)':'var(--cream2)';
-    if(dIsToday)bgCol='var(--cobalt)';
+    var bgCol=dIsToday?'var(--cobalt)':dIsPeak?'var(--gold)':dInWindow?'var(--sage-bg)':'var(--cream2)';
+    var txtCol=dIsToday?'#fff':dIsPeak?'#fff':dInWindow?'var(--forest)':'var(--txt2)';
     h+='<div style="flex:0 0 auto;min-width:32px;display:flex;flex-direction:column;align-items:center;gap:2px">';
     h+='<div style="font-size:8px;color:var(--txt4);font-weight:600;height:10px;display:flex;align-items:center;gap:2px">';
     if(dHasFertileCM)h+='<span style="color:var(--forest)">💧</span>';
     if(dOPK!=null&&dOPK>=4)h+='<span style="color:var(--burnt)">🩸</span>';
     if(dSex)h+='<span style="color:var(--cobalt)">💕</span>';
     h+='</div>';
-    h+='<div style="width:28px;height:36px;background:'+bgCol+';border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:'+(dIsToday||dIsPeak?'800':'600')+';color:'+(dIsToday||dIsPeak?'#fff':'var(--txt2)')+(dIsToday?';box-shadow:0 0 0 2px var(--cobalt-bg,rgba(122,139,168,0.3))':'')+'">'+d+'</div>';
+    h+='<div style="width:28px;height:36px;background:'+bgCol+';border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:'+(dIsToday||dIsPeak?'800':'600')+';color:'+txtCol+(dIsToday?';box-shadow:0 0 0 2px var(--cobalt-bg,rgba(122,139,168,0.3))':dIsPeak?';box-shadow:0 0 0 2px rgba(197,168,104,.3)':'')+'">'+d+'</div>';
     if(dIsToday)h+='<div style="font-size:7px;font-weight:700;color:var(--cobalt);text-transform:uppercase">Today</div>';
-    else if(dIsPeak)h+='<div style="font-size:7px;font-weight:700;color:var(--burnt);text-transform:uppercase">OV</div>';
+    else if(dIsPeak)h+='<div style="font-size:7px;font-weight:700;color:var(--gold);text-transform:uppercase">OV</div>';
     else h+='<div style="height:8px"></div>';
     h+='</div>';
   }
   h+='</div>';
   h+='<div style="display:flex;gap:8px;justify-content:center;font-size:9px;color:var(--txt3);margin-top:10px;flex-wrap:wrap">';
-  h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--peach);border-radius:2px"></span> Window</span>';
-  h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--burnt);border-radius:2px"></span> Peak (OV)</span>';
+  h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--sage-bg);border-radius:2px;border:1px solid var(--forest)"></span> Window</span>';
+  h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--gold);border-radius:2px"></span> Peak (OV)</span>';
   h+='<span><span style="display:inline-block;width:8px;height:8px;background:var(--cobalt);border-radius:2px"></span> Today</span>';
   h+='<span>💕 Sex · 💧 Fertile CM · 🩸 OPK+</span>';
   h+='</div>';
@@ -4791,9 +4994,10 @@ function rFertile(info){
       h+='<div class="section"><div class="card" style="padding:14px 16px">';
       h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Your fertile pattern</div>';
       h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">';
-      h+='<div style="padding:10px;background:var(--cream);border-radius:10px;text-align:center"><div style="font-size:18px;font-weight:700;color:var(--cobalt)">Day '+avgOv+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">Avg OV</div></div>';
-      h+='<div style="padding:10px;background:var(--cream);border-radius:10px;text-align:center"><div style="font-size:18px;font-weight:700;color:var(--gold)">'+minOv+'-'+maxOv+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">Range</div></div>';
-      h+='<div style="padding:10px;background:var(--cream);border-radius:10px;text-align:center"><div style="font-size:14px;font-weight:700;color:'+predCol+'">'+predictability+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">SD ±'+sd.toFixed(1)+'d</div></div>';
+      h+='<div style="padding:10px;background:var(--cob-bg);border-radius:10px;text-align:center;border:1px solid var(--cobalt)"><div style="font-size:18px;font-weight:700;color:var(--cobalt)">Day '+avgOv+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">Avg OV</div></div>';
+      h+='<div style="padding:10px;background:var(--butter-bg);border-radius:10px;text-align:center;border:1px solid var(--gold)"><div style="font-size:18px;font-weight:700;color:var(--gold)">'+minOv+'-'+maxOv+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">Range</div></div>';
+      var predBg=sd<=1.5?'var(--sage-bg)':sd<=2.5?'var(--butter-bg)':sd<=4?'var(--peach-bg)':'var(--rose-bg)';
+      h+='<div style="padding:10px;background:'+predBg+';border-radius:10px;text-align:center;border:1px solid '+predCol+'"><div style="font-size:14px;font-weight:700;color:'+predCol+'">'+predictability+'</div><div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-top:2px">SD ±'+sd.toFixed(1)+'d</div></div>';
       h+='</div>';
 
       // Per-cycle bars showing OV day
