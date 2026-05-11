@@ -323,6 +323,15 @@ textarea{resize:vertical;min-height:56px}
 .qs-chip:hover{background:var(--cream2)}
 .qs-chip.on{color:#fff;box-shadow:none;border-color:transparent}
 .qs-chip.on-s{background:var(--burnt)}.qs-chip.on-m{background:var(--cobalt)}.qs-chip.on-c{background:var(--gold)}
+.qs-chip.on-good{background:var(--forest)}.qs-chip.on-ok{background:var(--gold)}.qs-chip.on-poor{background:var(--burnt)}.qs-chip.on-broken{background:var(--rose)}
+/* Today's temp pill in header (feature #5) */
+.hdr-temp-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:14px;background:var(--burnt-bg);color:var(--burnt);font-size:11px;font-weight:700;margin-left:8px}
+.hdr-temp-pill .hdr-temp-dot{width:6px;height:6px;border-radius:50%;background:var(--burnt)}
+/* Cycle phase indicator (feature #2) */
+.phase-indicator{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.phase-dot{width:7px;height:7px;border-radius:50%}
+/* Swipeable cycle area (feature #4) */
+.cyc-swipe{touch-action:pan-y;-webkit-user-select:none;user-select:none}
 /* Streak */
 .streak{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--burnt);padding:2px 7px;border-radius:8px;background:var(--burnt-bg)}
 /* Temp range bar */
@@ -1888,6 +1897,66 @@ function phase(cd,av,ao,ho,od,c){
   return{n:ho?"Luteal":"Luteal (est.)",c:"var(--plum)",bg:"var(--plum-bg)",d:"Post-ovulation — progesterone keeps temps up."};
 }
 function pats(){var f={},l={};D.cycles.forEach(function(c,i){if(!isExcl(i)){var od2=ovDay(c)||aod();c.readings.forEach(function(r){var all=(D.sym[r.date]||[]).concat(D.mood[r.date]||[]);var b=r.day<=od2?f:l;all.forEach(function(s){b[s]=(b[s]||0)+1})})}});return{f:f,l:l}}
+
+/* === Phase-pattern detection (feature #3) ===
+   Looks at which symptoms have historically clustered in the current phase
+   across previous cycles. Returns top patterns with confidence + due-today flag. */
+function phasePatternDetect(info){
+  var ph=phase(info.cd,info.av,info.ao,info.ho,info.od,info.c);
+  var phaseName=ph.n.replace(' (est.)','');
+  // Bucket each (symptom, phase) tuple — count cycles it appeared in
+  var bucket={};   // bucket[phase][sym] = {cycles: Set, days: count, lastSeen}
+  var phaseCycles={};  // phase -> number of cycles where we have data
+  var seenInPhase={};  // tracks per-cycle whether we already counted that sym
+  D.cycles.forEach(function(c,i){
+    if(isExcl(i))return;
+    if(i===info.ci)return;  // exclude current cycle so we predict, not summarize
+    var od=ovDay(c)||aod();
+    var clen=c.length||info.av;
+    var phasesSeen={};
+    c.readings.forEach(function(r){
+      var p;
+      if(isPeriodActive(r.day,c))p='Menstrual';
+      else if(r.day<od-1)p='Follicular';
+      else if(r.day<=od+1)p='Ovulatory';
+      else p='Luteal';
+      phasesSeen[p]=true;
+      if(!bucket[p])bucket[p]={};
+      var combo=(D.sym[r.date]||[]).concat(D.mood[r.date]||[]);
+      var seenKey=i+':'+p;
+      if(!seenInPhase[seenKey])seenInPhase[seenKey]={};
+      combo.forEach(function(s){
+        if(!bucket[p][s])bucket[p][s]={cycles:0,days:0};
+        bucket[p][s].days++;
+        if(!seenInPhase[seenKey][s]){seenInPhase[seenKey][s]=true;bucket[p][s].cycles++}
+      });
+    });
+    Object.keys(phasesSeen).forEach(function(p){phaseCycles[p]=(phaseCycles[p]||0)+1});
+  });
+  var inCurrent=bucket[phaseName]||{};
+  var totalCycles=phaseCycles[phaseName]||0;
+  if(totalCycles<2)return{phaseName:phaseName,totalCycles:totalCycles,patterns:[]};
+  // Find symptoms that show up in ≥40% of historical cycles in this phase
+  var patterns=[];
+  Object.keys(inCurrent).forEach(function(s){
+    var freq=inCurrent[s].cycles/totalCycles;
+    if(freq>=0.4){
+      // Check if logged today
+      var loggedToday=((D.sym[td()]||[]).concat(D.mood[td()]||[])).indexOf(s)>-1;
+      patterns.push({
+        sym:s,
+        freq:freq,
+        cycles:inCurrent[s].cycles,
+        total:totalCycles,
+        loggedToday:loggedToday,
+        days:inCurrent[s].days
+      });
+    }
+  });
+  patterns.sort(function(a,b){return b.freq-a.freq});
+  return{phaseName:phaseName,totalCycles:totalCycles,patterns:patterns};
+}
+
 function timeline(){var n=[];Object.keys(D.notes).forEach(function(d){if(!D.notes[d])return;var cy=null,cd=null;D.cycles.forEach(function(c,i){var end=D.cycles[i+1]?D.cycles[i+1].key:"9999";if(d>=c.key&&d<end){cy=i+1;cd=db(c.key,d)+1}});n.push({d:d,cy:cy,cd:cd,t:D.notes[d]})});return n.sort(function(a,b){return b.d.localeCompare(a.d)})}
 function togExcl(i){if(!D.excl)D.excl={};if(D.excl[i])delete D.excl[i];else D.excl[i]=true;save();render()}
 function setMyOv(ci,day){if(!D.myOv)D.myOv={};D.myOv[ci]=parseInt(day);save();render();flash("OV estimate set to Day "+day)}
@@ -2050,13 +2119,20 @@ function render(){
       else if(dpo2>=10)wbMsg='Testing window · '+dpo2+' DPO';
       else wbMsg=dpo2+' DPO · '+ph.n;
     } else wbMsg='Day '+info.cd+' · '+ph.n;
+    // Today's temp pill content (feature #5)
+    var tempPillHtml='';
+    if(todayR&&todayR.temp!=null){
+      var todayTimeH=D.ttime&&D.ttime[td()]||'';
+      tempPillHtml='<span class="hdr-temp-pill"><span class="hdr-temp-dot"></span>'+todayR.temp.toFixed(2)+'°'+(todayTimeH?' · '+todayTimeH:'')+'</span>';
+    }
   }
 
   if(showMorning){
+    var phaseInd2='<span class="phase-indicator" style="background:'+ph.bg+';color:'+ph.c+'"><span class="phase-dot" style="background:'+ph.c+'"></span>'+ph.n+'</span>';
     h+='<div class="morning-wrap">';
     h+='<div style="display:flex;justify-content:space-between;align-items:flex-start">';
     h+='<div><div class="morning-hi">'+hiMsg+'</div>';
-    h+='<div style="font-size:12px;color:var(--txt3);margin-top:3px">Day '+info.cd+' · '+ph.n+'</div></div>';
+    h+='<div style="font-size:12px;color:var(--txt3);margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+phaseInd2+'<span>Day '+info.cd+'</span></div></div>';
     h+='<div class="hdr-btns"><button class="hdr-btn" onclick="toggleDark()">'+(D.darkMode?'Light':'Dark')+'</button><button class="hdr-btn" onclick="backup()">Save</button><button class="hdr-btn" onclick="document.getElementById(\'hdrRest\').click()">Load</button>';
     h+='<input type="file" id="hdrRest" style="display:none" accept=".json" onchange="restore(this)"></div></div>';
     h+='<div style="font-size:13px;color:var(--txt2);margin:16px 0 12px;line-height:1.6;font-weight:400">'+morningMsg+'</div>';
@@ -2065,7 +2141,9 @@ function render(){
     h+='<div class="morning-temp"><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="mornT" placeholder="3650" oninput="autoDecimal(this)"><input type="time" id="mornTime" style="padding:10px 8px;border:1px solid var(--cream3);border-radius:12px;font-size:13px;background:var(--card);color:var(--txt);outline:none;width:90px;text-align:center" value="'+(new Date().getHours().toString().padStart(2,'0')+':'+new Date().getMinutes().toString().padStart(2,'0'))+'"><button onclick="quickLog3()">Log</button></div>';
     h+='</div>';
   } else {
-    h+='<div class="hdr-row"><div><h1>'+hiMsg+'</h1><div class="hdr-sub">'+wbMsg+'</div></div>';
+    // Phase indicator dot (feature #2)
+    var phaseInd='<span class="phase-indicator" style="background:'+ph.bg+';color:'+ph.c+'"><span class="phase-dot" style="background:'+ph.c+'"></span>'+ph.n+'</span>';
+    h+='<div class="hdr-row"><div style="flex:1;min-width:0"><h1 style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">'+hiMsg+(tempPillHtml||'')+'</h1><div class="hdr-sub" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px">'+phaseInd+'<span>'+wbMsg+'</span></div></div>';
     h+='<div class="hdr-btns"><button class="hdr-btn" onclick="toggleDark()">'+(D.darkMode?'Light':'Dark')+'</button><button class="hdr-btn" onclick="backup()">Save</button><button class="hdr-btn" onclick="document.getElementById(\'hdrRest\').click()">Load</button>';
     h+='<input type="file" id="hdrRest" style="display:none" accept=".json" onchange="restore(this)"></div></div>';
   }
@@ -2361,6 +2439,39 @@ function rToday(info){  var h='';
   h+='<button onclick="copyQuickStatus()" style="margin-top:10px;width:100%;padding:9px;background:var(--cream);color:var(--txt3);border:1px solid var(--cream3);border-radius:10px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">📋 Copy where I am today</button>';
   h+='</div></div>';
 
+  // === PHASE PATTERN INSIGHT (feature #3) ===
+  // Surface symptoms that have historically clustered in your current phase
+  var phPat=phasePatternDetect(info);
+  if(phPat.patterns.length>=2&&phPat.totalCycles>=2){
+    var loggedToday=phPat.patterns.filter(function(p){return p.loggedToday}).length;
+    var notLoggedYet=phPat.patterns.filter(function(p){return !p.loggedToday});
+    h+='<div class="section"><div class="card" style="padding:14px 16px;background:'+ph.bg+';border-left:3px solid '+ph.c+'">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+    h+='<span style="font-size:10px;font-weight:700;color:'+ph.c+';text-transform:uppercase;letter-spacing:.6px">📊 Your '+phPat.phaseName.toLowerCase()+' pattern</span>';
+    h+='<span style="font-size:9px;color:var(--txt4);font-weight:600">'+phPat.totalCycles+' cycle'+(phPat.totalCycles===1?'':'s')+' tracked</span>';
+    h+='</div>';
+    h+='<div style="font-size:11px;color:var(--txt2);line-height:1.5;margin-bottom:8px">Across your history, these tend to show up in '+phPat.phaseName.toLowerCase()+':</div>';
+    h+='<div style="display:flex;flex-direction:column;gap:5px">';
+    phPat.patterns.slice(0,5).forEach(function(p){
+      var pct=Math.round(p.freq*100);
+      var pctCol=pct>=70?ph.c:pct>=55?'var(--burnt)':'var(--txt3)';
+      h+='<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--card);border-radius:10px'+(p.loggedToday?';border:1.5px solid '+ph.c:'')+'">';
+      h+='<span style="font-size:11px;font-weight:600;color:var(--txt);flex:1">'+fmtSym(p.sym,td())+'</span>';
+      if(p.loggedToday)h+='<span style="font-size:9px;font-weight:700;color:'+ph.c+';padding:2px 6px;background:'+ph.bg+';border-radius:6px">✓ logged today</span>';
+      h+='<span style="font-size:10px;font-weight:700;color:'+pctCol+';min-width:40px;text-align:right">'+pct+'%</span>';
+      h+='</div>';
+    });
+    h+='</div>';
+    // Helpful summary line
+    if(loggedToday===0&&notLoggedYet.length>=2){
+      var tops=notLoggedYet.slice(0,2).map(function(p){return fmtSym(p.sym,td()).toLowerCase()}).join(' or ');
+      h+='<div style="margin-top:8px;font-size:10px;color:var(--txt3);font-style:italic;line-height:1.4">If you feel '+tops+' today, it tracks with your usual pattern. Worth logging.</div>';
+    } else if(loggedToday>0){
+      h+='<div style="margin-top:8px;font-size:10px;color:var(--txt3);font-style:italic;line-height:1.4">Today\'s symptoms match your usual '+phPat.phaseName.toLowerCase()+' pattern.</div>';
+    }
+    h+='</div></div>';
+  }
+
   // CIRCULAR CYCLE VIEW
   h+='<div class="section"><div class="card" style="padding:14px 10px 10px;text-align:center">';
   h+='<canvas id="circC" width="520" height="520" style="width:min(260px,70vw);height:min(260px,70vw);margin:0 auto;display:block"></canvas>';
@@ -2427,7 +2538,7 @@ function rToday(info){  var h='';
     var wTrend=wYest?(todayWrist-wYest):null;
     h+='<div style="font-size:9px;color:var(--txt4)">Wrist'+(wTrend!=null?' <span style="color:'+(wTrend>=0?'var(--burnt)':'var(--cobalt)')+';">'+(wTrend>=0?'↑':'↓')+Math.abs(wTrend).toFixed(2)+'°</span>':'')+'</div></div>'}
     if(todaySleep){var slCol=todaySleep==='Good'?'var(--forest)':todaySleep==='OK'?'var(--gold)':'var(--rose)';
-    var slHrs=D.sleepTimes&&D.sleepTimes[td()]?calcSleepHrs(D.sleepTimes[td()].asleep,D.sleepTimes[td()].woke):null;
+    var slHrs=D.sleepTimes&&D.sleepTimes[td()]?calcSleepHrs(D.sleepTimes[td()].asleep,D.sleepTimes[td()].woke,D.sleepTimes[td()].awake):null;
     h+='<div><div style="font-size:13px;font-weight:700;color:'+slCol+'">'+todaySleep+'</div>';
     h+='<div style="font-size:9px;color:var(--txt4)">'+(slHrs?slHrs+'h':'Sleep')+'</div></div>'}
     h+='</div>';
@@ -2439,7 +2550,7 @@ function rToday(info){  var h='';
       h+='<input type="time" id="qlTimePost" style="padding:4px 8px;border:1.5px solid var(--cream3);border-radius:8px;font-size:12px;background:var(--card);color:var(--txt);outline:none">';
       h+='<button style="font-size:10px;font-weight:600;color:var(--cobalt);background:none" onclick="saveTimePost()">Save</button></div>';
     }
-    // Show missing fields stacked
+    // Wrist input (still missing)
     if(!todayWrist){
       h+='<div style="margin-top:8px"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Wrist temp <span style="color:var(--txt5)">(from Watch ± baseline)</span></div>';
       h+='<div style="display:flex;gap:4px;align-items:center">';
@@ -2447,28 +2558,14 @@ function rToday(info){  var h='';
       h+='<input type="text" inputmode="decimal" id="qlW" placeholder="0.50" style="flex:1;padding:10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:16px;font-weight:700;background:var(--card);color:var(--txt);text-align:center;outline:none">';
       h+='<button onclick="logWrist()" style="padding:10px 16px;border-radius:10px;font-size:12px;font-weight:700;background:var(--cobalt);color:#fff">Log</button></div></div>';
     }
-    if(!todaySleep){
-      h+='<div style="margin-top:8px"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Sleep quality</div>';
-      h+='<div class="qs-chips" style="gap:6px">'+["Good","OK","Poor","Broken"].map(function(s){return '<button class="qs-chip" style="padding:6px 12px" onclick="logSleep(\''+s+'\')">'+s+'</button>'}).join('')+'</div></div>';
-    }
-    // Sleep times
-    var slTimes=D.sleepTimes&&D.sleepTimes[td()];
-    if(!slTimes){
-      h+='<div style="margin-top:10px">';
-      h+='<div style="font-size:9px;color:var(--txt4);margin-bottom:6px">Sleep times</div>';
-      h+='<div style="margin-bottom:8px">';
-      h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--txt3);width:75px">Fell asleep</span><input type="time" id="slAsleep" value="'+D.bedtime+'" style="flex:1;padding:12px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
-      h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--txt3);width:75px">Woke up</span><input type="time" id="slWoke" value="'+D.waketime+'" style="flex:1;padding:12px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
-      h+='</div>';
-      h+='<button onclick="logSleepTimes()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--cobalt);color:#fff">Log sleep</button>';
-      h+='</div>';
-    } else {
-      var hrs=calcSleepHrs(slTimes.asleep,slTimes.woke);
-      h+='<div style="margin-top:6px;display:flex;gap:10px;align-items:center">';
-      h+='<div style="font-size:10px;color:var(--txt3)">🛏 '+slTimes.asleep+' → '+slTimes.woke+'</div>';
-      h+='<div style="font-size:12px;font-weight:700;color:var(--txt)">'+hrs+'h</div>';
-      h+='<button style="font-size:9px;color:var(--cobalt);background:none" onclick="clearSleepTimes()">Edit</button></div>';
-    }
+    // Sleep quality — always show chips, highlight current (fixes #3)
+    h+=renderSleepQualityChips(todaySleep);
+    // Sleep times block (Apple Health style with awake periods)
+    h+=renderSleepTimesBlock();
+    // Quick meds toggles (feature #6)
+    h+=renderQuickMeds();
+    // Today's notes box (feature #7 — replaces journal in quick log)
+    h+=renderQuickNotes();
   } else {
     // Not logged
     h+='<div class="fl">Temperature</div>';
@@ -2481,26 +2578,14 @@ function rToday(info){  var h='';
     h+='<button onclick="wristSign()" id="wSign" style="width:40px;height:40px;border-radius:10px;font-size:20px;font-weight:700;background:var(--cream3);color:var(--txt)">+</button>';
     h+='<input type="text" inputmode="decimal" id="qlW" placeholder="0.50" style="flex:1;padding:10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:16px;font-weight:700;background:var(--card);color:var(--txt);text-align:center;outline:none">';
     h+='<button onclick="logWrist()" style="padding:10px 16px;border-radius:10px;font-size:12px;font-weight:700;background:var(--cobalt);color:#fff">Log</button></div></div>';
-    h+='<div style="margin-top:8px"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Sleep quality</div>';
-    h+='<div class="qs-chips" style="gap:6px">'+["Good","OK","Poor","Broken"].map(function(s){return '<button class="qs-chip" style="padding:6px 12px" onclick="logSleep(\''+s+'\')">'+s+'</button>'}).join('')+'</div></div>';
-    // Sleep times
-    var slTimes2=D.sleepTimes&&D.sleepTimes[td()];
-    if(!slTimes2){
-      h+='<div style="margin-top:10px">';
-      h+='<div style="font-size:9px;color:var(--txt4);margin-bottom:6px">Sleep times</div>';
-      h+='<div style="margin-bottom:8px">';
-      h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--txt3);width:75px">Fell asleep</span><input type="time" id="slAsleep2" value="'+D.bedtime+'" style="flex:1;padding:12px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
-      h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--txt3);width:75px">Woke up</span><input type="time" id="slWoke2" value="'+D.waketime+'" style="flex:1;padding:12px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
-      h+='</div>';
-      h+='<button onclick="logSleepTimes2()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--cobalt);color:#fff">Log sleep</button>';
-      h+='</div>';
-    } else {
-      var hrs2=calcSleepHrs(slTimes2.asleep,slTimes2.woke);
-      h+='<div style="margin-top:6px;display:flex;gap:10px;align-items:center">';
-      h+='<div style="font-size:10px;color:var(--txt3)">🛏 '+slTimes2.asleep+' → '+slTimes2.woke+'</div>';
-      h+='<div style="font-size:12px;font-weight:700;color:var(--txt)">'+hrs2+'h</div>';
-      h+='<button style="font-size:9px;color:var(--cobalt);background:none" onclick="clearSleepTimes()">Edit</button></div>';
-    }
+    // Sleep quality — always show chips, highlight current (fixes #3)
+    h+=renderSleepQualityChips(todaySleep);
+    // Sleep times block (Apple Health style with awake periods)
+    h+=renderSleepTimesBlock();
+    // Quick meds toggles (feature #6)
+    h+=renderQuickMeds();
+    // Today's notes box (feature #7 — replaces journal in quick log)
+    h+=renderQuickNotes();
   }
   h+='<div style="margin-top:10px"><div class="fl">Cervical mucus</div>';
   h+='<div class="qs-chips">';
@@ -2837,34 +2922,167 @@ function logWrist(){saveUndo();var inp=document.getElementById('qlW');if(!inp||!
   flash("Wrist "+t.toFixed(2)+"° ("+(dev>=0?"+":"")+dev.toFixed(2)+")",true)}
 function logSleep(q){saveUndo();D.sleep[td()]=q;save();render();flash("Sleep: "+q,true)}
 function logSleepHrs(){var el=document.getElementById('qlSH');if(!el||!el.value)return;var h=parseFloat(el.value);if(isNaN(h)||h<0||h>14){flash("Enter 0-14");return}if(!D.sleepHrs)D.sleepHrs={};D.sleepHrs[td()]=h;save();render();flash(h+"h logged",true)}
-function calcSleepHrs(asleep,woke){
+function calcSleepHrs(asleep,woke,awakePeriods){
   var ap=asleep.split(':'),wp=woke.split(':');
   var aM=parseInt(ap[0])*60+parseInt(ap[1]),wM=parseInt(wp[0])*60+parseInt(wp[1]);
   var diff=wM-aM;if(diff<0)diff+=1440;
+  // Subtract awake time
+  if(awakePeriods&&awakePeriods.length){
+    var awakeTotal=awakePeriods.reduce(function(a,p){return a+(p.duration||0)},0);
+    diff=Math.max(0,diff-awakeTotal);
+  }
   return(Math.round(diff/6)/10).toFixed(1);
 }
 function logSleepTimes(){
   var a=document.getElementById('slAsleep'),w=document.getElementById('slWoke');
   if(!a||!w||!a.value||!w.value){flash("Set both times");return}
   saveUndo();if(!D.sleepTimes)D.sleepTimes={};
-  D.sleepTimes[td()]={asleep:a.value,woke:w.value};
+  var existing=D.sleepTimes[td()]||{};
+  D.sleepTimes[td()]={asleep:a.value,woke:w.value,awake:existing.awake||[]};
   D.bedtime=a.value;D.waketime=w.value;
-  var hrs=calcSleepHrs(a.value,w.value);
+  var hrs=calcSleepHrs(a.value,w.value,D.sleepTimes[td()].awake);
   if(!D.sleepHrs)D.sleepHrs={};D.sleepHrs[td()]=parseFloat(hrs);
   save();render();flash(hrs+"h sleep logged",true);
 }
-function logSleepTimes2(){
-  var a=document.getElementById('slAsleep2'),w=document.getElementById('slWoke2');
-  if(!a||!w||!a.value||!w.value){flash("Set both times");return}
-  saveUndo();if(!D.sleepTimes)D.sleepTimes={};
-  D.sleepTimes[td()]={asleep:a.value,woke:w.value};
-  D.bedtime=a.value;D.waketime=w.value;
-  var hrs=calcSleepHrs(a.value,w.value);
-  if(!D.sleepHrs)D.sleepHrs={};D.sleepHrs[td()]=parseFloat(hrs);
-  save();render();flash(hrs+"h sleep logged",true);
-}
+function logSleepTimes2(){logSleepTimes()}  // legacy fallback
 function clearSleepTimes(){saveUndo();if(D.sleepTimes)delete D.sleepTimes[td()];if(D.sleepHrs)delete D.sleepHrs[td()];save();render()}
 function saveTimePost(){var el=document.getElementById('qlTimePost');if(!el||!el.value)return;if(!D.ttime)D.ttime={};D.ttime[td()]=el.value;save();render();flash("Time saved")}
+
+/* === Sleep quality chips — always visible, tappable to change (fixes #3) === */
+function renderSleepQualityChips(current){
+  var h='<div style="margin-top:10px"><div style="font-size:9px;color:var(--txt4);margin-bottom:5px">Sleep quality'+(current?' · tap to change':'')+'</div>';
+  h+='<div class="qs-chips" style="gap:6px">';
+  ["Good","OK","Poor","Broken"].forEach(function(s){
+    var on=current===s;
+    var colorClass=s==='Good'?'on-good':s==='OK'?'on-ok':s==='Poor'?'on-poor':'on-broken';
+    h+='<button class="qs-chip'+(on?' on '+colorClass:'')+'" style="padding:6px 12px" onclick="setSleep(\''+s+'\')">'+s+'</button>';
+  });
+  if(current)h+='<button class="qs-chip" style="padding:6px 12px;color:var(--txt4)" onclick="clearSleep()">Clear</button>';
+  h+='</div></div>';
+  return h;
+}
+function setSleep(q){
+  saveUndo();
+  if(D.sleep[td()]===q)delete D.sleep[td()];
+  else D.sleep[td()]=q;
+  save();render();
+  flash(D.sleep[td()]?"Sleep: "+q:"Sleep cleared",true);
+}
+function clearSleep(){saveUndo();delete D.sleep[td()];save();render();flash("Sleep cleared",true)}
+
+/* === Sleep times block — Apple Health style with awake periods (feature #1) === */
+function renderSleepTimesBlock(){
+  var slTimes=D.sleepTimes&&D.sleepTimes[td()];
+  var h='<div style="margin-top:10px">';
+  h+='<div style="font-size:9px;color:var(--txt4);margin-bottom:6px">Sleep times</div>';
+  if(!slTimes){
+    h+='<div style="margin-bottom:8px">';
+    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--txt3);width:75px">Fell asleep</span><input type="time" id="slAsleep" value="'+D.bedtime+'" style="flex:1;padding:12px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--txt3);width:75px">Woke up</span><input type="time" id="slWoke" value="'+D.waketime+'" style="flex:1;padding:12px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+    h+='</div>';
+    h+='<button onclick="logSleepTimes()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--cobalt);color:#fff">Log sleep</button>';
+  } else {
+    var hrs=calcSleepHrs(slTimes.asleep,slTimes.woke,slTimes.awake);
+    var awakeMin=(slTimes.awake||[]).reduce(function(a,p){return a+(p.duration||0)},0);
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--cream);border-radius:12px">';
+    h+='<div><div style="display:flex;gap:10px;align-items:baseline"><span style="font-size:18px;font-weight:800;color:var(--txt)">'+hrs+'h</span><span style="font-size:11px;color:var(--txt3)">🛏 '+slTimes.asleep+' → '+slTimes.woke+'</span></div>';
+    if(awakeMin>0)h+='<div style="font-size:10px;color:var(--burnt);margin-top:2px;font-weight:600">Awake '+awakeMin+' min · '+(slTimes.awake||[]).length+' '+((slTimes.awake||[]).length===1?'period':'periods')+'</div>';
+    h+='</div>';
+    h+='<div style="display:flex;gap:6px"><button style="font-size:10px;font-weight:700;color:var(--cobalt);background:var(--card);padding:6px 10px;border-radius:8px;border:1px solid var(--cream3)" onclick="openAwakeModal()">+ Awake</button>';
+    h+='<button style="font-size:9px;color:var(--txt4);background:none;border:none;cursor:pointer" onclick="clearSleepTimes()">Edit</button></div>';
+    h+='</div>';
+    // Awake periods list
+    if(slTimes.awake&&slTimes.awake.length){
+      h+='<div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">';
+      slTimes.awake.forEach(function(p,i){
+        h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--burnt-bg);border-radius:8px">';
+        h+='<span style="font-size:10px;color:var(--burnt);font-weight:600">⏰ '+(p.start||'—')+' for '+p.duration+' min</span>';
+        if(p.note)h+='<span style="font-size:10px;color:var(--txt3);font-style:italic;flex:1;text-align:center">'+p.note+'</span>';
+        h+='<button style="font-size:9px;color:var(--txt4);background:none;border:none;cursor:pointer" onclick="removeAwakePeriod('+i+')">×</button>';
+        h+='</div>';
+      });
+      h+='</div>';
+    }
+  }
+  h+='</div>';
+  return h;
+}
+function openAwakeModal(){
+  var nowH=new Date().getHours().toString().padStart(2,'0');
+  var nowM=new Date().getMinutes().toString().padStart(2,'0');
+  var h='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl"><div class="mt">Awake period</div>';
+  h+='<div class="fr"><div class="fl">Started at</div><input class="fi" type="time" id="awS" value="'+nowH+':'+nowM+'"></div>';
+  h+='<div class="fr"><div class="fl">Duration (minutes)</div><input class="fi" type="number" id="awD" placeholder="15" min="1" max="240"></div>';
+  h+='<div class="fr"><div class="fl">Note (optional)</div><input class="fi" id="awN" placeholder="loo, bad dream, hot..."></div>';
+  h+='<div class="br"><button class="cb" onclick="closeM()">Cancel</button><button class="sb" onclick="saveAwakePeriod()">Add</button></div></div></div>';
+  var div=document.createElement('div');div.id='mdl';div.innerHTML=h;document.body.appendChild(div);
+}
+function saveAwakePeriod(){
+  var s=document.getElementById('awS').value;
+  var d=parseInt(document.getElementById('awD').value);
+  var n=document.getElementById('awN').value.trim();
+  if(!s||!d||isNaN(d)){flash("Need time and duration");return}
+  saveUndo();
+  if(!D.sleepTimes)D.sleepTimes={};
+  if(!D.sleepTimes[td()]){
+    // Create from defaults
+    D.sleepTimes[td()]={asleep:D.bedtime,woke:D.waketime,awake:[]};
+  }
+  if(!D.sleepTimes[td()].awake)D.sleepTimes[td()].awake=[];
+  D.sleepTimes[td()].awake.push({start:s,duration:d,note:n});
+  save();closeM();render();flash("Awake period added",true);
+}
+function removeAwakePeriod(i){
+  saveUndo();
+  if(D.sleepTimes&&D.sleepTimes[td()]&&D.sleepTimes[td()].awake){
+    D.sleepTimes[td()].awake.splice(i,1);
+    save();render();flash("Removed",true);
+  }
+}
+
+/* === Quick meds (feature #6) === */
+function renderQuickMeds(){
+  var md=D.meds[td()]||[];
+  var presets=["Prenatal","CoQ10","Vitamin D","Folic acid"];
+  var h='<div style="margin-top:10px"><div style="font-size:9px;color:var(--txt4);margin-bottom:5px">Quick meds</div>';
+  h+='<div class="qs-chips" style="gap:6px">';
+  presets.forEach(function(m){
+    var on=md.indexOf(m)>-1;
+    h+='<button class="qs-chip'+(on?' on on-c':'')+'" style="padding:6px 12px" onclick="toggleQuickMed(\''+m+'\')">'+(on?'✓ ':'')+m+'</button>';
+  });
+  h+='<button class="qs-chip" style="padding:6px 12px;color:var(--txt4)" onclick="openMeds()">More…</button>';
+  h+='</div></div>';
+  return h;
+}
+function toggleQuickMed(m){
+  saveUndo();
+  if(!D.meds[td()])D.meds[td()]=[];
+  var i=D.meds[td()].indexOf(m);
+  if(i>-1)D.meds[td()].splice(i,1);
+  else D.meds[td()].push(m);
+  if(D.meds[td()].length===0)delete D.meds[td()];
+  save();render();flash(i>-1?m+' removed':m+' added',true);
+}
+
+/* === Quick notes (feature #7 — replaces journal in quick log) === */
+function renderQuickNotes(){
+  var nt=D.notes[td()]||'';
+  var h='<div style="margin-top:10px"><div style="font-size:9px;color:var(--txt4);margin-bottom:5px">Notes</div>';
+  h+='<textarea id="qlNotes" placeholder="How are you feeling today? Any observations…" rows="2" style="width:100%;padding:10px 12px;border:1.5px solid var(--cream3);border-radius:12px;font-size:13px;background:var(--card);color:var(--txt);outline:none;font-family:inherit;resize:vertical;min-height:50px" onblur="saveQuickNote()">'+nt+'</textarea>';
+  h+='</div>';
+  return h;
+}
+function saveQuickNote(){
+  var el=document.getElementById('qlNotes');if(!el)return;
+  var v=el.value.trim();
+  if(v===(D.notes[td()]||''))return;  // no change
+  saveUndo();
+  if(v)D.notes[td()]=v;
+  else delete D.notes[td()];
+  save();
+  // Don't full re-render — just flash so cursor isn't lost
+  flash("Note saved",true);
+}
 
 /* Symptom knowledge base — keeping the full SKB from original */
 var SKB={"Cramps":{menstrual:"Ugh, cramps. Your uterus is doing its thing — squeezing to shed the lining. Totally normal. A hot water bottle and ibuprofen are your best friends today.",follicular:"A bit of cramping now is usually just your ovaries waking up and getting follicles ready.",ovulatory:"This could be mittelschmerz — happens when your follicle pops to release the egg. If it's on one side, even more likely. 🎯",luteal:"Progesterone is the culprit here — it makes everything a bit crampy after ovulation.",dpo:{"6-9":"Cramping at 6-9 DPO is in the implantation window. Some women feel a pulling or pinching when the embryo burrows in. Try not to obsess (easier said than done).","10-12":"Is this period or implantation? Honestly, impossible to tell from cramps alone. If your period doesn't show by 12 DPO, grab a test.","13-14":"Right at the point where your period would normally start. Test if you haven't."}},"Bloating":{menstrual:"Feeling like a balloon? Prostaglandins causing inflammation. It passes — promise.",follicular:"Bloating now isn't super common cycle-wise. Could be diet or stress.",ovulatory:"Blame oestrogen — it's peaking right now and makes you hold water.",luteal:"Welcome to the progesterone bloat club. It literally slows your digestion down.",dpo:{"6-9":"Progesterone bloat feels exactly the same whether or not there's a little embryo. Your body can't tell you yet.","10-14":"Still bloated? Could be PMS, could be early pregnancy — both involve the same hormones."}},"Headache":{menstrual:"Hormone headaches at period start are common — oestrogen just crashed. Water and paracetamol help.",follicular:"Probably not cycle-related. Check hydration and sleep.",ovulatory:"The oestrogen surge can trigger headaches, especially if migraine-prone.",luteal:"Hormones all over the place. Some women get headaches like clockwork here.",dpo:{"6-9":"Headaches during implantation window are common — hormonal shifts regardless.","10-14":"Headaches are commonly reported as early pregnancy symptoms because blood volume increases early."}},"Fatigue":{menstrual:"Your body is doing hard work. Iron dips during period. Rest and eat iron-rich food.",follicular:"Energy should be picking up as oestrogen rises.",ovulatory:"Most women feel energy burst around ovulation.",luteal:"Progesterone is literally a sedative. Feeling wiped is 100% normal. 😴",dpo:{"6-9":"The tiredness is progesterone. But if implantation happens, hCG adds to it.","10-14":"If this tiredness feels DIFFERENT — bone-deep, falling-asleep-at-your-desk tired — pay attention. Test at 12+ DPO. 🤞"}},"Nausea":{menstrual:"Prostaglandins can upset your stomach. Ginger tea helps.",follicular:"Not typically cycle-related.",ovulatory:"Some women get a wave from the hormone surge. Brief and harmless.",luteal:"Progesterone slows digestion. Eat little and often.",dpo:{"6-9":"At 6-9 DPO it's genuinely too early for pregnancy nausea — hCG isn't high enough yet.","10-14":"If genuinely nauseous at 10+ DPO and this isn't normal for you, pay attention. Test if you haven't. 🤞"}},"Backache":{menstrual:"Prostaglandins make back muscles contract. Heat pad helps.",follicular:"Probably posture or activity, not cycle-related.",ovulatory:"Some feel dull ache from follicle rupturing. Usually one-sided.",luteal:"Progesterone relaxes ligaments, making lower back achy.",dpo:{"6-12":"Lower back ache in TWW is progesterone. Some report it as early sign.","13-14":"Back ache near expected period could go either way. Test if late."}},"Breast tenderness":{menstrual:"Tenderness usually eases once period arrives as progesterone drops.",follicular:"Breasts usually least tender now.",ovulatory:"Mild tenderness makes sense — progesterone beginning to rise.",luteal:"Classic. Progesterone makes breast tissue swell. Most common luteal symptom.",dpo:{"6-9":"Your boobs hurt because of progesterone — they'd hurt whether pregnant or not.","10-14":"Women say pregnancy breast tenderness feels DIFFERENT — fuller, heavier, especially nipples."}},"Acne":{menstrual:"Hormone shift triggers extra oil. Calms in a few days.",follicular:"Skin should be at its best — oestrogen is a skin's friend.",ovulatory:"Mini breakout from hormone surge. Short-lived.",luteal:"Progesterone + oil = spots. More sebum in luteal phase.",dpo:{"1-14":"Acne doesn't tell you about pregnancy — all progesterone-driven."}},"Insomnia":{menstrual:"Sleep disruption from hormone nosedive. Settles in a day or two.",follicular:"Sleep usually improves as oestrogen rises.",ovulatory:"Some feel buzzy and wired around ovulation.",luteal:"Irony: progesterone makes you tired but disrupts deep sleep. 🙃",dpo:{"6-9":"Tossing and turning is normal — hormonal + emotional. Try magnesium.","10-14":"Insomnia at 10+ DPO is reported as early pregnancy symptom more than you'd think."}},"Spotting":{menstrual:"Normal at start/end of period.",follicular:"Not super common. Mention to GP if recurring.",ovulatory:"Ovulation spotting is real and a good sign you ovulated! ✨",luteal:"Spotting after OV grabs attention when TTC. Could be implantation or low progesterone.",dpo:{"6-9":"Deep breath. Light pink/brown, small amount, lasting hours not days — ticks implantation boxes. About 25% of pregnancies have some spotting. 🤞","10-12":"Could be late implantation or period starting. If it STOPS, more implantation-like.","13-14":"Right on the edge. Only way to know is to test."}},"CM: Egg white":{menstrual:"Unusual during period. Don't worry about tracking CM today.",follicular:"Your body is gearing up! Oestrogen rising nicely.",ovulatory:"THIS IS IT. Peak fertility. Superhighway for sperm. Go go go. 🏃‍♀️",luteal:"Unusual after confirmed OV — could be secondary oestrogen surge or early pregnancy sign.",dpo:{"1-5":"A bit right after OV can happen as hormones transition.","6-12":"EWCM is back after drying up? Mentioned a lot as early sign. Theory: rising hCG causes secondary mucus surge. 👀"}},"CM: Watery":{menstrual:"Hard to track during period.",follicular:"Oestrogen building — you're on the right track towards fertile mucus.",ovulatory:"Fertile! Not quite egg white but sperm can survive in it. 💪",luteal:"A bit unusual — progesterone normally thickens things.",dpo:{"6-14":"Noticing watery CM when normally dry? Common anecdotal observation before positive tests."}},"CM: Thin creamy":{menstrual:"Can't tell during period.",follicular:"Transitional — moving from dry towards fertile.",ovulatory:"Not quite peak but don't dismiss it — thin creamy can still be fertile enough.",luteal:"Classic luteal phase mucus. Totally normal.",dpo:{"1-14":"Standard throughout TWW. Some say MORE than usual before positive."}},"CM: Sticky":{menstrual:"Normal around period end.",follicular:"Early follicular — oestrogen still low. Expect this to transition as OV approaches.",ovulatory:"Sticky near OV is unusual — not ideal for sperm survival. Check whether OV might be delayed.",luteal:"Common post-OV as progesterone takes over. Body's blocking sperm now.",dpo:{"1-14":"Normal luteal texture."}},"CM: Thick creamy":{menstrual:"Normal around period end.",follicular:"Early follicular — oestrogen still low. Expect this to thin out as you approach OV.",ovulatory:"Thick creamy near OV is unusual — usually means OV hasn't quite happened yet or is being delayed.",luteal:"Classic post-OV progesterone CM — thick and sperm-blocking. Body's doing its job.",dpo:{"1-14":"Standard luteal texture. If it suddenly becomes watery or egg-white late in TWW, that\\'s worth noticing."}},"CM: Dry":{menstrual:"Normal.",follicular:"Normal at start. CM ramps up closer to OV. Stay hydrated.",ovulatory:"Not ideal for conception. Try Preseed lubricant during sex.",luteal:"Classic progesterone doing its job.",dpo:{"1-14":"Dryness in TWW is the norm. Don't read into it."}},"Tired":{menstrual:"Your body's saying 'slow down.' Listen to it. 💤",follicular:"Energy should pick up. Check sleep and iron.",ovulatory:"Energy usually peaks. If tired, something else might be off.",luteal:"Progesterone is nature's sleeping pill. Nap if you can. 😴",dpo:{"6-14":"If this tiredness feels DIFFERENT — bone-deep, can't-keep-your-eyes-open tired — that's what women describe as early pregnancy fatigue. 🤞"}},"Irritable":{menstrual:"Oestrogen and progesterone crashed simultaneously. Biological reason, not 'just you.'",follicular:"Mood usually lifts. Might be life stuff.",ovulatory:"High oestrogen usually makes you feel great.",luteal:"Progesterone affects serotonin. Genuinely chemical, not a character flaw. 💛",dpo:{"6-14":"Between progesterone messing with serotonin AND the emotional weight of waiting... anyone would be snappy."}},"Anxious":{menstrual:"Anxiety spikes when period arrives — hormonal + emotional. Both valid. 💜",follicular:"Usually eases as oestrogen rises.",ovulatory:"Might be about timing pressure rather than hormones.",luteal:"TWW is an anxiety generator. Progesterone makes it worse chemically. 🫂",dpo:{"6-14":"The anxiety of the TWW is one of the hardest parts. The outcome is already decided — worrying won't change it. 💜"}},"Emotional":{menstrual:"Hormones did a dramatic shift. Plus, getting your period when TTC is genuinely sad.",follicular:"Less common hormonally. Maybe still processing last cycle.",ovulatory:"Some feel everything more intensely around ovulation.",luteal:"Progesterone turns up the volume on ALL emotions. SO normal. 😭",dpo:{"6-14":"Being emotional in the TWW is part hormones, part hope, part fear. You're not 'too much.' You're human. 💛"}},"Sad":{menstrual:"This is grief. Each failed cycle carries a loss. You're allowed to be sad. 💜",follicular:"If sadness lingers, talk to someone.",ovulatory:"Can come from the pressure of it all.",luteal:"Emotionally heavy when TTC. Be gentle with yourself. 🫂",dpo:{"6-14":"Whatever happens this cycle — you showed up, you tracked, you tried. That takes courage. 💛"}},"Happy":{menstrual:"Feeling good? Hold onto it!",follicular:"Oestrogen is your mood's best friend.",ovulatory:"Peak mood time! ✨",luteal:"Hold onto the good moments.",dpo:{"1-14":"A good day in the TWW is a gift. Enjoy today. 💛"}},"Calm":{menstrual:"Feeling calm is a healthy sign.",follicular:"Soak it up.",ovulatory:"Feeling centred is lovely.",luteal:"Studies show chronic stress can affect implantation. Whatever you're doing, keep doing it. 🧘‍♀️",dpo:{"1-14":"Being calm during the TWW is rare and wonderful."}},"Energetic":{menstrual:"Make the most of it!",follicular:"Classic oestrogen boost! ⚡",ovulatory:"Peak energy by design.",luteal:"Unusual — some report unexpected bursts in early pregnancy.",dpo:{"1-14":"Energy in the TWW? Take it and run with it. 🙌"}}};
@@ -3852,6 +4070,16 @@ function rCycle(){
   var c=D.cycles[curCyc];var excl=isExcl(curCyc);
   var info=cInfo();var isCurrent=(curCyc===info.ci);
   var h='';
+  // Swipe nav header — feature #4
+  h+='<div class="section"><div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px 4px">';
+  h+='<button onclick="prevCycle()" style="padding:8px 14px;border-radius:10px;background:'+(curCyc>0?'var(--card)':'var(--cream)')+';color:'+(curCyc>0?'var(--cobalt)':'var(--txt5)')+';font-size:13px;font-weight:700;border:none;cursor:pointer">‹ Prev</button>';
+  h+='<div style="display:flex;flex-direction:column;align-items:center;gap:2px">';
+  h+='<div style="font-size:13px;font-weight:800;color:var(--txt)">Cycle '+(curCyc+1)+' of '+D.cycles.length+'</div>';
+  h+='<div style="font-size:10px;color:var(--txt4)">'+c.label+(c.length?' · '+c.length+'d':'')+'</div>';
+  h+='</div>';
+  h+='<button onclick="nextCycle()" style="padding:8px 14px;border-radius:10px;background:'+(curCyc<D.cycles.length-1?'var(--card)':'var(--cream)')+';color:'+(curCyc<D.cycles.length-1?'var(--cobalt)':'var(--txt5)')+';font-size:13px;font-weight:700;border:none;cursor:pointer">Next ›</button>';
+  h+='</div><div style="text-align:center;font-size:9px;color:var(--txt5);margin-bottom:6px">Tip: swipe left/right on the chart to switch cycle</div></div>';
+
   // Cycle selection pills
   h+='<div class="pills">';
   D.cycles.forEach(function(cc,i){
@@ -3900,7 +4128,7 @@ function rCycle(){
   }
 
   // Chart — bigger (270px instead of 200)
-  h+='<div class="section"><div class="cw"><canvas id="cC" style="height:270px"></canvas></div>';
+  h+='<div class="section"><div class="cw cyc-swipe" id="cycSwipeWrap"><canvas id="cC" style="height:270px"></canvas></div>';
   h+='<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 6px;font-size:9px;font-weight:600;color:var(--txt4)">';
   h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:2px;background:#C4652A;border-radius:1px"></span>BBT</span>';
   if(sWrist)h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:0;border-top:2px dashed #6B4E8B"></span>Wrist</span>';
@@ -4163,8 +4391,75 @@ function dCyc(){
     }
   }
 
+  // === OPK intensity dots overlay (feature #10 + fix #2) ===
+  // Render along the top of the chart so they're visible alongside temps
+  var opkOverlay=[];
+  c.readings.forEach(function(r){var inten=getOpkIntensity(r.date);if(inten!=null)opkOverlay.push({day:r.day,date:r.date,intensity:inten})});
+  if(D.opks){
+    Object.keys(D.opks).forEach(function(d){
+      if(d<c.key)return;
+      var nextCycleStart=D.cycles[curCyc+1]?D.cycles[curCyc+1].key:'9999';
+      if(d>=nextCycleStart)return;
+      if(opkOverlay.find(function(o){return o.date===d}))return;
+      var dayN=db(c.key,d)+1;
+      var inten=getOpkIntensity(d);
+      if(inten!=null)opkOverlay.push({day:dayN,date:d,intensity:inten});
+    });
+  }
+  if(opkOverlay.length){
+    // Draw a faint baseline near the top showing where OPK row sits
+    var opkY=p.t+6;
+    ctx.save();
+    opkOverlay.forEach(function(o){
+      var px=x(o.day);
+      var color=o.intensity<=2?'#A0928A':o.intensity===3?'#9A7B1E':'#C44A2A';
+      var size=2+o.intensity*0.8;
+      // Vertical thin line down to chart for context
+      ctx.strokeStyle=color;ctx.globalAlpha=0.18;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(px,opkY+size);ctx.lineTo(px,H-p.b);ctx.stroke();
+      // The dot itself
+      ctx.globalAlpha=1;ctx.fillStyle=color;
+      ctx.beginPath();ctx.arc(px,opkY,size,0,Math.PI*2);ctx.fill();
+      // Intensity number for positives
+      if(o.intensity>=4){
+        ctx.fillStyle='#fff';ctx.font='bold 7px sans-serif';ctx.textAlign='center';
+        ctx.fillText(o.intensity,px,opkY+2.5);
+      }
+    });
+    ctx.restore();
+    // Small label on the right
+    ctx.fillStyle='#A0928A';ctx.font='600 8px -apple-system';ctx.textAlign='right';
+    ctx.fillText('OPK',W-p.r,opkY+3);
+  }
+
   cycHits=_hits;
   cv.onclick=function(e){showTip('cC',cycHits,e.clientX,e.clientY)};
+  // Swipe handling (feature #4)
+  var wrap=document.getElementById('cycSwipeWrap');
+  if(wrap&&!wrap.__swipeWired){
+    wrap.__swipeWired=true;
+    var startX=0,startY=0,startT=0;
+    wrap.addEventListener('touchstart',function(e){
+      var t=e.touches[0];startX=t.clientX;startY=t.clientY;startT=Date.now();
+    },{passive:true});
+    wrap.addEventListener('touchend',function(e){
+      var t=(e.changedTouches&&e.changedTouches[0])||{clientX:startX,clientY:startY};
+      var dx=t.clientX-startX,dy=t.clientY-startY,dt=Date.now()-startT;
+      // Horizontal swipe — clear gesture (>60px, >2x horizontal, <500ms)
+      if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*2&&dt<500){
+        if(dx<0)nextCycle();else prevCycle();
+      }
+    },{passive:true});
+  }
+}
+
+function prevCycle(){
+  if(curCyc<=0){flash("Oldest cycle");return}
+  curCyc--;cycCmp=-1;render();
+}
+function nextCycle(){
+  if(curCyc>=D.cycles.length-1){flash("Latest cycle");return}
+  curCyc++;cycCmp=-1;render();
 }
 
 /* COMPARE */
@@ -6000,6 +6295,7 @@ function rInsights(){
 }
 function getPhaseTips(pn,info){
   var t=[];var dpo=info.ho?(info.cd-info.od):null;
+  var cd=info.cd;
   // ===== PERSONAL PATTERN TIPS — prepended to standard tips when relevant =====
   var pp=personalPatterns();
   if(pp&&pp.length){
@@ -6023,11 +6319,84 @@ function getPhaseTips(pn,info){
     if(contextTip)t.push(contextTip);
   }
 
-  if(pn.indexOf('Menstrual')>-1){t.push({icon:'\ud83e\udecb',text:'Warm drinks and iron-rich foods \u2014 your body is losing iron.'});t.push({icon:'\ud83d\udc8a',text:'Take your prenatal. Iron absorbs best with vitamin C.'});t.push({icon:'\ud83d\udecf\ufe0f',text:'Rest is productive. Your body is resetting.'});if(info.cd<=2)t.push({icon:'\ud83c\udf21\ufe0f',text:'Still log your temp \u2014 period temps build your baseline.'})}
-  else if(pn.indexOf('Follicular')>-1){t.push({icon:'\ud83d\udca7',text:'Hydrate well \u2014 water directly affects CM quality.'});t.push({icon:'\ud83c\udfc3\u200d\u2640\ufe0f',text:'Energy peaks now. Great time for exercise.'});if(info.cd>=info.ao-7)t.push({icon:'\ud83e\uddea',text:'Start OPK testing daily \u2014 your surge could come soon.'});t.push({icon:'\ud83e\udd57',text:'Leafy greens support follicle development.'})}
-  else if(pn.indexOf('Ovulatory')>-1){t.push({icon:'\ud83d\udd25',text:'Peak fertility! Prioritise intercourse today and tomorrow.'});t.push({icon:'\ud83e\uddea',text:'Take an OPK \u2014 watch for that strong positive.'});t.push({icon:'\ud83d\udc40',text:'Check CM \u2014 egg white means peak fertility.'});t.push({icon:'\ud83d\udc91',text:'Every other day is as effective as every day.'})}
-  else if(pn.indexOf('Luteal')>-1){if(dpo&&dpo<=5){t.push({icon:'\ud83e\uddd8',text:'Too early to know. Distract yourself.'});t.push({icon:'\ud83c\udf21\ufe0f',text:'Keep logging \u2014 sustained rise confirms OV.'})}else if(dpo&&dpo>=6&&dpo<=9){t.push({icon:'\u2728',text:'Implantation window \u2014 note anything unusual.'});t.push({icon:'\ud83d\udeab',text:"Don't test yet. hCG isn't high enough."});t.push({icon:'\ud83d\udc9c',text:'Be kind to yourself. The wait is hardest.'})}else if(dpo&&dpo>=10){t.push({icon:'\ud83e\uddea',text:'You can test now. FRER, first morning urine.'});t.push({icon:'\ud83e\udec2',text:'Negative today doesn\'t mean you\'re out.'})}else{t.push({icon:'\ud83d\ude34',text:'Progesterone makes you sleepy. Nap guilt-free.'});t.push({icon:'\ud83c\udf4c',text:'Magnesium helps with progesterone symptoms.'})}t.push({icon:'\ud83d\udc8a',text:'Keep taking your prenatal \u2014 folic acid is crucial.'})}
-  return t.slice(0,4)
+  if(pn.indexOf('Menstrual')>-1){
+    if(cd===1){
+      t.push({icon:'🩸',text:'Day 1 — new cycle. Hopeful starts.'});
+      t.push({icon:'🫖',text:'Warm drinks ease cramps. Avoid caffeine if it makes them worse.'});
+      t.push({icon:'💊',text:'Ibuprofen + heat works better than either alone.'});
+    }else if(cd===2){
+      t.push({icon:'🥩',text:'Heaviest day for most. Iron-rich foods help replenish.'});
+      t.push({icon:'🛌',text:'Cramps + fatigue today is normal. Rest is productive.'});
+    }else if(cd<=3){
+      t.push({icon:'🫛',text:'Warm drinks and iron-rich foods — your body is losing iron.'});
+      t.push({icon:'💊',text:'Take your prenatal. Iron absorbs best with vitamin C.'});
+    }else{
+      t.push({icon:'🌿',text:'Tail end of period. Energy starts returning.'});
+      t.push({icon:'🛏️',text:'Rest is productive. Your body is resetting.'});
+    }
+    if(cd<=2)t.push({icon:'🌡️',text:'Still log your temp — period temps build your baseline.'});
+  }
+  else if(pn.indexOf('Follicular')>-1){
+    var daysToOv=Math.max(0,info.ao-cd);
+    if(daysToOv>=7){
+      t.push({icon:'⚡',text:'Early follicular — energy builds steadily over the next week.'});
+      t.push({icon:'🏃‍♀️',text:'Best phase for harder workouts. Body responds well now.'});
+      t.push({icon:'🥬',text:'Leafy greens support follicle development.'});
+      t.push({icon:'💧',text:'Hydrate well — water directly affects CM quality.'});
+    }else if(daysToOv>=4){
+      t.push({icon:'🧪',text:'Start OPK testing daily — your surge could come in 4-7 days.'});
+      t.push({icon:'💧',text:'Hydrate well — water directly affects CM quality.'});
+      t.push({icon:'👀',text:'Check CM each day. Watch for the shift from creamy to watery.'});
+      t.push({icon:'💞',text:'Begin every-other-day intercourse to build sperm presence.'});
+    }else{
+      t.push({icon:'🔥',text:'Window opens in '+daysToOv+' day'+(daysToOv===1?'':'s')+'. Crucial OPK timing now.'});
+      t.push({icon:'🧪',text:'OPK twice a day if you can — surges can be brief.'});
+      t.push({icon:'💞',text:'Don\'t wait for a positive OPK. Sperm need to be present already.'});
+      t.push({icon:'👀',text:'Egg white CM = peak fertility. Don\'t miss it.'});
+    }
+  }
+  else if(pn.indexOf('Ovulatory')>-1){
+    if(info.ho){
+      t.push({icon:'🎯',text:'OV confirmed by temp shift. Sperm from last 2-3 days has best shot.'});
+      t.push({icon:'💞',text:'One more session today increases odds — egg lives 12-24h.'});
+      t.push({icon:'🌡️',text:'Watch tomorrow\'s temp for the sustained rise.'});
+      t.push({icon:'🧘‍♀️',text:'Stress hormones spike with anxiety — breathe.'});
+    }else{
+      t.push({icon:'🔥',text:'Peak fertility! Prioritise intercourse today and tomorrow.'});
+      t.push({icon:'🧪',text:'Take an OPK — watch for that strong positive.'});
+      t.push({icon:'👀',text:'Check CM — egg white means peak fertility.'});
+      t.push({icon:'💞',text:'Every other day is as effective as every day.'});
+    }
+  }
+  else if(pn.indexOf('Luteal')>-1){
+    if(dpo&&dpo<=2){
+      t.push({icon:'🌡️',text:'Keep logging — sustained rise confirms OV.'});
+      t.push({icon:'🥚',text:'Egg has either been fertilised or not. Nothing you do now changes outcome.'});
+      t.push({icon:'😴',text:'Progesterone is rising. Tiredness from here is normal.'});
+    }else if(dpo&&dpo>=3&&dpo<=5){
+      t.push({icon:'🧘',text:'Too early for symptoms. Progesterone sedation kicks in around now.'});
+      t.push({icon:'🌡️',text:'Watch for a triphasic pattern around 7-10 DPO.'});
+      t.push({icon:'🍌',text:'Magnesium helps with progesterone symptoms.'});
+    }else if(dpo&&dpo>=6&&dpo<=9){
+      t.push({icon:'✨',text:'Implantation window ('+dpo+' DPO) — note anything unusual.'});
+      t.push({icon:'🚫',text:'Don\'t test yet. hCG isn\'t high enough.'});
+      t.push({icon:'🌡️',text:'A dip today could be implantation. Don\'t over-read it.'});
+      t.push({icon:'💜',text:'Be kind to yourself. The wait is hardest now.'});
+    }else if(dpo&&dpo>=10&&dpo<=11){
+      t.push({icon:'🧪',text:'You CAN test now with FRER. May still be early though.'});
+      t.push({icon:'☕',text:'First morning urine has highest hCG concentration.'});
+      t.push({icon:'🤞',text:'Negative today doesn\'t mean you\'re out — test again in 48h.'});
+    }else if(dpo&&dpo>=12){
+      t.push({icon:'🧪',text:dpo+' DPO — reliable testing day. FRER, FMU.'});
+      t.push({icon:'📊',text:'If temp is still up tomorrow morning, that\'s its own signal.'});
+      t.push({icon:'💪',text:'Whatever happens, you\'ve shown up every day this cycle.'});
+    }else{
+      t.push({icon:'😴',text:'Progesterone makes you sleepy. Nap guilt-free.'});
+      t.push({icon:'🍌',text:'Magnesium helps with progesterone symptoms.'});
+    }
+    t.push({icon:'💊',text:'Keep taking your prenatal — folic acid is crucial.'});
+  }
+  return t.slice(0,4);
 }
 function drawCircle(info){
   var cv=document.getElementById('circC');if(!cv)return;
@@ -6267,13 +6636,13 @@ function showM(date,r,ci2){
   
   h+='<div class="chips" style="margin-top:4px" id="tqReasons">';
   ["Bad sleep","Alcohol","Illness","Different time","Mouth breathing"].forEach(function(q){h+='<button class="chip chip-s'+(tq===q?' on':'')+'" onclick="this.parentElement.querySelectorAll(\'.chip\').forEach(function(c){c.classList.remove(\'on\')});this.classList.add(\'on\')">'+q+'</button>'});
-  h+='</div></div>';
+  h+='</div>';
   h+='<div class="fr"><div class="fl">Period Flow</div><div class="chips">';
   ["none","light","medium","heavy"].forEach(function(f){var on=(r&&r.flow===f)||(f==="none"&&(!r||!r.flow));h+='<button class="chip chip-f'+(on?' on':'')+'" data-f="'+f+'" onclick="pF(this)">'+f+'</button>'});h+='</div></div>';
   h+='<div class="fr"><div class="fl">Mood</div><div class="chips" style="max-height:none">';
   ["Happy","Calm","Energetic","Tired","Irritable","Anxious","Sad","Emotional"].forEach(function(m){h+='<button class="chip chip-m'+(mo.indexOf(m)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+m+'</button>'});h+='</div></div>';
   h+='<div class="fr"><div class="fl">Symptoms</div><div class="chips" style="max-height:none">';
-  ["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+s+'</button>'});h+='</div></div>';
+  ["Cramps","Bloating","Headache","Fatigue","Nausea","Backache","Breast tenderness","Acne","Insomnia","Spotting","Constipation"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" onclick="this.classList.toggle(\'on\')" style="font-size:10px;padding:5px 9px">'+s+'</button>'});h+='</div></div>';
   h+='<div class="fr"><div class="fl">CM</div><div class="chips" id="mCMchips" style="max-height:none">';
   ["CM: Egg white","CM: Watery","CM: Thin creamy","CM: Thick creamy","CM: Sticky","CM: Dry"].forEach(function(s){h+='<button class="chip chip-s'+(sy.indexOf(s)>-1?' on':'')+'" data-cm="'+s+'" onclick="this.classList.toggle(\'on\');renderCMAmounts(\''+date+'\')" style="font-size:10px;padding:5px 9px">'+s.replace("CM: ","")+'</button>'});h+='</div>';
   // CM amount picker — populated dynamically based on which CM types are active
