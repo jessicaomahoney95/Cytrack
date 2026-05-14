@@ -1896,6 +1896,27 @@ function phase(cd,av,ao,ho,od,c){
   if(cd>=eo-1&&cd<=eo+1)return{n:ho?"Ovulatory":"Ovulatory (est.)",c:"var(--gold)",bg:"var(--gold-bg)",d:"Peak fertility around ovulation."};
   return{n:ho?"Luteal":"Luteal (est.)",c:"var(--plum)",bg:"var(--plum-bg)",d:"Post-ovulation — progesterone keeps temps up."};
 }
+
+/* phaseForDay — resolves phase for a SPECIFIC historical day using that day's
+   actual flow data, not "today's" data (which is what phase()/isPeriodActive use).
+   Used by the full symptom timeline so retrospective days get correct phase labels. */
+function phaseForDay(c,cd,eod,fallbackAv,fallbackAo){
+  var dt=ad(c.key,cd-1);
+  var rdg=c.readings.find(function(x){return x.date===dt});
+  // Menstrual: day has actual flow recorded (and is within typical period range)
+  var isMenstrual=false;
+  if(cd<=10&&rdg&&rdg.flow&&rdg.flow!=='spotting'&&rdg.flow!=='none')isMenstrual=true;
+  // Also catch period-end markers
+  if(!isMenstrual&&cd<=10&&D.periodEndDates&&D.periodEndDates[c.key]){
+    if(dt<D.periodEndDates[c.key])isMenstrual=true;
+  }
+  if(isMenstrual)return{n:"Menstrual",c:"var(--rose)",bg:"var(--rose-bg)"};
+  var eo=eod||fallbackAo;
+  if(cd<eo-1)return{n:"Follicular",c:"var(--forest)",bg:"var(--forest-bg)"};
+  if(cd>=eo-1&&cd<=eo+1)return{n:eod?"Ovulatory":"Ovulatory (est.)",c:"var(--gold)",bg:"var(--gold-bg)"};
+  return{n:eod?"Luteal":"Luteal (est.)",c:"var(--plum)",bg:"var(--plum-bg)"};
+}
+
 function pats(){var f={},l={};D.cycles.forEach(function(c,i){if(!isExcl(i)){var od2=ovDay(c)||aod();c.readings.forEach(function(r){var all=(D.sym[r.date]||[]).concat(D.mood[r.date]||[]);var b=r.day<=od2?f:l;all.forEach(function(s){b[s]=(b[s]||0)+1})})}});return{f:f,l:l}}
 
 /* === Phase-pattern detection (feature #3) ===
@@ -5092,10 +5113,14 @@ function rDoctor(info){
   h+='<div style="font-size:11px;color:var(--txt3);margin-top:2px">Full side-by-side view in the Compare tab</div></div>';
   h+='<span style="color:var(--cobalt);font-size:16px;font-weight:700">›</span></div></div>';
 
+  // ===== FULL SYMPTOM TIMELINE — day-by-day across all cycles =====
+  h+=rSymptomTimeline();
+
   // Doctor report buttons at bottom
   h+='<div class="section"><div class="sec-hdr"><span class="sec-title" style="font-size:11px;color:var(--cobalt);text-transform:uppercase;letter-spacing:.8px;font-weight:700">Export</div></div>';
   h+='<div class="card" style="padding:12px 14px">';
   h+='<button onclick="exportDoctorReport()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--cobalt);color:#fff;margin-bottom:6px">📄 Full Doctor Report</button>';
+  h+='<button onclick="exportFullSymptomTimeline()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--plum);color:#fff;margin-bottom:6px">📋 Full Symptom Timeline (all cycles)</button>';
   h+='<button onclick="exportDayByDay()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--burnt);color:#fff">📅 Current Cycle Day-by-Day</button>';
   h+='</div></div>';
   
@@ -6881,6 +6906,323 @@ function exportDoctorReport(){
   var blob=new Blob([r],{type:'text/plain'});
   dlFB(blob,'cytrack_doctor_report_'+td()+'.txt');
 }
+/* ===== Full symptom timeline — day-by-day across all cycles =====
+   Lets you scan what symptoms/CM/moods occurred on which cycle day,
+   across every cycle, with cycle-day vertical alignment for pattern spotting */
+
+// State for which cycle is "expanded" — collapse-by-default to keep mobile fast
+var _stlExpanded={};
+// Filter state — which categories to show
+var _stlFilter={cm:true,flow:true,sym:true,mood:true,intimacy:true,opk:true};
+// Filter: only show days that had something logged
+var _stlOnlyLogged=false;
+
+function rSymptomTimeline(){
+  var info=cInfo();
+  var h='';
+  h+='<div class="section"><div class="card" style="padding:14px 16px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px">';
+  h+='<div><div style="font-size:12px;font-weight:700;color:var(--plum);text-transform:uppercase;letter-spacing:.6px">📋 Full symptom timeline</div>';
+  h+='<div style="font-size:11px;color:var(--txt3);margin-top:3px;line-height:1.4">Day-by-day breakdown for every cycle. Useful for spotting patterns — and for showing a doctor.</div></div>';
+  h+='</div>';
+
+  // Filter chips
+  h+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin:8px 0">';
+  var filters=[
+    {k:'cm',lbl:'CM',col:'var(--gold)'},
+    {k:'flow',lbl:'Flow',col:'var(--rose)'},
+    {k:'sym',lbl:'Symptoms',col:'var(--burnt)'},
+    {k:'mood',lbl:'Mood',col:'var(--cobalt)'},
+    {k:'intimacy',lbl:'Intimacy',col:'var(--cobalt)'},
+    {k:'opk',lbl:'OPK',col:'var(--gold)'}
+  ];
+  filters.forEach(function(f){
+    var on=_stlFilter[f.k];
+    h+='<button onclick="toggleStlFilter(\''+f.k+'\')" style="padding:5px 10px;border-radius:12px;font-size:10px;font-weight:700;background:'+(on?f.col:'var(--cream3)')+';color:'+(on?'#fff':'var(--txt4)')+';border:none;cursor:pointer">'+(on?'✓ ':'')+f.lbl+'</button>';
+  });
+  h+='<button onclick="toggleStlOnlyLogged()" style="padding:5px 10px;border-radius:12px;font-size:10px;font-weight:700;background:'+(_stlOnlyLogged?'var(--forest)':'var(--cream3)')+';color:'+(_stlOnlyLogged?'#fff':'var(--txt4)')+';border:none;cursor:pointer">'+(_stlOnlyLogged?'✓ ':'')+'Only logged days</button>';
+  h+='</div>';
+
+  // Expand/collapse all
+  var allExpanded=D.cycles.every(function(_,i){return _stlExpanded[i]});
+  h+='<div style="display:flex;justify-content:space-between;margin-bottom:8px">';
+  h+='<button onclick="expandAllStl('+(allExpanded?'false':'true')+')" style="padding:4px 10px;border-radius:8px;font-size:10px;font-weight:700;background:none;color:var(--plum);border:1px solid var(--plum-bg);cursor:pointer">'+(allExpanded?'Collapse all':'Expand all')+'</button>';
+  h+='<span style="font-size:9px;color:var(--txt4);align-self:center">Tap a cycle to expand</span>';
+  h+='</div>';
+
+  // Build cycle blocks, newest first
+  D.cycles.slice().reverse().forEach(function(c,revI){
+    var ci=D.cycles.length-1-revI;
+    var isExpanded=!!_stlExpanded[ci];
+    var isCurrent=(ci===info.ci);
+    var excl=isExcl(ci);
+    var eod=effOv(ci);
+
+    // Summary header — clickable to expand
+    var lastDay;
+    if(isCurrent)lastDay=info.cd;
+    else if(c.length)lastDay=c.length;
+    else if(c.readings.length)lastDay=c.readings[c.readings.length-1].day;
+    else lastDay=1;
+
+    // Quick badge counts for the summary
+    var counts={cm:0,sym:0,mood:0,intimacy:0,opk:0,flowDays:0};
+    for(var d=1;d<=lastDay;d++){
+      var dt=ad(c.key,d-1);
+      var sy=D.sym[dt]||[];
+      sy.forEach(function(s){if(s.indexOf('CM:')===0)counts.cm++;else counts.sym++});
+      if((D.mood[dt]||[]).length)counts.mood++;
+      if(D.sex[dt])counts.intimacy++;
+      if(D.opks&&D.opks[dt])counts.opk++;
+      var rdg=c.readings.find(function(x){return x.date===dt});
+      if(rdg&&rdg.flow&&rdg.flow!=='none')counts.flowDays++;
+    }
+
+    h+='<div style="margin-bottom:10px;border:1px solid '+(isCurrent?'var(--cobalt)':'var(--cream3)')+';border-radius:12px;overflow:hidden">';
+    h+='<div onclick="toggleStlCycle('+ci+')" style="padding:11px 13px;background:'+(isExpanded?'var(--cream)':'var(--card)')+';cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">';
+    h+='<div style="flex:1;min-width:0">';
+    h+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:12px;font-weight:800;color:'+(excl?'#A87A1A':(isCurrent?'var(--cobalt)':'var(--txt)'))+'">'+(isCurrent?'Current cycle':'C'+(ci+1))+'</span><span style="font-size:11px;color:var(--txt3)">'+c.label+'</span>';
+    if(c.length)h+='<span style="font-size:10px;color:var(--txt4);font-weight:600">· '+c.length+'d</span>';
+    if(eod)h+='<span style="font-size:10px;color:var(--gold);font-weight:700">· OV D'+eod+'</span>';
+    if(excl)h+='<span style="font-size:9px;font-weight:700;color:#A87A1A;background:#FAEFC4;padding:2px 6px;border-radius:6px">★ Pregnancy</span>';
+    h+='</div>';
+    // Mini stats row
+    h+='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;font-size:9px;color:var(--txt4);font-weight:600">';
+    if(counts.flowDays)h+='<span style="color:var(--rose)">'+counts.flowDays+' flow</span>';
+    if(counts.cm)h+='<span style="color:var(--gold)">'+counts.cm+' CM</span>';
+    if(counts.sym)h+='<span style="color:var(--burnt)">'+counts.sym+' sym</span>';
+    if(counts.mood)h+='<span style="color:var(--cobalt)">'+counts.mood+' mood</span>';
+    if(counts.intimacy)h+='<span style="color:var(--cobalt)">'+counts.intimacy+' intimacy</span>';
+    if(counts.opk)h+='<span style="color:var(--gold)">'+counts.opk+' OPK</span>';
+    h+='</div>';
+    h+='</div>';
+    h+='<span style="font-size:18px;color:var(--txt4);flex-shrink:0;transition:transform .2s;'+(isExpanded?'transform:rotate(90deg)':'')+'">›</span>';
+    h+='</div>';
+
+    // Expanded body — day-by-day rows
+    if(isExpanded){
+      h+='<div style="padding:0 13px 13px;background:var(--card)">';
+      // Phase legend / column reference
+      h+='<div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 0;font-size:9px;color:var(--txt4);border-bottom:1px solid var(--cream3);margin-bottom:6px">';
+      h+='<span><span style="display:inline-block;width:8px;height:8px;background:#A8445533;border-radius:2px;vertical-align:middle"></span> Menstrual</span>';
+      h+='<span><span style="display:inline-block;width:8px;height:8px;background:#4A7D5E33;border-radius:2px;vertical-align:middle"></span> Follicular</span>';
+      h+='<span><span style="display:inline-block;width:8px;height:8px;background:#9A7B1E33;border-radius:2px;vertical-align:middle"></span> Ovulatory</span>';
+      h+='<span><span style="display:inline-block;width:8px;height:8px;background:#6B4E8B33;border-radius:2px;vertical-align:middle"></span> Luteal</span>';
+      h+='</div>';
+
+      var cycAv=c.length||info.av;
+      var cycAo=eod||info.ao;
+
+      for(var d=1;d<=lastDay;d++){
+        var dt=ad(c.key,d-1);
+        var rdg=c.readings.find(function(x){return x.date===dt});
+        var sy=D.sym[dt]||[];
+        var mo=D.mood[dt]||[];
+        var sx=D.sex[dt];
+        var opk=D.opks&&D.opks[dt];
+        var hasSomething=(sy.length>0)||(mo.length>0)||sx||(rdg&&rdg.flow)||opk||(rdg&&rdg.temp!=null);
+        if(_stlOnlyLogged&&!hasSomething)continue;
+
+        var ph=phaseForDay(c,d,eod,info.av,info.ao);
+        // Build the symptom display
+        var pills=[];
+        if(_stlFilter.flow&&rdg&&rdg.flow&&rdg.flow!=='none'){
+          pills.push({col:'var(--rose)',bg:'var(--rose-bg)',txt:'🩸 '+rdg.flow});
+        }
+        if(_stlFilter.cm){
+          sy.forEach(function(s){if(s.indexOf('CM:')===0){
+            pills.push({col:'var(--gold)',bg:'var(--gold-bg)',txt:'💧 '+s.replace('CM: ','')});
+          }});
+        }
+        if(_stlFilter.sym){
+          sy.forEach(function(s){if(s.indexOf('CM:')!==0){
+            pills.push({col:'var(--burnt)',bg:'var(--burnt-bg)',txt:fmtSym(s,dt)});
+          }});
+        }
+        if(_stlFilter.mood){
+          mo.forEach(function(m){
+            pills.push({col:'var(--cobalt)',bg:'var(--cob-bg)',txt:'😊 '+m});
+          });
+        }
+        if(_stlFilter.intimacy&&sx){
+          pills.push({col:'var(--cobalt)',bg:'var(--cob-bg)',txt:'💞'});
+        }
+        if(_stlFilter.opk&&opk){
+          var opkR=getOpkResult(dt);var opkI=getOpkIntensity(dt);
+          var lbl='OPK '+(opkR==='pos'?'+':'−')+(opkI?' ('+opkI+'/5)':'');
+          pills.push({col:opkR==='pos'?'var(--burnt)':'var(--txt3)',bg:opkR==='pos'?'var(--burnt-bg)':'var(--cream)',txt:'🧪 '+lbl});
+        }
+        if(rdg&&rdg.ov){
+          pills.push({col:'var(--gold)',bg:'var(--gold-bg)',txt:'🎯 LH+ / OV'});
+        }
+
+        // Phase tint for the row background
+        var rowBg='transparent';
+        if(ph.n.indexOf('Menstrual')>-1)rowBg='rgba(168,68,85,.06)';
+        else if(ph.n.indexOf('Follicular')>-1)rowBg='rgba(74,125,94,.06)';
+        else if(ph.n.indexOf('Ovulatory')>-1)rowBg='rgba(154,123,30,.10)';
+        else if(ph.n.indexOf('Luteal')>-1)rowBg='rgba(107,78,139,.06)';
+
+        var dpo=eod&&d>eod?(d-eod):null;
+        h+='<div style="display:flex;gap:8px;padding:7px 8px;border-radius:8px;background:'+rowBg+';margin-bottom:3px;align-items:flex-start">';
+        // Day column — fixed width for vertical alignment
+        h+='<div style="flex-shrink:0;width:46px;text-align:center">';
+        h+='<div style="font-size:12px;font-weight:800;color:var(--txt)">'+d+'</div>';
+        if(dpo)h+='<div style="font-size:8px;font-weight:600;color:var(--plum)">'+dpo+' DPO</div>';
+        h+='<div style="font-size:8px;color:var(--txt4);margin-top:1px">'+fd(dt).split(' ')[0]+'</div>';
+        h+='</div>';
+        // Content column
+        h+='<div style="flex:1;min-width:0">';
+        // Temp row
+        if(rdg&&rdg.temp!=null){
+          var tq=D.tqual&&D.tqual[dt];
+          h+='<div style="display:flex;gap:6px;align-items:center;font-size:11px;font-weight:700;color:var(--txt);margin-bottom:'+(pills.length?'4px':'0')+'">';
+          h+='<span>'+rdg.temp.toFixed(2)+'°</span>';
+          if(tq)h+='<span style="font-size:9px;color:var(--burnt)">⚠️ '+tq+'</span>';
+          h+='</div>';
+        }
+        // Pills row
+        if(pills.length){
+          h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
+          pills.forEach(function(p){
+            h+='<span style="background:'+p.bg+';color:'+p.col+';font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;white-space:nowrap">'+p.txt+'</span>';
+          });
+          h+='</div>';
+        } else if(!(rdg&&rdg.temp!=null)){
+          // Genuinely empty day
+          h+='<div style="font-size:10px;color:var(--txt5);font-style:italic">—</div>';
+        }
+        h+='</div></div>';
+      }
+      h+='</div>';
+    }
+    h+='</div>';  // end cycle block
+  });
+  h+='</div></div>';
+  return h;
+}
+
+function toggleStlCycle(ci){
+  if(_stlExpanded[ci])delete _stlExpanded[ci];
+  else _stlExpanded[ci]=true;
+  render();
+}
+function expandAllStl(makeOpen){
+  if(makeOpen){
+    D.cycles.forEach(function(_,i){_stlExpanded[i]=true});
+  }else{
+    _stlExpanded={};
+  }
+  render();
+}
+function toggleStlFilter(k){
+  _stlFilter[k]=!_stlFilter[k];
+  render();
+}
+function toggleStlOnlyLogged(){
+  _stlOnlyLogged=!_stlOnlyLogged;
+  render();
+}
+
+/* Export — Full symptom timeline as a .txt file across all cycles */
+function exportFullSymptomTimeline(){
+  var info=cInfo();
+  var r='';
+  r+='FULL SYMPTOM TIMELINE — ALL CYCLES\n';
+  r+='Generated: '+fdf(td())+'\n';
+  r+='Total cycles: '+D.cycles.length+'\n';
+  r+='\n';
+  r+='Symptoms, moods, CM, flow, intimacy and OPK results day-by-day for every cycle.\n';
+  r+='Useful for clinical review and pattern analysis.\n';
+  r+='\n';
+  r+='═══════════════════════════════════════\n\n';
+
+  D.cycles.slice().reverse().forEach(function(c,revI){
+    var ci=D.cycles.length-1-revI;
+    var isCurrent=(ci===info.ci);
+    var excl=isExcl(ci);
+    var eod=effOv(ci);
+    var od=ovDay(c);
+
+    var lastDay;
+    if(isCurrent)lastDay=info.cd;
+    else if(c.length)lastDay=c.length;
+    else if(c.readings.length)lastDay=c.readings[c.readings.length-1].day;
+    else lastDay=1;
+
+    r+=(isCurrent?'CURRENT CYCLE':'CYCLE '+(ci+1))+' — '+c.label+'\n';
+    r+='Start date: '+fdf(c.key)+'\n';
+    if(c.length)r+='Length: '+c.length+' days\n';
+    else if(isCurrent)r+='Current day: '+info.cd+' (in progress)\n';
+    if(eod)r+='Ovulation: Day '+eod+(od?' (LH+ confirmed)':' (estimated)')+'\n';
+    if(excl)r+='★ PREGNANCY CYCLE\n';
+    r+='\n';
+
+    var cycAv=c.length||info.av;
+    var cycAo=eod||info.ao;
+    var anyLogged=false;
+
+    for(var d=1;d<=lastDay;d++){
+      var dt=ad(c.key,d-1);
+      var rdg=c.readings.find(function(x){return x.date===dt});
+      var sy=D.sym[dt]||[];
+      var mo=D.mood[dt]||[];
+      var sx=D.sex[dt];
+      var opk=D.opks&&D.opks[dt];
+      var cm=sy.filter(function(s){return s.indexOf('CM:')===0});
+      var other=sy.filter(function(s){return s.indexOf('CM:')!==0});
+      var hasSomething=cm.length||other.length||mo.length||sx||(rdg&&rdg.flow)||opk||(rdg&&rdg.ov);
+      if(!hasSomething&&!(rdg&&rdg.temp!=null))continue;
+      anyLogged=true;
+
+      var ph=phaseForDay(c,d,eod,info.av,info.ao);
+      var dpo=eod&&d>eod?(d-eod):null;
+      r+='Day '+d+' · '+fd(dt)+' · '+ph.n+(dpo?' ('+dpo+' DPO)':'')+'\n';
+      if(rdg&&rdg.temp!=null){
+        r+='  BBT: '+rdg.temp.toFixed(2)+'°C';
+        var tq=D.tqual&&D.tqual[dt];
+        if(tq)r+=' (⚠️ '+tq+')';
+        r+='\n';
+      }
+      if(rdg&&rdg.flow&&rdg.flow!=='none')r+='  Flow: '+rdg.flow+'\n';
+      if(cm.length)r+='  CM: '+cm.map(function(s){return s.replace('CM: ','')}).join(', ')+'\n';
+      if(other.length)r+='  Symptoms: '+other.map(function(s){return fmtSym(s,dt)}).join(', ')+'\n';
+      if(mo.length)r+='  Mood: '+mo.join(', ')+'\n';
+      if(sx)r+='  Intimacy: yes\n';
+      if(rdg&&rdg.ov)r+='  Ovulation marker: LH+\n';
+      else if(opk){
+        var opkR=getOpkResult(dt);var opkI=getOpkIntensity(dt);
+        r+='  OPK: '+(opkR==='pos'?'Positive':'Negative')+(opkI?' (intensity '+opkI+'/5)':'')+'\n';
+      }
+      r+='\n';
+    }
+    if(!anyLogged)r+='(No symptoms or readings logged for this cycle)\n\n';
+    r+='───────────────────────────────────────\n\n';
+  });
+
+  r+='═══════════════════════════════════════\n';
+  r+='CROSS-CYCLE PATTERNS\n\n';
+  // Add a summary of which symptoms occurred most across cycles
+  var symByCycle={};  // sym -> Set of cycle indices it appeared in
+  D.cycles.forEach(function(c,i){
+    var seen={};
+    c.readings.forEach(function(rdg){
+      (D.sym[rdg.date]||[]).forEach(function(s){if(!seen[s]){seen[s]=true;symByCycle[s]=(symByCycle[s]||0)+1}});
+      (D.mood[rdg.date]||[]).forEach(function(m){if(!seen[m]){seen[m]=true;symByCycle[m]=(symByCycle[m]||0)+1}});
+    });
+  });
+  var totalCycles=D.cycles.length;
+  var sortedSyms=Object.keys(symByCycle).sort(function(a,b){return symByCycle[b]-symByCycle[a]});
+  sortedSyms.slice(0,15).forEach(function(s){
+    var pct=Math.round(symByCycle[s]/totalCycles*100);
+    r+='  '+s+': '+symByCycle[s]+'/'+totalCycles+' cycles ('+pct+'%)\n';
+  });
+
+  r+='\nGenerated by CyTrack\n';
+  var blob=new Blob([r],{type:'text/plain'});
+  dlFB(blob,'cytrack_full_symptom_timeline_'+td()+'.txt');
+}
+
 function exportDayByDay(targetCi){
   var info=cInfo();
   // Default to current cycle if no argument passed (preserves old Doctor tab button)
