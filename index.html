@@ -1842,7 +1842,34 @@ function fdf(d){return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{weekd
 function td(){return new Date().toISOString().slice(0,10)}
 function greet(){var h=new Date().getHours();return(h<12?"Good morning":h<17?"Good afternoon":"Good evening")+", Jess"}
 function ovDay(c){var d=null;c.readings.forEach(function(r){if(r.ov&&(d===null||r.day<d))d=r.day});return d}
-function effOv(ci){var my=D.myOv&&D.myOv[ci];if(my)return parseInt(my);return ovDay(D.cycles[ci])}
+// Detect OV from temp shift — find the most significant sustained rise mid-cycle
+function ovDayFromTemp(c){
+  var temps=c.readings.filter(function(r){return r.temp!=null});
+  if(temps.length<8)return null;
+  // Only look from Day 10 onwards (OV rarely before Day 10)
+  var candidates=[];
+  for(var i=5;i<temps.length;i++){
+    if(temps[i].day<10)continue;
+    var pre=[];
+    for(var j=Math.max(0,i-6);j<i;j++){if(temps[j].day>=5)pre.push(temps[j].temp)}
+    if(pre.length<3)continue;
+    var preAvg=pre.reduce(function(a,b){return a+b},0)/pre.length;
+    var shift=temps[i].temp-preAvg;
+    if(shift>=0.2){
+      // Check if any subsequent readings also stay elevated
+      var sustained=true;
+      if(i+1<temps.length&&temps[i+1].temp<preAvg+0.05)sustained=false;
+      candidates.push({day:temps[i].day,shift:shift,sustained:sustained});
+    }
+  }
+  if(!candidates.length)return null;
+  // Prefer sustained shifts, then pick the biggest
+  var best=candidates.filter(function(c){return c.sustained});
+  if(!best.length)best=candidates;
+  best.sort(function(a,b){return b.shift-a.shift});
+  return best[0].day-1; // OV is day before the rise
+}
+function effOv(ci){var my=D.myOv&&D.myOv[ci];if(my)return parseInt(my);var opk=ovDay(D.cycles[ci]);if(opk)return opk;return ovDayFromTemp(D.cycles[ci])}
 function isExcl(i){return D.excl&&D.excl[i]}
 function acl(){var l=[];D.cycles.forEach(function(c,i){if(!isExcl(i)&&c.length&&c.length<45)l.push(c.length)});return l.length?Math.round(l.reduce(function(a,b){return a+b},0)/l.length):30}
 function aod(){var d=[];D.cycles.forEach(function(c,i){if(!isExcl(i)){var o=ovDay(c);if(o)d.push(o)}});return d.length?Math.round(d.reduce(function(a,b){return a+b},0)/d.length):16}
@@ -2738,22 +2765,29 @@ function rToday(info){  var h='';
   h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.04)">';
   h+='<div><div style="font-size:12px;font-weight:700;color:var(--gold)">OPK Detection</div><div style="font-size:10px;color:var(--txt4);margin-top:1px">From positive LH test</div></div>';
   h+='<div style="font-size:16px;font-weight:800;color:'+(opkD?'var(--gold)':'var(--txt4)')+';">'+(opkD?'Day '+opkD:'—')+'</div></div>';
+  // Temp shift detection
+  var tempOvD=ovDayFromTemp(info.c);
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.04)">';
+  h+='<div><div style="font-size:12px;font-weight:700;color:var(--burnt)">Temp Shift</div><div style="font-size:10px;color:var(--txt4);margin-top:1px">Detected from BBT rise</div></div>';
+  h+='<div style="font-size:16px;font-weight:800;color:'+(tempOvD?'var(--burnt)':'var(--txt4)')+';">'+(tempOvD?'Day '+tempOvD:'—')+'</div></div>';
   h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.04)">';
   h+='<div><div style="font-size:12px;font-weight:700;color:var(--cobalt)">My Estimate</div><div style="font-size:10px;color:var(--txt4);margin-top:1px">Your best guess</div></div>';
   h+='<div style="font-size:16px;font-weight:800;color:'+(myOvD?'var(--cobalt)':'var(--txt4)')+';">'+(myOvD?'Day '+myOvD:'—')+'</div></div>';
-  var src=myOvD?'your estimate':'OPK';
+  var src=myOvD?'your estimate':opkD?'OPK':tempOvD?'temp shift':'unknown';
   if(info.od)h+='<div style="font-size:10px;color:var(--txt3);margin-top:6px">DPO calculated from <strong>'+src+'</strong> (Day '+info.od+')</div>';
+  if(!info.od&&tempOvD)h+='<div style="font-size:10px;color:var(--burnt);margin-top:6px">Temp shift suggests OV around Day '+tempOvD+'. Set your estimate to confirm.</div>';
   h+='<div style="margin-top:10px"><div style="font-size:10px;font-weight:600;color:var(--txt4);margin-bottom:6px">I think I ovulated on:</div>';
   h+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
   var ovOpts=[];
-  var yd=info.cd-1,tdy=info.cd,dby=info.cd-2,db3=info.cd-3;
-  if(db3>0)ovOpts.push(db3);if(dby>0)ovOpts.push(dby);if(yd>0)ovOpts.push(yd);ovOpts.push(tdy);
+  // Show from Day 8 (or earlier if short cycle) through to today
+  var ovStart=Math.max(1,Math.min(8,info.cd-10));
+  for(var oi=ovStart;oi<=info.cd;oi++)ovOpts.push(oi);
   if(myOvD&&ovOpts.indexOf(myOvD)<0)ovOpts.push(myOvD);
   ovOpts.sort(function(a,b){return a-b});
   ovOpts=ovOpts.filter(function(v,i){return ovOpts.indexOf(v)===i});
   ovOpts.forEach(function(d){
     var label='Day '+d;
-    if(d===tdy)label+=' (today)';else if(d===yd)label+=' (yesterday)';else label+=' ('+fd(ad(info.c.key,d-1))+')';
+    if(d===info.cd)label+=' (today)';else if(d===info.cd-1)label+=' (yesterday)';else label+=' ('+fd(ad(info.c.key,d-1))+')';
     h+='<button class="chip'+(myOvD===d?' on chip-m':'')+'" onclick="setMyOv('+info.ci+','+d+')">'+label+'</button>';
   });
   if(myOvD)h+='<button class="chip" onclick="clearMyOv('+info.ci+')" style="color:var(--rose)">Clear</button>';
