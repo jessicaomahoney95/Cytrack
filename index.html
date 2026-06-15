@@ -2690,11 +2690,32 @@ function rToday(info){  var h='';
     h+='<button class="qs-chip'+(on?' on on-m':'')+'" onclick="qMood(\''+m+'\')">'+m+'</button>';
   });
   h+='</div></div>';
+  // Sticky meds — daily one-tap toggles
+  var todayMeds=D.meds[td()]||[];
+  h+='<div style="margin-top:10px"><div class="fl">Daily meds</div>';
+  h+='<div class="qs-chips" style="gap:6px">';
+  ["Prenatal","CoQ10","Folic acid","Vitamin D"].forEach(function(m){
+    var on=todayMeds.indexOf(m)>-1;
+    h+='<button class="qs-chip'+(on?' on on-good':'')+'" onclick="qMed(\''+m+'\')">'+m+(on?' ✓':'')+'</button>';
+  });
+  h+='</div></div>';
   h+='<div style="display:flex;gap:6px;margin-top:10px">';
   h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px;'+(D.sex[td()]?'background:var(--cobalt);color:#fff':'')+'" onclick="qSex()">Sex</button>';
-  var todayOPKRes=getOpkResult(td());var todayOPKInt=getOpkIntensity(td());
-  h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px;'+(todayOPKRes==='pos'?'background:var(--gold);color:#fff':todayOPKRes==='neg'?'background:var(--cream3);color:var(--txt3)':'')+'" onclick="cycleOPK()">OPK'+(todayOPKInt?' '+todayOPKInt+'/5':'')+'</button>';
   h+='</div>';
+  // OPK with intensity
+  var todayOPKRes=getOpkResult(td());var todayOPKInt=getOpkIntensity(td());
+  h+='<div style="margin-top:8px"><div style="display:flex;justify-content:space-between;align-items:center"><div class="fl" style="margin:0">OPK test</div>';
+  if(todayOPKRes)h+='<button onclick="clearOPK()" style="font-size:9px;color:var(--txt4);background:none;border:none">Clear</button>';
+  h+='</div>';
+  h+='<div style="display:flex;gap:4px;margin-top:4px">';
+  [1,2,3,4,5].forEach(function(n){
+    var lbl=n<=2?'Low':n===3?'Med':n===4?'High':'Peak';
+    var on=todayOPKInt===n;
+    var bg=on?(n>=4?'var(--gold)':n===3?'var(--burnt)':'var(--cream3)'):'var(--cream)';
+    var col=on?(n>=4?'#fff':n===3?'#fff':'var(--txt)'):'var(--txt4)';
+    h+='<button onclick="setOPKIntensity('+n+')" style="flex:1;padding:8px 2px;border-radius:10px;background:'+bg+';color:'+col+';font-size:9px;font-weight:700;text-align:center;border:none">'+n+'<br>'+lbl+'</button>';
+  });
+  h+='</div></div>';
   // Period / flow button
   var todayRCheck=cInfo().c.readings.find(function(x){return x.date===td()});
   var todayFlow=todayRCheck?todayRCheck.flow:null;
@@ -2707,6 +2728,32 @@ function rToday(info){  var h='';
   h+='<div style="display:flex;gap:6px;margin-top:6px">';
   h+='<button class="qs-chip" style="flex:1;text-align:center;padding:10px" onclick="openAdd()">Edit past date</button>';
   h+='</div>';
+  // Recent days — quick tap to edit
+  h+='<div style="margin-top:12px"><div style="font-size:9px;color:var(--txt4);margin-bottom:6px">Recent days — tap to edit</div>';
+  h+='<div style="display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch">';
+  var lastC=D.cycles[D.cycles.length-1];
+  for(var rd2=Math.max(1,info.cd-6);rd2<=info.cd;rd2++){
+    var rdDate=ad(lastC.key,rd2-1);
+    var rdR=lastC.readings.find(function(x){return x.date===rdDate});
+    var rdHasTemp=rdR&&rdR.temp!=null;
+    var rdHasSleep=!!D.sleep[rdDate];
+    var rdHasSex=!!D.sex[rdDate];
+    var rdFlow=rdR&&rdR.flow;
+    var rdIsToday=rdDate===td();
+    var rdBg=rdIsToday?'var(--burnt)':rdHasTemp?'var(--cream)':'var(--cream3)';
+    var rdCol=rdIsToday?'#fff':rdHasTemp?'var(--txt)':'var(--txt4)';
+    h+='<button onclick="openEdit(\''+rdDate+'\','+(D.cycles.length-1)+')" style="min-width:44px;padding:6px 4px;border-radius:10px;background:'+rdBg+';text-align:center;border:none;flex-shrink:0">';
+    h+='<div style="font-size:12px;font-weight:700;color:'+rdCol+'">'+rd2+'</div>';
+    h+='<div style="font-size:8px;color:'+(rdIsToday?'rgba(255,255,255,.7)':'var(--txt4)')+'">'+fd(rdDate).split(' ')[0]+'</div>';
+    var dots=[];
+    if(rdHasTemp)dots.push('var(--burnt)');
+    if(rdHasSleep)dots.push('var(--cobalt)');
+    if(rdHasSex)dots.push('var(--cobalt)');
+    if(rdFlow)dots.push('var(--rose)');
+    if(dots.length){h+='<div style="display:flex;gap:2px;justify-content:center;margin-top:2px">';dots.forEach(function(dc){h+='<div style="width:4px;height:4px;border-radius:50%;background:'+dc+'"></div>'});h+='</div>'}
+    h+='</button>';
+  }
+  h+='</div></div>';
   // Quick notes
   var todayNote=D.notes[td()]||'';
   h+='<div style="margin-top:10px"><div class="fl">Notes</div>';
@@ -3045,18 +3092,52 @@ function setSleep(q){
   flash(D.sleep[td()]?"Sleep: "+q:"Sleep cleared",true);
 }
 function clearSleep(){saveUndo();delete D.sleep[td()];save();render();flash("Sleep cleared",true)}
+function toggleDetailedSleep(){var el=document.getElementById('detailedSleep');if(el)el.style.display=el.style.display==='none'?'block':'none'}
+function logSleepQuick(){
+  var hrs=parseInt(document.getElementById('slHrs').value)||0;
+  var min=parseInt(document.getElementById('slMin').value)||0;
+  var awk=parseInt(document.getElementById('slAwk').value)||0;
+  var totalMin=hrs*60+min;
+  if(totalMin<60||totalMin>840){flash("Enter valid sleep time");return}
+  saveUndo();if(!D.sleepTimes)D.sleepTimes={};
+  // Calculate approximate bedtime/wake from total
+  var now=new Date();var woke=D.waketime||('0'+now.getHours()).slice(-2)+':'+('0'+now.getMinutes()).slice(-2);
+  var wp=woke.split(':');var wakeMin=parseInt(wp[0])*60+parseInt(wp[1]);
+  var inBedMin=totalMin+awk;
+  var asleepMin=wakeMin-inBedMin;if(asleepMin<0)asleepMin+=1440;
+  var asleepH=('0'+Math.floor(asleepMin/60)).slice(-2);var asleepM=('0'+(asleepMin%60)).slice(-2);
+  D.sleepTimes[td()]={asleep:asleepH+':'+asleepM,woke:woke,awake:awk>0?[{duration:awk,start:'',note:''}]:[]};
+  if(!D.sleepHrs)D.sleepHrs={};D.sleepHrs[td()]=Math.round(totalMin/6)/10;
+  save();render();flash(hrs+"h "+min+"m logged"+(awk?" ("+awk+"m awake)":""),true);
+}
 
-/* === Sleep times block — Apple Health style with awake periods (feature #1) === */
+/* === Sleep times block — two modes: Quick (total hours + awake) or Detailed (bedtime/wake) === */
 function renderSleepTimesBlock(){
   var slTimes=D.sleepTimes&&D.sleepTimes[td()];
   var h='<div style="margin-top:10px">';
   h+='<div style="font-size:9px;color:var(--txt4);margin-bottom:6px">Sleep times</div>';
   if(!slTimes){
-    h+='<div style="margin-bottom:8px">';
-    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--txt3);width:75px">Fell asleep</span><input type="time" id="slAsleep" value="'+D.bedtime+'" style="flex:1;padding:12px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
-    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--txt3);width:75px">Woke up</span><input type="time" id="slWoke" value="'+D.waketime+'" style="flex:1;padding:12px;border:1.5px solid var(--cream3);border-radius:12px;font-size:16px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+    // Quick mode — enter total sleep and awake minutes from Apple Watch
+    h+='<div style="display:flex;gap:8px;margin-bottom:8px">';
+    h+='<div style="flex:1"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Total sleep</div>';
+    h+='<div style="display:flex;gap:4px;align-items:center">';
+    h+='<input type="number" id="slHrs" placeholder="7" style="width:40px;padding:10px 6px;border:1.5px solid var(--cream3);border-radius:10px;font-size:16px;font-weight:700;background:var(--card);color:var(--txt);text-align:center;outline:none" inputmode="numeric">';
+    h+='<span style="font-size:11px;color:var(--txt3)">h</span>';
+    h+='<input type="number" id="slMin" placeholder="52" style="width:40px;padding:10px 6px;border:1.5px solid var(--cream3);border-radius:10px;font-size:16px;font-weight:700;background:var(--card);color:var(--txt);text-align:center;outline:none" inputmode="numeric">';
+    h+='<span style="font-size:11px;color:var(--txt3)">m</span></div></div>';
+    h+='<div style="flex:1"><div style="font-size:9px;color:var(--txt4);margin-bottom:3px">Awake time</div>';
+    h+='<div style="display:flex;gap:4px;align-items:center">';
+    h+='<input type="number" id="slAwk" placeholder="4" style="width:40px;padding:10px 6px;border:1.5px solid var(--cream3);border-radius:10px;font-size:16px;font-weight:700;background:var(--card);color:var(--txt);text-align:center;outline:none" inputmode="numeric">';
+    h+='<span style="font-size:11px;color:var(--txt3)">min</span></div></div></div>';
+    h+='<div style="display:flex;gap:6px">';
+    h+='<button onclick="logSleepQuick()" style="flex:2;padding:10px;border-radius:10px;font-size:12px;font-weight:700;background:var(--cobalt);color:#fff">Log sleep</button>';
+    h+='<button onclick="toggleDetailedSleep()" style="flex:1;padding:10px;border-radius:10px;font-size:10px;font-weight:600;background:var(--cream3);color:var(--txt3)">Detailed</button>';
     h+='</div>';
-    h+='<button onclick="logSleepTimes()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:700;background:var(--cobalt);color:#fff">Log sleep</button>';
+    h+='<div id="detailedSleep" style="display:none;margin-top:8px">';
+    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--txt3);width:75px">Fell asleep</span><input type="time" id="slAsleep" value="'+D.bedtime+'" style="flex:1;padding:10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:14px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--txt3);width:75px">Woke up</span><input type="time" id="slWoke" value="'+D.waketime+'" style="flex:1;padding:10px;border:1.5px solid var(--cream3);border-radius:10px;font-size:14px;font-weight:600;background:var(--card);color:var(--txt);outline:none;text-align:center"></div>';
+    h+='<button onclick="logSleepTimes()" style="width:100%;padding:10px;border-radius:10px;font-size:12px;font-weight:700;background:var(--cobalt);color:#fff">Log detailed</button>';
+    h+='</div>';
   } else {
     var hrs=calcSleepHrs(slTimes.asleep,slTimes.woke,slTimes.awake);
     var awakeMin=(slTimes.awake||[]).reduce(function(a,p){return a+(p.duration||0)},0);
@@ -3307,6 +3388,7 @@ function qSym(s){
 }
 function qMood(m){saveUndo();var date=td();var mo=D.mood[date]||[];var idx=mo.indexOf(m);if(idx>-1)mo.splice(idx,1);else mo.push(m);if(mo.length)D.mood[date]=mo;else delete D.mood[date];save();render()}
 function qSex(){saveUndo();var date=td();if(D.sex[date])delete D.sex[date];else D.sex[date]=1;save();render()}
+function qMed(m){saveUndo();var date=td();var md=D.meds[date]||[];var idx=md.indexOf(m);if(idx>-1)md.splice(idx,1);else md.push(m);if(md.length)D.meds[date]=md;else delete D.meds[date];save();render()}
 /* Set CM amount for a given CM type on a date. amt = 'lots' | 'some' | 'little' or null to clear */
 function setCmAmt(cmType,amt,date){saveUndo();date=date||td();if(!D.cmAmt)D.cmAmt={};if(!D.cmAmt[date])D.cmAmt[date]={};if(amt)D.cmAmt[date][cmType]=amt;else delete D.cmAmt[date][cmType];if(!Object.keys(D.cmAmt[date]).length)delete D.cmAmt[date];save();render()}
 function getCmAmt(cmType,date){if(!D.cmAmt||!D.cmAmt[date])return null;return D.cmAmt[date][cmType]||null}
@@ -3615,6 +3697,8 @@ function prePeriodSignal(){
 }
 function toggleCheck(idx){if(!D.checks)D.checks={};if(!D.checks[td()])D.checks[td()]={};D.checks[td()][idx]=!D.checks[td()][idx];save();render()}
 function cycleOPK(){openOPKModal()}
+function setOPKIntensity(n){saveUndo();if(!D.opks)D.opks={};var date=td();var existing=D.opks[date];if(typeof existing==='object'&&existing){existing.intensity=n;existing.result=n>=4?'pos':'neg'}else{D.opks[date]={result:n>=4?'pos':'neg',intensity:n}}save();render();flash("OPK "+n+"/5"+(n>=4?" — positive!":""),true)}
+function clearOPK(){saveUndo();delete D.opks[td()];save();render();flash("OPK cleared",true)}
 
 /* Open period logging modal — allows logging flow today or starting new cycle */
 function openPeriodModal(){
