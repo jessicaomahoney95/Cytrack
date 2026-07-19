@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CyTrack Data Recovery</title>
+<style>
+body{font-family:-apple-system,sans-serif;background:#B25835;color:#3D2C2C;padding:16px;max-width:600px;margin:0 auto}
+h1{color:#fff;font-size:20px}
+.card{background:#FFF6F0;border-radius:14px;padding:14px;margin-bottom:10px}
+.key{font-weight:700;font-size:14px;color:#2B5C8A}
+.meta{font-size:12px;color:#6B5E56;margin:4px 0}
+.good{color:#4A7D5E;font-weight:700}
+.empty{color:#A0928A;font-style:italic}
+button{background:#2B5C8A;color:#fff;border:none;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;margin-top:8px;cursor:pointer}
+.dl{background:#4A7D5E}
+pre{font-size:9px;overflow-x:auto;background:#F0DDD0;padding:8px;border-radius:8px;max-height:100px}
+</style>
+</head>
+<body>
+<h1>CyTrack Data Recovery</h1>
+<p style="color:#fff;font-size:13px">This checks every storage key for your cycle data. Whichever has the most cycles / most recent data is the one to restore.</p>
+<div id="results"></div>
+<script>
+var keys=["bbt-jess-v14","bbt-jess-v13","bbt-jess-v12","bbt-jess-v11","bbt-jess-v10","bbt-jess-v9","bbt-jess-v8","bbt-jess-v7","bbt-jess","bbt-data","cytrack","cytrack-data"];
+// Also scan ALL localStorage keys in case it's something else
+var allKeys=[];
+for(var i=0;i<localStorage.length;i++){allKeys.push(localStorage.key(i))}
+keys.forEach(function(k){if(allKeys.indexOf(k)<0)allKeys.push(k)});
+
+var html='';
+var found=[];
+allKeys.forEach(function(k){
+  var raw=localStorage.getItem(k);
+  if(!raw){
+    return; // skip empty
+  }
+  var info={key:k,size:raw.length,cycles:0,lastDate:'',lastReading:''};
+  try{
+    var d=JSON.parse(raw);
+    if(d.cycles&&d.cycles.length){
+      info.cycles=d.cycles.length;
+      var last=d.cycles[d.cycles.length-1];
+      info.lastDate=last.key||'';
+      if(last.readings&&last.readings.length){
+        var lr=last.readings[last.readings.length-1];
+        info.lastReading=lr.date+' (temp: '+(lr.temp||'none')+')';
+      }
+    }
+    found.push({info:info,raw:raw,parsed:d});
+  }catch(e){
+    // not JSON, still show it
+    found.push({info:info,raw:raw,parsed:null});
+  }
+});
+
+if(!found.length){
+  html='<div class="card"><span class="empty">No data found in any storage key. The data may have been cleared by the browser. Check if you have iCloud/Safari history that could help, or an old backup file in your Files app / Downloads.</span></div>';
+}else{
+  // Sort by most recent last reading date
+  found.sort(function(a,b){return (b.info.lastReading||'').localeCompare(a.info.lastReading||'')});
+  found.forEach(function(f){
+    html+='<div class="card">';
+    html+='<div class="key">'+f.info.key+'</div>';
+    if(f.info.cycles){
+      html+='<div class="meta good">'+f.info.cycles+' cycles</div>';
+      html+='<div class="meta">Latest cycle starts: '+f.info.lastDate+'</div>';
+      html+='<div class="meta">Last reading: '+f.info.lastReading+'</div>';
+      html+='<button class="dl" onclick="downloadKey(\''+f.info.key+'\')">Download this as backup</button> ';
+      html+='<button onclick="restoreKey(\''+f.info.key+'\')">Restore to app (set as v14)</button>';
+    }else{
+      html+='<div class="meta empty">'+f.info.size+' chars, no readable cycle data</div>';
+    }
+    html+='</div>';
+  });
+}
+document.getElementById('results').innerHTML=html;
+
+function downloadKey(k){
+  var raw=localStorage.getItem(k);
+  var blob=new Blob([raw],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download='cytrack_recovery_'+k+'_'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  alert('Downloaded backup of '+k);
+}
+function restoreKey(k){
+  var raw=localStorage.getItem(k);
+  if(confirm('Set '+k+' as the active data (bbt-jess-v14)? Do this only if this key has your most recent data.')){
+    localStorage.setItem('bbt-jess-v14',raw);
+    alert('Done. Now open your app and it should load this data. IMPORTANT: tap Save straight away to make a backup file.');
+  }
+}
+</script>
+</body>
+</html>
