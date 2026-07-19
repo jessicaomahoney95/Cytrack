@@ -1285,46 +1285,17 @@ function runOpkAnalysis(){
   analyseOpkImage(window._pendingOpkImage).then(function(result){
     if(btn){btn.disabled=false;btn.textContent='🔍 Analyse OPK'}
     window._opkAnalysisResult=result;
-    // Auto-log to today's OPK intensity if result is usable
+    // Show the AI suggestion but DON'T auto-commit — let the user confirm or correct
     if(result.intensity>=1&&result.intensity<=5){
-      saveUndo();
-      var today=td();
-      if(!D.sym[today])D.sym[today]=[];
-      // Map intensity to existing OPK symptom format
-      var opkLabel='OPK '+result.intensity+'/5';
-      // Remove any existing OPK logs from today
-      D.sym[today]=D.sym[today].filter(function(s){return s.indexOf('OPK ')!==0});
-      D.sym[today].push(opkLabel);
-      // Also set OPK positive flag if intensity >= 4
-      if(result.intensity>=4){
-        var info=cInfo();var c=info.c;
-        var todayR=c.readings.find(function(r){return r.date===today});
-        if(todayR)todayR.ov=true;
-        else{
-          var day=db(c.key,today)+1;
-          c.readings.push({day:day,date:today,ov:true});
-          c.readings.sort(function(a,b){return a.day-b.day});
-        }
-      }
-      // Store the photo (lightweight — just most recent 14 days)
-      D.opkPhotos[today]={
-        intensity:result.intensity,
-        result:result.result,
-        interpretation:result.interpretation,
-        loggedAt:Date.now(),
-      };
-      // Keep only last 14 days of photos to save storage
-      var cutoff=ad(today,-14);
-      Object.keys(D.opkPhotos).forEach(function(d){
-        if(d<cutoff)delete D.opkPhotos[d];
-      });
-      save();
-      flash('✓ Logged OPK '+result.intensity+'/5');
+      window._opkSuggested=result.intensity;
+      flash('AI suggests '+result.intensity+'/5 — tap to confirm or correct');
+    } else {
+      flash('Could not read the test clearly — please tap the darkness manually');
     }
     render();
   }).catch(function(err){
     if(btn){btn.disabled=false;btn.textContent='🔍 Analyse OPK'}
-    flash('Analysis failed: '+err.message);
+    flash('Analysis failed — please tap the darkness manually');
   });
 }
 
@@ -1798,11 +1769,25 @@ function journeyData(){
   return items.sort(function(a,b){return b.date.localeCompare(a.date)})
 }
 function load(){
-  var s=localStorage.getItem(SK);
-  if(!s){s=localStorage.getItem("bbt-jess-v13")}
-  if(!s){s=localStorage.getItem("bbt-jess-v12")}
-  if(!s){s=localStorage.getItem("bbt-jess-v11")}
-  if(!s){s=localStorage.getItem("bbt-jess-v9")}
+  // RECOVERY: scan ALL possible keys and find the one with the most/most-recent data
+  var candidateKeys=["bbt-jess-v14","bbt-jess-v13","bbt-jess-v12","bbt-jess-v11","bbt-jess-v10","bbt-jess-v9","bbt-jess-v8","bbt-jess"];
+  for(var li=0;li<localStorage.length;li++){var lk=localStorage.key(li);if(lk&&lk.indexOf('bbt')===0&&lk.indexOf('collapsed')<0&&candidateKeys.indexOf(lk)<0)candidateKeys.push(lk)}
+  var best=null,bestScore=-1,bestKey=null;
+  candidateKeys.forEach(function(k){
+    var raw=localStorage.getItem(k);if(!raw)return;
+    try{
+      var d=JSON.parse(raw);
+      if(!d.cycles||!d.cycles.length)return;
+      var last=d.cycles[d.cycles.length-1];
+      var lastReadingDate='';
+      if(last.readings&&last.readings.length){lastReadingDate=last.readings[last.readings.length-1].date||''}
+      var dateScore=lastReadingDate?new Date(lastReadingDate).getTime()/86400000:0;
+      var score=d.cycles.length*10000+dateScore;
+      if(score>bestScore){bestScore=score;best=raw;bestKey=k}
+    }catch(e){}
+  });
+  var s=null;
+  if(best){s=best;if(bestKey!==SK)window._recoveredFrom=bestKey}
   if(s){try{D=JSON.parse(s);localStorage.setItem(SK,s)}catch(e){D=null}}
   if(!D)D={cycles:JSON.parse(JSON.stringify(SEED_C)),sex:JSON.parse(JSON.stringify(SEED_SEX)),sym:JSON.parse(JSON.stringify(SEED_SYM)),mood:JSON.parse(JSON.stringify(SEED_MOOD)),notes:JSON.parse(JSON.stringify(SEED_NOTES)),photos:{},excl:{11:true},ptests:[],meds:{}};
   if(!D.photos)D.photos={};if(!D.notes)D.notes={};if(!D.mood)D.mood={};if(!D.sym)D.sym={};
@@ -2144,7 +2129,18 @@ function render(){
   var showMorning=!todayR&&curTab==='today';
   var ph=phase(info.cd,info.av,info.ao,info.ho,info.od,info.c);
 
-  var h='<div class="hdr">';
+  var h='';
+  // Recovery banner — if data was loaded from a non-current key
+  if(window._recoveredFrom){
+    var lastCyc=D.cycles[D.cycles.length-1];
+    var lastRd=lastCyc&&lastCyc.readings.length?lastCyc.readings[lastCyc.readings.length-1].date:'unknown';
+    h+='<div style="background:#4A7D5E;color:#fff;padding:12px 16px;font-size:12px;line-height:1.5">';
+    h+='<strong>Data recovered</strong> from backup storage ('+window._recoveredFrom+'). '+D.cycles.length+' cycles, last reading '+lastRd+'. ';
+    h+='<button onclick="backup();" style="background:rgba(255,255,255,.25);color:#fff;border:none;padding:4px 10px;border-radius:8px;font-weight:700;margin-top:6px">Download backup now</button> ';
+    h+='<button onclick="window._recoveredFrom=null;render()" style="background:none;color:rgba(255,255,255,.7);border:none;padding:4px 8px;font-size:11px">Dismiss</button>';
+    h+='</div>';
+  }
+  h+='<div class="hdr">';
   if(showMorning){
     // Conversational morning message
     var dpo=info.ho?(info.cd-info.od):null;
@@ -3919,6 +3915,7 @@ function openOPKModal(){
   });
   h+='</div>';
   h+='<div style="font-size:10px;color:var(--txt3);margin-top:8px;line-height:1.5">Positive (LH+) = 4 or 5. Track the rise — it usually spikes 12-36h before ovulation.</div>';
+  h+='<div style="font-size:10px;color:var(--burnt);margin-top:6px;line-height:1.5;font-weight:600">Tip: tapping the darkness yourself is more accurate than photo analysis — your eyes read the lines better than the AI.</div>';
   h+='</div>';
   h+='<div class="fr"><div class="fl">Photo</div>';
   if(curPh)h+='<div style="display:flex;gap:10px;align-items:center"><img src="'+curPh+'" class="pth" style="width:80px;height:80px"><button class="chip" onclick="delete D.opkPhotos[td()];save();closeM();openOPKModal()">Remove</button></div>';
@@ -4248,6 +4245,51 @@ function rCycle(){
     h+='<button class="pill'+(curCyc===i?' on':'')+'" style="'+(ex&&curCyc!==i?'text-decoration:line-through;opacity:.6':'')+'" onclick="curCyc='+i+';cycCmp=-1;render()">'+cc.label+star+'</button>';
   });
   h+='</div>';
+
+  // Calendar grid view — tap any day to edit
+  h+='<div class="section">'+colHdr('cyc-cal','Calendar — tap any day to edit');
+  h+=colBody('cyc-cal');
+  h+='<div class="card" style="padding:14px">';
+  h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
+  var cLen=c.length||(curCyc===info.ci?info.cd:c.readings.length);
+  var maxCalDay=Math.max(cLen,c.readings.reduce(function(m,r){return Math.max(m,r.day)},0));
+  for(var cd=1;cd<=maxCalDay;cd++){
+    var calDate=ad(c.key,cd-1);
+    var calR=c.readings.find(function(x){return x.day===cd});
+    var hasTemp=calR&&calR.temp!=null;
+    var flow=calR&&calR.flow;
+    var hasSex=!!D.sex[calDate];
+    var opkR=getOpkResult(calDate);
+    var eod=effOv(curCyc);
+    var isOv=eod&&cd===eod;
+    var isFertile=eod&&cd>=eod-5&&cd<=eod;
+    var isToday=calDate===td();
+    // Cell background priority: period > ov > fertile > temp logged > empty
+    var bg='var(--cream3)',col='var(--txt4)';
+    if(flow){bg='var(--rose)';col='#fff'}
+    else if(isOv){bg='var(--gold)';col='#fff'}
+    else if(isFertile){bg='var(--forest-bg)';col='var(--forest)'}
+    else if(hasTemp){bg='var(--cream)';col='var(--txt)'}
+    var border=isToday?'2px solid var(--cobalt)':'none';
+    h+='<button onclick="openEdit(\''+calDate+'\','+curCyc+')" style="aspect-ratio:1;border-radius:10px;background:'+bg+';color:'+col+';border:'+border+';display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;padding:2px;position:relative">';
+    h+='<div style="font-size:12px;font-weight:700">'+cd+'</div>';
+    if(hasTemp)h+='<div style="font-size:7px;opacity:.8">'+calR.temp.toFixed(1)+'</div>';
+    // Dots for sex/opk
+    var dots='';
+    if(hasSex)dots+='<div style="width:3px;height:3px;border-radius:50%;background:var(--cobalt)"></div>';
+    if(opkR==='pos')dots+='<div style="width:3px;height:3px;border-radius:50%;background:var(--gold)"></div>';
+    if(dots)h+='<div style="display:flex;gap:1px;position:absolute;bottom:3px">'+dots+'</div>';
+    h+='</button>';
+  }
+  h+='</div>';
+  // Legend
+  h+='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:9px;color:var(--txt4)">';
+  h+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--rose);vertical-align:middle;margin-right:3px"></span>Period</span>';
+  h+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--gold);vertical-align:middle;margin-right:3px"></span>Ovulation</span>';
+  h+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--forest-bg);vertical-align:middle;margin-right:3px"></span>Fertile</span>';
+  h+='<span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--cobalt);vertical-align:middle;margin-right:3px"></span>Intimacy</span>';
+  h+='</div>';
+  h+='</div>'+colEnd()+'</div>';
 
   // === NEW: Cycle Story card ===
   var story=cycleStory(curCyc);
